@@ -38,7 +38,7 @@ open "build/WhistleSim_artefacts/Release/WhistleSim.app"
 ```
 sudo apt install build-essential cmake git pkg-config libasound2-dev libjack-jackd2-dev \
     libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
-    libxinerama-dev libxrandr-dev libxrender-dev
+    libxi-dev libxinerama-dev libxrandr-dev libxrender-dev
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build
