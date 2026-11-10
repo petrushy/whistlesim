@@ -4,7 +4,7 @@ A physical model of a whistle (and recorder), played from a WARBL2 wind controll
 
 WARBL needs firmware with the sensor stream, from the `sensor-stream` branch of [petrushy/WARBL2](https://github.com/petrushy/WARBL2/tree/sensor-stream); its `SENSOR_STREAM.md` describes the protocol and how to build and flash the firmware. Without a WARBL, the app's built-in simulator plays it.
 
-- **WhistleSim** (`Source/`): the app (built and tested on macOS; see Building for Linux and Windows). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and gyro. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
+- **WhistleSim** (`Source/`): the app (macOS, Windows and Linux; see Building). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and gyro. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
 - **WARBL Simulator** (`tools/`): a virtual WARBL that plays a scale, as a separate MIDI device. The app also has this built in.
 - **ReverbCheck** (`tools/`): measures the generated rooms and renders WAV files for listening.
 - **WhistleCheck** (`tools/`): tunes and tabulates the whistle presets, and plays the model offline to measure what it sounds (see below).
@@ -12,13 +12,13 @@ WARBL needs firmware with the sensor stream, from the `sensor-stream` branch of 
 
 ## Download
 
-Ready-built versions for macOS 12 or newer (Apple silicon and Intel) are on the [Releases](https://github.com/petrushy/whistlesim/releases) page. The app isn't notarized, so the first time, right-click it and choose **Open**.
+Ready-built versions are on the [Releases](https://github.com/petrushy/whistlesim/releases) page: macOS 12 or newer (Apple silicon and Intel), Windows 10 or newer (x64) and Linux (x86_64, glibc 2.39 or newer, e.g. Ubuntu 24.04). They aren't signed by a known developer, so the first time, right-click the app and choose **Open** on macOS, or **More info → Run anyway** on Windows. The release notes say more.
 
 ## Building
 
 Two parts: the **WARBL firmware** (with the sensor stream) goes on the instrument, and the **WhistleSim app** runs on the computer. The app only hears WARBL if the firmware has the sensor stream, and the stream only goes over a USB cable.
 
-**Platforms.** Everything here has been built and tested on **macOS** only (Apple silicon, macOS 15). The firmware builds with the cross-platform Arduino tools, so it should build the same way on Linux and Windows. The app uses only JUCE (audio, MIDI, GUI) and standard C++20, with nothing Mac-specific in its code, so it should also build on **Linux** and **Windows**, but it hasn't been tried there yet: expect to fix small compiler differences. Known limits elsewhere: the separate `WarblSimulator` tool makes virtual MIDI ports, which Windows doesn't support (the simulator built into the app works everywhere); on Windows, use WASAPI (exclusive mode) or an ASIO-capable interface for low latency, and on Linux JACK or PipeWire.
+**Platforms.** The app is developed and played on **macOS** (Apple silicon, macOS 15). It uses only JUCE (audio, MIDI, GUI) and standard C++20, and CI builds it and runs the tests on **Linux** (Ubuntu 24.04) and **Windows** (Visual Studio 2022) as well, but it has had little playing there so far. Known limits elsewhere: the separate `WarblSimulator` tool makes virtual MIDI ports, which Windows doesn't support (the simulator built into the app works everywhere); on Windows, use WASAPI (exclusive mode) or an ASIO-capable interface for low latency, and on Linux JACK or PipeWire.
 
 ### The app
 
@@ -33,7 +33,7 @@ ctest --test-dir build          # protocol, instrument file and preset tuning te
 open "build/WhistleSim_artefacts/Release/WhistleSim.app"
 ```
 
-**Linux** (untested; Debian/Ubuntu package names): install the build tools and JUCE's dependencies:
+**Linux** (built in CI on Ubuntu 24.04; Debian/Ubuntu package names): install the build tools and JUCE's dependencies:
 
 ```
 sudo apt install build-essential cmake git pkg-config libasound2-dev libjack-jackd2-dev \
@@ -45,7 +45,7 @@ ctest --test-dir build
 "build/WhistleSim_artefacts/Release/WhistleSim"
 ```
 
-**Windows** (untested): install Visual Studio 2022 with the "Desktop development with C++" workload, CMake and git. In a "Developer PowerShell for VS 2022":
+**Windows** (built in CI): install Visual Studio 2022 with the "Desktop development with C++" workload, CMake and git. In a "Developer PowerShell for VS 2022":
 
 ```
 cmake -B build

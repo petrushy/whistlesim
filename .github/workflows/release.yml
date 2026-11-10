@@ -1,6 +1,7 @@
-# Pushing a tag like v0.2.0 builds a universal (Apple silicon + Intel) WhistleSim.app, runs the tests and publishes it
-# as a GitHub Release. The tag must match the VERSION in CMakeLists.txt, which the About window shows.
-# Run by hand (Actions > Release > Run workflow) it is a dry run: it builds and keeps the zip as a workflow artifact.
+# Pushing a tag like v0.2.0 builds WhistleSim for macOS (universal: Apple silicon + Intel), Linux (x86_64) and Windows
+# (x64), runs the tests on each and publishes the three packages as one GitHub Release. The tag must match the VERSION
+# in CMakeLists.txt, which the About window shows.
+# Run by hand (Actions > Release > Run workflow) it is a dry run: it builds and keeps the packages as workflow artifacts.
 name: Release
 
 on:
@@ -15,9 +16,28 @@ env:
   JUCE_VERSION: 9.0.5  # Keep in step with GIT_TAG in CMakeLists.txt
 
 jobs:
-  release:
-    runs-on: macos-15
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            platform: macOS
+            # Both architectures in one app.
+            cmake-args: -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
+          - os: ubuntu-24.04
+            platform: Linux-x86_64
+            cmake-args: ''
+          - os: windows-2022
+            platform: Windows-x64
+            # The C++ runtime linked in, so the .exe runs without the Visual C++ Redistributable.
+            cmake-args: -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      PACKAGE: WhistleSim-${{ github.ref_name }}-${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,52 +50,92 @@ jobs:
             exit 1
           fi
 
+      - name: Install JUCE's Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libxrender-dev
+
       - name: Cache JUCE
         id: juce-cache
         uses: actions/cache@v4
         with:
           path: .juce
-          key: juce-${{ env.JUCE_VERSION }}
+          key: juce-${{ env.JUCE_VERSION }}-${{ runner.os }}
       - name: Fetch JUCE
         if: steps.juce-cache.outputs.cache-hit != 'true'
         run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git .juce
 
-      - name: Configure (universal)
-        run: >
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/.juce"
-          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Configure
+        run: |
+          juce="$PWD/.juce"
+          if [ "$RUNNER_OS" = Windows ]; then juce=$(cygpath -m "$juce"); fi  # Git Bash's /d/a/... means nothing to CMake
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_SOURCE_DIR_JUCE="$juce" "${{ matrix.cmake-args }}"
       - name: Build
-        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
+        run: cmake --build build --config Release --parallel 4
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build -C Release --output-on-failure
 
-      # Not signed with a Developer ID or notarized: an ad-hoc signature only, so macOS asks before the first launch
-      # (see the release notes).
-      - name: Package
+      # None of the packages is signed by a known developer, so macOS and Windows ask before the first launch (see the
+      # release notes). macOS gets an ad-hoc signature, which Apple silicon needs to run it at all.
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
         run: |
           app="build/WhistleSim_artefacts/Release/WhistleSim.app"
           lipo -info "$app/Contents/MacOS/WhistleSim"
           codesign --force --deep --sign - "$app"
-          ditto -c -k --keepParent "$app" "WhistleSim-$GITHUB_REF_NAME-macOS.zip"
+          ditto -c -k --keepParent "$app" "$PACKAGE.zip"
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir "$PACKAGE"
+          cp build/WhistleSim_artefacts/Release/WhistleSim README.md LICENSE "$PACKAGE/"
+          tar -czf "$PACKAGE.tar.gz" "$PACKAGE"
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir "$PACKAGE"
+          cp build/WhistleSim_artefacts/Release/WhistleSim.exe README.md LICENSE "$PACKAGE/"
+          7z a "$PACKAGE.zip" "$PACKAGE"
 
-      - name: Keep the zip (dry run)
-        if: github.ref_type != 'tag'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: WhistleSim-macOS
-          path: WhistleSim-*-macOS.zip
+          name: ${{ env.PACKAGE }}
+          path: |
+            ${{ env.PACKAGE }}.zip
+            ${{ env.PACKAGE }}.tar.gz
+          if-no-files-found: error
 
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
       - name: Publish release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > notes.md <<'EOF'
-          **macOS 12 or newer, Apple silicon and Intel.** Unzip and move WhistleSim.app to Applications. The app isn't
+          **macOS** (12 or newer, Apple silicon and Intel): unzip and move WhistleSim.app to Applications. It isn't
           notarized, so the first time, right-click it and choose **Open** (or allow it in System Settings → Privacy &
-          Security). To play it from a WARBL2, flash the sensor-stream firmware: see
+          Security).
+
+          **Windows** (10 or newer, x64): unzip and run WhistleSim.exe. It isn't signed, so SmartScreen may warn: choose
+          **More info → Run anyway**. For low latency use an ASIO interface or WASAPI exclusive mode.
+
+          **Linux** (x86_64, built on Ubuntu 24.04, so it needs glibc 2.39 or newer): unpack and run `./WhistleSim`. It
+          needs ALSA, FreeType, Fontconfig and the X11 libraries a desktop already has; JACK or PipeWire for low latency.
+
+          Windows and Linux builds pass the same tests as macOS, but have had little playing yet: reports welcome.
+
+          To play it from a WARBL2, flash the sensor-stream firmware: see
           [SENSOR_STREAM.md](https://github.com/petrushy/WARBL2/blob/sensor-stream/SENSOR_STREAM.md). Without a WARBL,
           switch on **Simulate WARBL** in the app.
           EOF
-          gh release create "$GITHUB_REF_NAME" "WhistleSim-$GITHUB_REF_NAME-macOS.zip" \
+          gh release create "$GITHUB_REF_NAME" packages/* --repo "$GITHUB_REPOSITORY" \
             --title "WhistleSim $GITHUB_REF_NAME" --notes-file notes.md --generate-notes

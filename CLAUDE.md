@@ -23,8 +23,8 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 
 ## CI and releases
 
-- `.github/workflows/ci.yml` builds and runs the tests on macOS for every push to `main` and every pull request.
-- `.github/workflows/release.yml`: pushing a tag `vX.Y.Z` builds a universal app (arm64 + x86_64), tests it and publishes `WhistleSim-vX.Y.Z-macOS.zip` as a GitHub Release. The tag must equal `VERSION` in `CMakeLists.txt` (the About window shows it), so bump that first. The app is ad-hoc signed, not notarized. Running the workflow by hand is a dry run that keeps the zip as a workflow artifact.
+- `.github/workflows/ci.yml` builds and runs the tests on macOS, Linux (Ubuntu 24.04) and Windows (VS 2022) for every push to `main` and every pull request. Code must build with GCC and MSVC too, not only Apple Clang.
+- `.github/workflows/release.yml`: pushing a tag `vX.Y.Z` builds on all three platforms (macOS universal arm64 + x86_64; Windows with the C++ runtime linked in), tests and packages each, and publishes them as one GitHub Release. The tag must equal `VERSION` in `CMakeLists.txt` (the About window shows it), so bump that first. The app is ad-hoc signed, not notarized. Running the workflow by hand is a dry run that keeps the packages as workflow artifacts.
 - The workflows take JUCE from a cached clone (`JUCE_VERSION` in both files); keep it in step with `GIT_TAG` in `CMakeLists.txt`.
 
 ## Conventions
