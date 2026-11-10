@@ -72,7 +72,7 @@ Voicing presetVoicing (size_t index)
         // both octaves; the Goldie style is 9-23 dB short of them). The jet bend, with the edge nearly centred, makes
         // the second octave purer instead of the spreading (H2 -27 dB there, -18 in the first). The jet band is a
         // little higher, which keeps the octave breaks where the Goldie style has them. Still too strong: H3, by ~7 dB.
-        // Not yet judged by playing.
+        // Played on 2026-11-10: good, if a little too bright.
         v.jetStrouhal = 0.018f;
         v.jetSpreading = 0.0f;
         v.vortexLoss = 0.18f;
@@ -119,8 +119,8 @@ Voicing presetVoicing (size_t index)
         // the Low D whistle preset's: with the edge 0.25 mm into the pipe, less vortex loss and the jet's full gain
         // the first octave's H2 is -7 dB (recorded -7) and H4, H6 and H8 within 1 dB of the recording (H5 and H7 6-7 dB
         // short). Its H3 stays ~10 dB short (-17 against -8). Quick fingering changes are as steady as the Low D
-        // whistle's, now that the check times the fundamental only (WhistleCheck transition, glide). Not yet judged
-        // by playing.
+        // whistle's, now that the check times the fundamental only (WhistleCheck transition, glide). Played on
+        // 2026-11-10: good, if a little too bright.
         v.vortexLoss = 0.25f;
         v.jetGain = 1.05f;
         v.slowJetGrowth = 0.08f;

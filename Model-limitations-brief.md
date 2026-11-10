@@ -404,4 +404,4 @@ Every existing preset plays sample for sample as before, except the Generation's
 - The high D's H3 is 6–8 dB too strong with the bright voicing, and the low D's 10 dB too weak. On the high D the tube's third resonance sits on the third harmonic; the real whistles' wider octaves suggest theirs doesn't. Measured bore and head dimensions would settle it.
 - The Löfgren's 20 dB drop in H2 between the octaves.
 - Pitch against breath (4.4). To play as sharp as the recorded Goldie the model needs 1.9 kPa on B5 and 3.7 kPa on F#6, so the real scale is itself sharp there.
-- The two bright presets have not been played. Offline they are as steady as the presets they come from, but offline measures have not predicted playability before.
+- The two bright presets, played on 2026-11-10, are good but a little too bright; kept as they are for now. The third harmonic, 6–8 dB too strong on the high D, is the first suspect.
