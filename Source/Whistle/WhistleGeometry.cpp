@@ -42,7 +42,10 @@ Voicing presetVoicing (size_t index)
                 v.jetStages = 1;
             }
 
-    if (index < presets().size() && (presets()[index].name.startsWith ("D whistle, Goldie style") || presets()[index].name.contains ("whistle, wood")))
+    const juce::String generation ("D whistle, Generation style"), lofgren (juce::String::fromUTF8 ("D whistle, Löfgren style"));
+    if (index < presets().size()
+        && (presets()[index].name.startsWith ("D whistle, Goldie style") || presets()[index].name.contains ("whistle, wood")
+            || presets()[index].name.startsWith (generation) || presets()[index].name.startsWith (lofgren)))
     {
         // Fitted to Real-examples/High-D-Goldie.wav (WhistleCheck analyse): the thin windway wants a lower jet band,
         // one band-pass stage (no silent pressures between registers), and the jet settings that make a softly blown
@@ -57,6 +60,28 @@ Voicing presetVoicing (size_t index)
         // the softer first octave back its odd harmonics.
         v.jetSpreading = 3.0f;
         v.vortexLoss = 0.6f;
+        // Breath noise as the RODE recordings of the Goldie and Lofgren: -66 to -69 dB between the harmonics in both
+        // octaves (0.05 gave -64 in the second octave as played).
+        v.breathNoise = 0.04f;
+    }
+    // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
+    // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
+    // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Goldie style's).
+    if (index < presets().size() && presets()[index].name.startsWith (generation))
+    {
+        // The recorded Generation: strong even, weak odd harmonics in the first octave (H2/H3 -13/-22 dB). Less
+        // spreading and more vortex loss keep its swing short of the square, odd-rich tone.
+        v.jetSpreading = 0.5f;
+        v.vortexLoss = 0.84f;
+        v.jetGain = 1.0f;
+    }
+    if (index < presets().size() && presets()[index].name.startsWith (lofgren))
+    {
+        // The recorded Löfgren: a rich first octave (H2/H3 -11/-13 dB) and a pure second (-31/-27): less vortex
+        // loss for the first, spreading for the second.
+        v.jetSpreading = 2.0f;
+        v.vortexLoss = 0.42f;
+        v.jetGain = 1.1f;
     }
     if (index < presets().size() && presets()[index].name.startsWith ("Low D"))
     {
@@ -73,6 +98,13 @@ Voicing presetVoicing (size_t index)
     {
         v.jetStrouhal = 0.03f;
         v.jetStages = 1;
+        // Fitted to a Moeck soprano (Real-examples/Moeck-Soprano-RODE.wav, with the edge offset in presets()): its
+        // first octave is fuller than assumed before (H2/H3/H4 -15/-19/-27 dB; the model had -29/-23/-40), and less
+        // vortex loss, more jet gain and some spreading match both octaves within ~2 dB. The low register now
+        // reaches the octave with no silent gap; quick changes still settle within ~70 ms.
+        v.vortexLoss = 0.5f;
+        v.jetGain = 1.2f;
+        v.jetSpreading = 1.0f;
         // A slow jet grows more (low notes speak from the softest breath, no gap before the octave), a fast one less
         // (a purer second octave).
         v.slowJetGrowth = 0.67f;
@@ -237,13 +269,28 @@ const std::vector<Geometry>& presets()
                 g.chart = FingeringChart::baroqueRecorder;
                 // A short window for the jet's thickness (W/h 3.7, a whistle's ~5) grows the jet less on its way to the
                 // edge: it switches less fully, a purer tone, and the top notes speak at lower breath.
-                // The edge nearly on the jet's centre line: weak even harmonics, as on baroque recorders.
-                g.edgeOffset = 0.00005;
+                // The edge 0.2 mm into the pipe: the recorded Moeck soprano's strong second harmonic (first octave
+                // H2 -15 dB). (At 0.05 mm, nearly on the jet's centre line, even harmonics were 14 dB weaker.)
+                g.edgeOffset = 0.0002;
                 g.windwayLength = 0.030;  // The block is longer than a whistle's fipple plug
                 g.bellClosesFoot = true;  // Top C# closes the foot (on the knee); without a bell sensor it stays open.
                 return g;
             }(),
         };
+
+        // The Generation and Löfgren styles: the Goldie style's tube and fipple (the most playable), voiced and edged
+        // after RODE recordings of those whistles (presetVoicing). Their tubes and windways are not measured.
+        for (size_t i = 0; i < instruments.size(); ++i)
+            if (instruments[i].name == "D whistle, Goldie style")
+            {
+                auto generation = instruments[i], lofgren = instruments[i];
+                generation.name = "D whistle, Generation style";
+                generation.edgeOffset = 0.00015;
+                lofgren.name = juce::String::fromUTF8 ("D whistle, Löfgren style");
+                lofgren.edgeOffset = 0.0002;  // Its first octave's strong second harmonic (H2 -11 dB)
+                instruments.insert (instruments.begin() + (long) i + 1, { generation, lofgren });
+                break;
+            }
 
         // Larger recorders start from geometrically scaled soprano dimensions, not measurements of a maker's
         // instrument. Scale the mouth too: the same W/h and f*h/U keep the recorder's jet behaviour as pitch falls.

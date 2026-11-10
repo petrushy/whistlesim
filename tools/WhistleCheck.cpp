@@ -176,6 +176,7 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("st=")) v.jetStrouhal = value;
         if (arg.startsWith ("conv=")) v.jetConvection = value;
         if (arg.startsWith ("noise=")) v.breathNoise = value;
+        if (arg.startsWith ("direct=")) v.directNoise = value;
         if (arg.startsWith ("gain=")) v.jetGain = value;
         if (arg.startsWith ("slow=")) v.slowJetGrowth = value;
         if (arg.startsWith ("stages=")) v.jetStages = (int) value;
@@ -699,7 +700,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "analyse")  // analyse <file.wav> [<preset> [p=<Pa>]]: a recorded scale note by note; with a preset, the model's too
+    if (mode == "analyse")  // analyse <file.wav> [<preset>|all] [options]: a recorded scale note by note; with a preset, the model's too
     {
         if (argc < 3)
         {
@@ -714,7 +715,10 @@ int main (int argc, char* argv[])
         };
 
         // Note by note: frames every 10 ms (40 ms windows) with level and pitch; runs of steady pitch are notes.
-        auto analyse = [] (const std::vector<float>& x, double rate)
+        bool keepAll = false;
+        for (int k = 3; k < argc; ++k)
+            keepAll = keepAll || juce::String (argv[k]) == "all";
+        auto analyse = [keepAll] (const std::vector<float>& x, double rate)
         {
             const auto hop = (size_t) (0.01 * rate), window = (size_t) (0.04 * rate);
             struct FrameInfo { double level, hz; };
@@ -850,15 +854,43 @@ int main (int argc, char* argv[])
                 }
                 i = j;
             }
+            // A recorded scale rises: keep the longest rising run of notes and drop squeaks and cracked notes
+            // (a low D's B5 played as 513 Hz, a squeak before the first note). "all" keeps every note (a tune).
+            if (! keepAll && notes.size() > 2)
+            {
+                std::vector<size_t> runLength (notes.size(), 1), previous (notes.size(), notes.size());
+                size_t bestEnd = 0;
+                for (size_t k = 0; k < notes.size(); ++k)
+                {
+                    for (size_t m = 0; m < k; ++m)
+                        if (notes[m].hz < notes[k].hz * 0.985 && runLength[m] + 1 > runLength[k])
+                        {
+                            runLength[k] = runLength[m] + 1;
+                            previous[k] = m;
+                        }
+                    if (runLength[k] > runLength[bestEnd])
+                        bestEnd = k;
+                }
+                std::vector<bool> keep (notes.size(), false);
+                for (size_t k = bestEnd; k < notes.size(); k = previous[k])
+                    keep[k] = true;
+                std::vector<NoteAnalysis> rising;
+                for (size_t k = 0; k < notes.size(); ++k)
+                    if (keep[k])
+                        rising.push_back (notes[k]);
+                    else
+                        std::printf ("  (dropped %s at %.2f s, %.1f Hz: not part of the rising scale)\n", noteName (notes[k].hz).c_str(), notes[k].start, notes[k].hz);
+                notes = rising;
+            }
             return notes;
         };
 
         auto print = [] (const char* title, const std::vector<NoteAnalysis>& notes)
         {
-            std::printf ("%s\n  note        Hz  cents wobble  level  attack centroid   H2  H3  H4  H5  H6  H7  H8  H9 H10 |  noise 1-2k 2-4k 4-8k 8-12k\n", title);
+            std::printf ("%s\n  note    at(s)  len      Hz  cents wobble  level  attack centroid   H2  H3  H4  H5  H6  H7  H8  H9 H10 |  noise 1-2k 2-4k 4-8k 8-12k\n", title);
             for (const auto& n : notes)
             {
-                std::printf ("  %-4s %8.1f %+5.0f %5.1fc %5.1fdB %5.0fms %6.0fHz ", noteName (n.hz).c_str(), n.hz, n.cents, n.wobble, n.levelDb,
+                std::printf ("  %-4s %6.2f %4.2f %8.1f %+5.0f %5.1fc %5.1fdB %5.0fms %6.0fHz ", noteName (n.hz).c_str(), n.start, n.length, n.hz, n.cents, n.wobble, n.levelDb,
                              n.attackMs, n.centroid);
                 for (int k = 2; k <= 10; ++k)
                     std::printf ("%4.0f", n.harmonics[(size_t) k]);
@@ -866,13 +898,16 @@ int main (int argc, char* argv[])
             }
             // Averages per octave (the second from 1.9 x the first note), in dB re the fundamental; brightness as
             // the centroid over the fundamental.
+            double lowest = 1e9;
+            for (const auto& n : notes)
+                lowest = std::min (lowest, n.hz);
             for (int octave = 0; octave < 2 && ! notes.empty(); ++octave)
             {
                 std::array<double, 6> sum {};
                 double bright = 0.0, noise = 0.0;
                 int count = 0;
                 for (const auto& n : notes)
-                    if ((n.hz >= 1.9 * notes.front().hz) == (octave == 1))
+                    if ((n.hz >= 1.9 * lowest) == (octave == 1) && n.hz < 3.8 * lowest)
                     {
                         for (int k = 2; k <= 5; ++k)
                             sum[(size_t) k] += n.harmonics[(size_t) k];
@@ -900,7 +935,7 @@ int main (int argc, char* argv[])
         std::vector<float> recorded (audio.getReadPointer (0), audio.getReadPointer (0) + audio.getNumSamples());
         print ((file.getFileName() + " (recording)").toRawUTF8(), analyse (recorded, reader->sampleRate));
 
-        if (argc > 3)
+        if (argc > 3 && juce::String (argv[3]) != "all")
         {
             const auto index = (size_t) presetArg (argv[3]);
             auto g = presets()[index];
@@ -936,9 +971,16 @@ int main (int argc, char* argv[])
             if (arg.startsWith ("to=")) to = arg.fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         }
         float strouhalOverride = 0.0f, outputMaxOverride = 0.0f;  // st=, outmax=<Pa>: try other settings on the same playing
+        bool snapHoles = false;  // snap=1: every hole fully open or closed (at half), to hear what partial holes add
+        float replayEdgeNoise = 1.0f, replayWobble = 1.0f;  // edgenoise=, wobble=: the breath noise's two paths
+        float pulsingOverride = -1.0f;  // pulsing=<0-1>: how much the edge noise comes in bursts locked to the tone
         for (int i = 3; i < argc; ++i)
         {
             const juce::String arg (argv[i]);
+            if (arg.startsWith ("snap=")) snapHoles = arg.fromFirstOccurrenceOf ("=", false, false).getIntValue() != 0;
+            if (arg.startsWith ("pulsing=")) pulsingOverride = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+            if (arg.startsWith ("edgenoise=")) replayEdgeNoise = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+            if (arg.startsWith ("wobble=")) replayWobble = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
             if (arg.startsWith ("st=")) strouhalOverride = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
             if (arg.startsWith ("outmax=")) outputMaxOverride = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
         }
@@ -1001,6 +1043,7 @@ int main (int argc, char* argv[])
         if (frames.empty())
             return 1;
         if (strouhalOverride > 0.0f) instrument.voicing.jetStrouhal = strouhalOverride;
+        jetVoicingArgs (argc, argv, 3, instrument.voicing);  // noise=, gain=, spread= ...: other voicings on the same playing
         if (outputMaxOverride > 0.0f) breath.outputMax = outputMaxOverride;
         const auto& g = instrument.geometry;
         std::printf ("Jet Strouhal %.3f, breath output max %.0f Pa.\n", instrument.voicing.jetStrouhal, breath.outputMax);
@@ -1022,6 +1065,8 @@ int main (int argc, char* argv[])
                 const response::FingerHole fh { used ? (float) (0.5 * g.holes[(size_t) hole].diameter) : 0.0f,
                                                 used ? (float) g.holeEffectiveLength (hole) : 0.0f };
                 c.openness[(size_t) hole] = 1.0f - holes.closedness (coverage, fh);
+                if (snapHoles)
+                    c.openness[(size_t) hole] = c.openness[(size_t) hole] < 0.5f ? 0.0f : 1.0f;
             }
             const float bellSpan = (float) std::max (1, covered[(size_t) kBellSensor] - baseline[(size_t) kBellSensor]);
             c.footOpenness = 1.0f - holes.closedness ((float) (f.h[(size_t) kBellSensor] - baseline[(size_t) kBellSensor]) / bellSpan);
@@ -1030,11 +1075,18 @@ int main (int argc, char* argv[])
         };
 
         // Render, one frame at a time with its real spacing.
-        constexpr double rate = 48000.0;
+        double rate = 48000.0;  // rate=<Hz>: the device rate (the model runs at twice it below 88.2 kHz)
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("rate="))
+                rate = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         WhistleModel model;
         model.setGeometry (g);
         model.prepare (rate);
         model.setVoicing (instrument.voicing);
+        if (pulsingOverride >= 0.0f)
+            model.noisePulsing = pulsingOverride;
+        model.testEdgeNoise = replayEdgeNoise;
+        model.testJetWobble = replayWobble;
         std::vector<float> out;
         std::vector<Controls> controlsAt;  // Per output sample... too big; per frame instead
         std::vector<size_t> frameStart;
@@ -1813,6 +1865,117 @@ int main (int argc, char* argv[])
             rel (tail, 1, 0, rate);
             std::printf ("%6.0f /%5.0f\n", harmonic (jetLog, 4, 2, inner, 1), harmonic (jetLog, 4, 3, inner, 1));
         }
+        return 0;
+    }
+
+    if (mode == "rough")  // rough [preset] [voicing options]: second- and third-octave notes held steady, inharmonic tones and flutter
+    {
+        // A second oscillation at another resonance of the bore, alongside the note (not locked to its harmonics),
+        // mixes with the note's harmonics into tones a few tens of Hz from them: a rattling, metallic "trrrr".
+        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
+        auto g = presets()[index];
+        windwayArgs (argc, argv, 3, g);
+        auto voicing = presetVoicing (index);
+        voicing.breathNoise = 0.0f;  // Only the oscillation itself, unless noise= is given
+        jetVoicingArgs (argc, argv, 3, voicing);
+        float edgeNoiseScale = 1.0f, wobbleScale = 1.0f;  // edgenoise=, wobble=: the noise's two paths
+        for (int i = 3; i < argc; ++i)
+        {
+            const juce::String arg (argv[i]);
+            if (arg.startsWith ("edgenoise=")) edgeNoiseScale = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+            if (arg.startsWith ("wobble=")) wobbleScale = arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+        }
+        voicing.vortexLoss *= vortexArg;
+        constexpr double rate = 48000.0;
+        std::printf ("%s, breath noise off. Per note and pressure: the strongest component that is not a harmonic (more than 40 Hz from one,\n"
+                     "dB re the fundamental, 200 Hz-9 kHz) and the level's flutter at 15-80 Hz (%% of the level). '<' marks > -45 dB or > 1 %%.\n\n",
+                     g.name.toRawUTF8());
+        int rough = 0, total = 0;
+        for (const auto& c : chartFor (g.chart))
+        {
+            if (c.reg < 2)
+                continue;
+            std::printf ("  %-6s %s ", c.name, c.holePattern (g).c_str());
+            for (double pressure : { 1200.0, 1600.0, 2000.0, 2500.0, 3000.0, 3600.0 })
+            {
+                WhistleModel model;
+                model.setGeometry (g);
+                model.prepare (rate);
+                model.setVoicing (voicing);
+                model.testEdgeNoise = edgeNoiseScale;
+                model.testJetWobble = wobbleScale;
+                auto controls = controlsFor (c.openness (g));
+                std::vector<float> out ((size_t) (3.0 * rate), 0.0f);
+                const int block = (int) (rate * 0.002);
+                for (int start = 0; start < (int) out.size(); start += block)
+                {
+                    controls.mouthPressure = (float) (pressure * std::min (1.0, start / (rate * 0.04)));
+                    model.setControls (controls);
+                    model.render (out.data() + start, std::min (block, (int) out.size() - start));
+                }
+                const std::vector<float> tail (out.end() - (long) (0.8 * rate), out.end());
+                saveWavArg (argc, argv, juce::String (c.name).replace (" ", "-") + "-" + juce::String ((int) pressure), out, rate);
+                double clarity = 0.0;
+                const double f0 = measurePitch (tail, rate, clarity);
+                if (f0 <= 0.0)
+                {
+                    std::printf ("  %4.0f: -        ", pressure);
+                    continue;
+                }
+                constexpr int order = 16;
+                const size_t n = (size_t) 1 << order;
+                std::vector<float> buffer (2 * n, 0.0f);
+                for (size_t k = 0; k < tail.size(); ++k)
+                    buffer[k] = tail[k] * (float) (0.5 - 0.5 * std::cos (2.0 * juce::MathConstants<double>::pi * (double) k / (double) tail.size()));
+                juce::dsp::FFT (order).performFrequencyOnlyForwardTransform (buffer.data());
+                const double binHz = rate / (double) n;
+                double top = 1e-12, other = 1e-12, otherHz = 0.0;
+                for (size_t b = (size_t) (200.0 / binHz); b < (size_t) (9000.0 / binHz); ++b)
+                {
+                    const double hz = (double) b * binHz, m = buffer[b];
+                    const double fromHarmonic = std::abs (hz - f0 * std::round (hz / f0));
+                    if (fromHarmonic < 15.0)
+                        top = std::max (top, m);
+                    else if (fromHarmonic > 40.0 && m > other)
+                    {
+                        other = m;
+                        otherHz = hz;
+                    }
+                }
+                const double inharmonic = 20.0 * std::log10 (other / top);
+                // Flutter: the level in 5 ms steps, its strongest swing at 15-80 Hz.
+                const size_t step = (size_t) (0.005 * rate);
+                std::vector<double> level;
+                for (size_t k = 0; k + step <= tail.size(); k += step)
+                {
+                    double e = 0.0;
+                    for (size_t j = k; j < k + step; ++j)
+                        e += (double) tail[j] * tail[j];
+                    level.push_back (std::sqrt (e / (double) step));
+                }
+                double mean = 0.0;
+                for (double v : level) mean += v;
+                mean /= (double) level.size();
+                double flutter = 0.0;
+                for (double hz = 15.0; hz <= 80.0; hz += 1.0)
+                {
+                    double re = 0.0, im = 0.0;
+                    for (size_t k = 0; k < level.size(); ++k)
+                    {
+                        const double ph = 2.0 * juce::MathConstants<double>::pi * hz * (double) k * 0.005;
+                        re += (level[k] - mean) * std::cos (ph);
+                        im += (level[k] - mean) * std::sin (ph);
+                    }
+                    flutter = std::max (flutter, 2.0 * std::hypot (re, im) / (double) level.size() / mean);
+                }
+                const bool bad = inharmonic > -45.0 || flutter > 0.01;
+                rough += bad ? 1 : 0;
+                ++total;
+                std::printf ("  %4.0f:%5.0f@%4.0f %4.1f%%%s", pressure, inharmonic, otherHz, 100.0 * flutter, bad ? "<" : " ");
+            }
+            std::printf ("\n");
+        }
+        std::printf ("\n%d of %d rough\n", rough, total);
         return 0;
     }
 

@@ -418,7 +418,8 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
         .setTooltip ("A slowly blown jet amplifies more (more wavelengths fit across the window), a fast one less: soft notes come "
                      "out rich, like a real whistle's bottom D, and the hard-blown second octave purer. 0 = the same at any "
                      "speed; 0.67 = thin-jet theory.");
-    addRow ("Jet spreading", 0.0, 2.0, 0.01, "", [&model] { return (double) model.jetSpreading.load(); },
+    // Up to 4: the Goldie style uses 3.
+    addRow ("Jet spreading", 0.0, 4.0, 0.01, "", [&model] { return (double) model.jetSpreading.load(); },
             [&model] (double v) { model.jetSpreading = (float) v; }, false)
         .setTooltip ("The jet widens on its way across the window, much more once it's fast enough to be turbulent (1 = a "
                      "turbulent plane jet, ~0.1 x the window length; 0 = constant width). A wider jet at the edge switches "

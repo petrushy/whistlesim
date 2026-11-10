@@ -85,6 +85,7 @@ public:
     std::vector<float>* windowFlowLog = nullptr;
     std::vector<float>* jetLog = nullptr;  // Per sample: deflection minus edge (m), jet flow (m^3/s), jet drive, vortex drop (Pa)
     float testWindowRadiation = 1.0f, testBodyRadiation = 1.0f;
+    float testEdgeNoise = 1.0f, testJetWobble = 1.0f;  // Scale the breath noise's two paths (WhistleCheck rough)
     bool testWindowLoss = true;  // The window's radiation loss (off: a lossless air mass, as before 2026-11-06)  // Scale what the window / the holes and foot radiate
 
     // For display.

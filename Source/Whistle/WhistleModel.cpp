@@ -486,8 +486,8 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float band = (noiseLow - noiseHigh) * noiseNorm * 1.4f;  // Second pole: ~1.4x to keep the level
 
     const float amount = breathNoise.load (std::memory_order_relaxed);
-    // Edge noise: of order rho U^2, growing a little faster (U^2.5): the edge-dipole law (U^3) let the hiss
-    // overtake the tone at the high pressures of the top notes.
+    // Edge noise: of order rho U^2 (below). The edge-dipole law (U^3) let the hiss overtake the tone at the high
+    // pressures of the top notes.
 
     // Attack chiff: a jet that has just started (its speed well above its ~20 ms average, as after a tongued
     // attack, not in a slow swell) rolls up a starting vortex and is turbulent, and until the sound in the pipe
@@ -500,8 +500,13 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float turbulent = juce::jlimit (0.0f, 1.0f, (reynolds - 1000.0f) / 2000.0f);
     const float chiff = 1.0f + attackChiff.load (std::memory_order_relaxed) * turbulent * starting * (1.0f - jetLock);
 
-    const float steadyEdgeNoise = chiff * amount * kEdgeNoise * rho * jetSpeed * jetSpeed * std::sqrt (jetSpeed / 20.0f) * band;  // Pa
-    const float turbulence = chiff * amount * 0.15f * band;  // In jet half-widths: a slight unsteadiness, not roughness
+    // Edge noise as the dynamic pressure, rho U^2 (kept at its earlier level for a low note at ~400 Pa, where it was
+    // rho U^2 x sqrt(U / 20 m/s)). That U^2.5 law made the second octave 4-5 dB noisier, relative to its tone, than the
+    // first; recorded Goldie and Lofgren whistles have the same noise floor in both octaves (-66 and -69 dB between the
+    // harmonics at 2.5-6 kHz).
+    constexpr float kEdgeNoiseAt400Pa = 1.14f;  // sqrt(25.8 / 20)
+    const float steadyEdgeNoise = testEdgeNoise * chiff * amount * kEdgeNoise * rho * jetSpeed * jetSpeed * kEdgeNoiseAt400Pa * band;  // Pa
+    const float turbulence = testJetWobble * chiff * amount * 0.15f * band;  // In jet half-widths: a slight unsteadiness, not roughness
 
     // A jet amplifies disturbances most around one frequency, set by its speed and thickness (Strouhal number
     // f h / U), and less above and below. Blowing harder moves that band up, which is what lets the higher
