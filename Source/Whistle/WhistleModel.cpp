@@ -193,6 +193,7 @@ void WhistleModel::setVoicing (const Voicing& v)
     jetStages = juce::jlimit (1, 2, v.jetStages);
     breathScale = v.breathScale;
     jetSpreading = v.jetSpreading;
+    jetBend = v.jetBend;
     fingerTap = v.fingerTap;
     fingerSoftness = v.fingerSoftness;
     bodyKnock = v.bodyKnock;
@@ -218,6 +219,7 @@ Voicing WhistleModel::getVoicing() const
     v.jetStages = jetStages.load();
     v.breathScale = breathScale.load();
     v.jetSpreading = jetSpreading.load();
+    v.jetBend = jetBend.load();
     v.fingerTap = fingerTap.load();
     v.fingerSoftness = fingerSoftness.load();
     v.bodyKnock = bodyKnock.load();
@@ -551,7 +553,15 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     // The slow jet's extra growth is for long waves (at and below the band centre), not for high resonances.
     jetBoostLow += jetBoostA * (filtered - jetBoostLow);
     const float deflection = jetAmplification * h * (filtered + jetSlowBoost * jetBoostLow) / speed + turbulence * jetHalfWidth * std::min (1.0f, jetSpeed / 20.0f);
-    const float edge = cfg.edgeOffset + current.edgeShift;  // Where the jet's centre line meets the edge
+    // A steady pressure difference across the jet bends it on its way: by dp W^2 / (2 rho h U^2) at the edge (a jet
+    // of thickness h accelerated sideways by dp / (rho h) for W / U), so a slow jet meets the edge further off its
+    // centre line than a fast one. Below the speed the lowest note is played at, the bend stays what it is there, and
+    // it levels off at the jet's half-width: a jet bent ever further as the breath falls would miss the edge, and
+    // notes would need more breath to start.
+    const float bendSpeed = std::max (speed, cfg.referenceJetSpeed);
+    const float freeBend = jetBend.load (std::memory_order_relaxed) * cfg.windowLength * cfg.windowLength / (2.0f * rho * h * bendSpeed * bendSpeed);
+    const float bend = jetHalfWidth * std::tanh (freeBend / jetHalfWidth);
+    const float edge = cfg.edgeOffset + current.edgeShift + bend;  // Where the jet's centre line meets the edge
     const float jetFlow = cfg.windowWidth * jetHalfWidth * jetSpeed * flowShare * std::tanh ((deflection - edge) / jetHalfWidth);
 
     // The edge turbulence comes in bursts as the jet sweeps across the edge (pulsed noise, locked to the tone),

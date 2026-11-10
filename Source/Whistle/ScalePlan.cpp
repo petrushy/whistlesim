@@ -86,7 +86,7 @@ int scaleControlsAt (const std::vector<ScaleStep>& steps, double t, Controls& co
     return step;
 }
 
-std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lowestHz, int semitones)
+std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lowestHz, int semitones, const std::map<std::string, float>* aimCents)
 {
     std::vector<ScaleStep> steps;
     std::set<double> done;
@@ -102,6 +102,10 @@ std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lo
 
         const double target = lowestHz * std::pow (2.0, c.semitones / 12.0);
         const auto open = c.openness (g);
+        float aim = 0.0f;  // Cents from the note to play at
+        if (aimCents != nullptr)
+            if (const auto found = aimCents->find (noteName (target)); found != aimCents->end())
+                aim = found->second;
 
         // Try pressures from soft to hard (each register in its usual range) and keep the closest in tune, among
         // those at which the fingering also sounds one step softer (in any register): right at the threshold a
@@ -129,7 +133,7 @@ std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lo
                 const auto& here = candidates[k];
                 const bool smooth = k > 0 && k + 1 < candidates.size() && std::abs (candidates[k - 1].cents - here.cents) <= 20.0f
                                     && std::abs (candidates[k + 1].cents - here.cents) <= 20.0f;
-                if (here.reliable && (smooth || pick == 1) && std::abs (here.cents) < std::abs (best.cents))
+                if (here.reliable && (smooth || pick == 1) && std::abs (here.cents - aim) < std::abs (best.cents - aim))
                 {
                     best.cents = here.cents;
                     best.pressure = here.pressure;

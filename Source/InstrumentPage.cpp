@@ -424,6 +424,12 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
         .setTooltip ("The jet widens on its way across the window, much more once it's fast enough to be turbulent (1 = a "
                      "turbulent plane jet, ~0.1 x the window length; 0 = constant width). A wider jet at the edge switches "
                      "less abruptly: hard-blown notes, the second octave, come out louder and purer.");
+    addRow ("Jet bend", -20.0, 40.0, 0.5, "Pa", [&model] { return (double) model.jetBend.load(); },
+            [&model] (double v) { model.jetBend = (float) v; }, false)
+        .setTooltip ("A steady sideways push on the jet, as the pressure difference across it; positive bends it out of the "
+                     "pipe, like moving the edge further in. A slow jet is bent much more than a fast one, so the low "
+                     "register gets a stronger second harmonic and the second octave comes out purer, as on real whistles. "
+                     "0 = none: the edge offset alone, the same at every breath.");
     addRow ("Jet band-pass stages", 1.0, 2.0, 1.0, "", [&model] { return (double) model.jetStages.load(); },
             [&model] (double v) { model.jetStages = juce::roundToInt (v); }, false)
         .setTooltip ("How sharply the jet prefers frequencies near its Strouhal number. 2 = sharper, but its extra phase shift "

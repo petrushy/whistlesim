@@ -7,7 +7,7 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 - `Source/StreamProtocol.h`: protocol decoder and encoder, no JUCE. It must match the firmware; the version byte in each frame says which format it is.
 - `Source/Whistle/`: geometry, frequency-domain acoustics (`Acoustics`) and the time-domain model (`WhistleModel`).
 - `Source/*Page`: the Monitor, Instrument, Sensors and Model tabs.
-- `tools/`: lowercase. WarblSimulator, ReverbCheck, WhistleCheck, stream_monitor.py, and `Real-examples/` (recordings of real whistles the presets are fitted to).
+- `tools/`: lowercase. WarblSimulator, ReverbCheck, WhistleCheck, stream_monitor.py, fit_voicing.py (searches a voicing against a recording, with WhistleCheck), and `Real-examples/` (recordings of real whistles the presets are fitted to).
 
 ## Build and check
 
@@ -33,7 +33,7 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 - **Audio-thread code:** no locks (try-lock only), no allocation. Data goes from the MIDI thread to the audio thread through `SpscQueue`, and settings through atomics. Geometry is handed over to the audio thread with a try-locked pending copy.
 - **Preset dimensions are tuned offline.** After changing the acoustics or a preset, run `WhistleCheck code` and paste the printed values into `WhistleGeometry.cpp`; `PresetTuningTest` checks them.
 - **Holes:** there are eight, one per WARBL finger sensor (LT, L1–L3, R1–R4). Each has an enabled flag, and code must skip plugged holes.
-- **Verifying model changes:** run `WhistleCheck` (`play`, `chart`, `slide`) before and after. It measures what the model actually plays.
+- **Verifying model changes:** run `WhistleCheck` (`play`, `chart`, `slide`) before and after. It measures what the model actually plays. For a voicing, `analyse <recording> <preset>` scores it against a recorded whistle, and `transition`, `glide` and `breath` check it stays playable. `transition` and `glide` time the fundamental only: a rich tone's harmonics add zero crossings, which once read as register jumps (`raw=1` gives the old reading).
 - **Protocol changes** go in both repos: bump the version byte, keep decoding the older versions, and update `SENSOR_STREAM.md` in the firmware repo.
 - **Instrument files** keep the format ID `warbl-whistle` (older files must still load).
 - Match the surrounding style: comments explain why, units are in comments, and variable names are descriptive.

@@ -150,6 +150,16 @@ struct Voicing
     // that, 0 = a jet of constant width (0.4 h). A wider jet at the edge switches less abruptly and carries more
     // flow: fast-blown notes (the second octave) come out louder and purer, as on real whistles.
     float jetSpreading = 0.0f;
+    // A steady sideways push on the jet as it crosses the window, as the pressure difference across it that would
+    // give it (Pa; positive bends the jet out of the pipe, which is the same as moving the edge further in). A thin
+    // jet under a pressure difference dp is displaced by dp W^2 / (2 rho h U^2) at the edge, so the bend is large
+    // for a slow jet and nearly gone for a fast one: the low register gets the even harmonics of an off-centre
+    // edge and the second register comes out purer, as on recorded whistles (their second harmonic drops 8-21 dB
+    // between the octaves; a fixed edge offset gives ~7). Below the jet speed the lowest note is played at (the
+    // model's reference speed) the bend stays what it is there, and it levels off at the jet's half-width, so
+    // notes still start at a soft breath. 0 = none.
+    // A fitted law: what bends a real whistle's jet, and by how much, has not been measured.
+    float jetBend = 0.0f;
     // How hard this instrument is blown, as a share of WARBL's breath response (Sensors tab): a recorder is blown
     // about half as hard as a whistle, but WARBL's mouthpiece feels the same for both. Only WARBL's breath is
     // scaled (not Play scale or playing from the screen, which give the model's own pressures).
