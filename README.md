@@ -10,6 +10,10 @@ WARBL needs firmware with the sensor stream, from the `sensor-stream` branch of 
 - **WhistleCheck** (`tools/`): tunes and tabulates the whistle presets, and plays the model offline to measure what it sounds (see below).
 - **StreamProtocol.h**: the protocol decoder. It has no JUCE dependency, so a synth plugin can use it too.
 
+## Download
+
+Ready-built versions for macOS 12 or newer (Apple silicon and Intel) are on the [Releases](https://github.com/petrushy/whistlesim/releases) page. The app isn't notarized, so the first time, right-click it and choose **Open**.
+
 ## Building
 
 Two parts: the **WARBL firmware** (with the sensor stream) goes on the instrument, and the **WhistleSim app** runs on the computer. The app only hears WARBL if the firmware has the sensor stream, and the stream only goes over a USB cable.

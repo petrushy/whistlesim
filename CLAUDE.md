@@ -21,6 +21,12 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 - App state lives in `~/Library/Application Support/WhistleSim/WhistleSim.settings`; it's the user's real settings. A `--snapshot` run doesn't save state on exit, doesn't connect to MIDI devices (so it can't disturb the user's WARBL session; use `--simulate`), outputs silence (it still computes the sound, so the CPU figure is real), and may run alongside the user's own copy of the app. If a test edits the file, put it back afterwards.
 - A MacBook with its lid closed runs no audio at all: the app shows "blocks 0", and even `afplay` hangs. That isn't an app bug.
 
+## CI and releases
+
+- `.github/workflows/ci.yml` builds and runs the tests on macOS for every push to `main` and every pull request.
+- `.github/workflows/release.yml`: pushing a tag `vX.Y.Z` builds a universal app (arm64 + x86_64), tests it and publishes `WhistleSim-vX.Y.Z-macOS.zip` as a GitHub Release. The tag must equal `VERSION` in `CMakeLists.txt` (the About window shows it), so bump that first. The app is ad-hoc signed, not notarized. Running the workflow by hand is a dry run that keeps the zip as a workflow artifact.
+- The workflows take JUCE from a cached clone (`JUCE_VERSION` in both files); keep it in step with `GIT_TAG` in `CMakeLists.txt`.
+
 ## Conventions
 
 - **Physical model principle:** sound comes from simulating the instrument. Never map fingerings to notes. Hole sensors give continuous openness, and pitch, half-holing, slides and overblowing must come out of the simulation. `Acoustics` (transfer-matrix method) is only a design aid, for the tuning table and hole placement.

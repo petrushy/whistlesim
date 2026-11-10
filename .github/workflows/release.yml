@@ -1,0 +1,81 @@
+# Pushing a tag like v0.2.0 builds a universal (Apple silicon + Intel) WhistleSim.app, runs the tests and publishes it
+# as a GitHub Release. The tag must match the VERSION in CMakeLists.txt, which the About window shows.
+# Run by hand (Actions > Release > Run workflow) it is a dry run: it builds and keeps the zip as a workflow artifact.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write  # To create the release
+
+env:
+  JUCE_VERSION: 9.0.5  # Keep in step with GIT_TAG in CMakeLists.txt
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the project version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(sed -nE 's/^project\(WhistleSim VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match VERSION $version in CMakeLists.txt"
+            exit 1
+          fi
+
+      - name: Cache JUCE
+        id: juce-cache
+        uses: actions/cache@v4
+        with:
+          path: .juce
+          key: juce-${{ env.JUCE_VERSION }}
+      - name: Fetch JUCE
+        if: steps.juce-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git .juce
+
+      - name: Configure (universal)
+        run: >
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/.juce"
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Build
+        run: cmake --build build -j"$(sysctl -n hw.ncpu)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Not signed with a Developer ID or notarized: an ad-hoc signature only, so macOS asks before the first launch
+      # (see the release notes).
+      - name: Package
+        run: |
+          app="build/WhistleSim_artefacts/Release/WhistleSim.app"
+          lipo -info "$app/Contents/MacOS/WhistleSim"
+          codesign --force --deep --sign - "$app"
+          ditto -c -k --keepParent "$app" "WhistleSim-$GITHUB_REF_NAME-macOS.zip"
+
+      - name: Keep the zip (dry run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhistleSim-macOS
+          path: WhistleSim-*-macOS.zip
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **macOS 12 or newer, Apple silicon and Intel.** Unzip and move WhistleSim.app to Applications. The app isn't
+          notarized, so the first time, right-click it and choose **Open** (or allow it in System Settings → Privacy &
+          Security). To play it from a WARBL2, flash the sensor-stream firmware: see
+          [SENSOR_STREAM.md](https://github.com/petrushy/WARBL2/blob/sensor-stream/SENSOR_STREAM.md). Without a WARBL,
+          switch on **Simulate WARBL** in the app.
+          EOF
+          gh release create "$GITHUB_REF_NAME" "WhistleSim-$GITHUB_REF_NAME-macOS.zip" \
+            --title "WhistleSim $GITHUB_REF_NAME" --notes-file notes.md --generate-notes
