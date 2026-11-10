@@ -1,0 +1,33 @@
+# WhistleSim
+
+A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder from a WARBL2 wind controller, plus room reverb. WARBL sends raw sensor frames over USB MIDI SysEx; the firmware side lives in petrushy/WARBL2, branch `sensor-stream` (`warbl2_firmware/Sensor_stream.ino`, protocol in `SENSOR_STREAM.md`), usually checked out at `../WARBL2-phy`. This repo was split out of that one's `host/` folder on 2026-11-10, with its history.
+
+## Layout
+
+- `Source/StreamProtocol.h`: protocol decoder and encoder, no JUCE. It must match the firmware; the version byte in each frame says which format it is.
+- `Source/Whistle/`: geometry, frequency-domain acoustics (`Acoustics`) and the time-domain model (`WhistleModel`).
+- `Source/*Page`: the Monitor, Instrument, Sensors and Model tabs.
+- `tools/`: lowercase. WarblSimulator, ReverbCheck, WhistleCheck, stream_monitor.py, and `Real-examples/` (recordings of real whistles the presets are fitted to).
+
+## Build and check
+
+    cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j8
+    ctest --test-dir build                                         # protocol, instrument-file and preset tuning tests
+    build/WhistleCheck_artefacts/Release/WhistleCheck chart 0       # whistle (or a name: chart recorder): predicted + played tuning
+    build/ReverbCheck_artefacts/Release/ReverbCheck <dir>          # reverb times / balance vs. targets, WAVs
+
+- The first configure downloads JUCE 9.0.5. LTO is deliberately off, because linking took many minutes.
+- To check the app without anyone at the screen, use `build/WhistleSim_artefacts/Release/WhistleSim.app/Contents/MacOS/WhistleSim --simulate --instrument --snapshot out.png`. Other options: `--sensors`, `--monitor`, `--model` (a live look inside the model; `--play` gives it something to show), `--about`, `--play`, `--output <device>`. Read the PNG.
+- App state lives in `~/Library/Application Support/WhistleSim/WhistleSim.settings`; it's the user's real settings. A `--snapshot` run doesn't save state on exit, doesn't connect to MIDI devices (so it can't disturb the user's WARBL session; use `--simulate`), outputs silence (it still computes the sound, so the CPU figure is real), and may run alongside the user's own copy of the app. If a test edits the file, put it back afterwards.
+- A MacBook with its lid closed runs no audio at all: the app shows "blocks 0", and even `afplay` hangs. That isn't an app bug.
+
+## Conventions
+
+- **Physical model principle:** sound comes from simulating the instrument. Never map fingerings to notes. Hole sensors give continuous openness, and pitch, half-holing, slides and overblowing must come out of the simulation. `Acoustics` (transfer-matrix method) is only a design aid, for the tuning table and hole placement.
+- **Audio-thread code:** no locks (try-lock only), no allocation. Data goes from the MIDI thread to the audio thread through `SpscQueue`, and settings through atomics. Geometry is handed over to the audio thread with a try-locked pending copy.
+- **Preset dimensions are tuned offline.** After changing the acoustics or a preset, run `WhistleCheck code` and paste the printed values into `WhistleGeometry.cpp`; `PresetTuningTest` checks them.
+- **Holes:** there are eight, one per WARBL finger sensor (LT, L1–L3, R1–R4). Each has an enabled flag, and code must skip plugged holes.
+- **Verifying model changes:** run `WhistleCheck` (`play`, `chart`, `slide`) before and after. It measures what the model actually plays.
+- **Protocol changes** go in both repos: bump the version byte, keep decoding the older versions, and update `SENSOR_STREAM.md` in the firmware repo.
+- **Instrument files** keep the format ID `warbl-whistle` (older files must still load).
+- Match the surrounding style: comments explain why, units are in comments, and variable names are descriptive.

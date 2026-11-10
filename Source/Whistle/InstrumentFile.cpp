@@ -114,7 +114,7 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
     }
     if ((int) root["version"] > kVersion)
     {
-        error = "Made by a newer version of WARBL Stream";
+        error = "Made by a newer version of WhistleSim";
         return std::nullopt;
     }
 

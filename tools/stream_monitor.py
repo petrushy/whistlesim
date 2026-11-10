@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn on the WARBL2 sensor stream over USB MIDI and print the decoded frames.
 
-A quick hardware check for the sensor stream (see warbl2_firmware/Sensor_stream.ino)
+A quick hardware check for the sensor stream (see Sensor_stream.ino in petrushy/WARBL2, branch sensor-stream)
 before the host app exists. Needs: pip install mido python-rtmidi
 
     python3 stream_monitor.py              # stream with normal MIDI output still on

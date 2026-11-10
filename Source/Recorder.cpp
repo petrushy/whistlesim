@@ -13,7 +13,7 @@ Recorder::~Recorder()
 
 juce::File Recorder::getFolder() const
 {
-    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads").getChildFile ("WARBL Stream recordings");
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads").getChildFile ("WhistleSim recordings");
 }
 
 bool Recorder::start (double sampleRate, const juce::StringArray& header)

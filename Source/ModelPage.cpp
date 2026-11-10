@@ -655,7 +655,7 @@ void ModelPage::paintHarmonics (juce::Graphics& g, juce::Rectangle<float> area)
     g.fillRoundedRectangle (area, 6.0f);
     area = area.reduced (10.0f);
     title (g, area.removeFromTop (46.0f), "Harmonics of the sound",
-           "In dB below the fundamental. Real high-D whistles (host/tools/Real-examples): bottom D about -2 dB at H2 and H3; "
+           "In dB below the fundamental. Real high-D whistles (tools/Real-examples): bottom D about -2 dB at H2 and H3; "
            "first-octave average -12, -15, -26, -23; the second octave is nearly pure (-31).");
     if (! playing)
         return;

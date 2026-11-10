@@ -1,8 +1,10 @@
-# WARBL2 sensor stream host
+# WhistleSim
 
-Computer-side tools for the WARBL2 sensor stream, where WARBL sends its sensor readings over USB MIDI SysEx instead of notes (see `warbl2_firmware/Sensor_stream.ino`). The plan is for a physical model on the computer to make the sound.
+A physical model of a whistle (and recorder), played from a WARBL2 wind controller. WARBL sends its raw sensor readings (tone holes, breath pressure, motion) over USB MIDI SysEx, and WhistleSim simulates the instrument from them: the air jet, the window, the bore and the tone holes. There is no table of fingerings and notes, so pitch, half-holing, slides and overblowing all come out of the physics. It is an independent project, not made by or affiliated with the makers of WARBL.
 
-- **WARBL Stream** (`Source/`): the app (built and tested on macOS; see Building for Linux and Windows). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and gyro. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
+WARBL needs firmware with the sensor stream, from the `sensor-stream` branch of [petrushy/WARBL2](https://github.com/petrushy/WARBL2/tree/sensor-stream); its `SENSOR_STREAM.md` describes the protocol and how to build and flash the firmware. Without a WARBL, the app's built-in simulator plays it.
+
+- **WhistleSim** (`Source/`): the app (built and tested on macOS; see Building for Linux and Windows). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and gyro. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
 - **WARBL Simulator** (`tools/`): a virtual WARBL that plays a scale, as a separate MIDI device. The app also has this built in.
 - **ReverbCheck** (`tools/`): measures the generated rooms and renders WAV files for listening.
 - **WhistleCheck** (`tools/`): tunes and tabulates the whistle presets, and plays the model offline to measure what it sounds (see below).
@@ -10,7 +12,7 @@ Computer-side tools for the WARBL2 sensor stream, where WARBL sends its sensor r
 
 ## Building
 
-Two parts: the **WARBL firmware** (with the sensor stream) goes on the instrument, and the **WARBL Stream app** runs on the computer. The app only hears WARBL if the firmware has `Sensor_stream.ino`, and the stream only goes over a USB cable.
+Two parts: the **WARBL firmware** (with the sensor stream) goes on the instrument, and the **WhistleSim app** runs on the computer. The app only hears WARBL if the firmware has the sensor stream, and the stream only goes over a USB cable.
 
 **Platforms.** Everything here has been built and tested on **macOS** only (Apple silicon, macOS 15). The firmware builds with the cross-platform Arduino tools, so it should build the same way on Linux and Windows. The app uses only JUCE (audio, MIDI, GUI) and standard C++20, with nothing Mac-specific in its code, so it should also build on **Linux** and **Windows**, but it hasn't been tried there yet: expect to fix small compiler differences. Known limits elsewhere: the separate `WarblSimulator` tool makes virtual MIDI ports, which Windows doesn't support (the simulator built into the app works everywhere); on Windows, use WASAPI (exclusive mode) or an ASIO-capable interface for low latency, and on Linux JACK or PipeWire.
 
@@ -21,11 +23,10 @@ You need a C++20 compiler, CMake 3.22 or newer, and git. The first configure dow
 **macOS:** install the Xcode command line tools (`xcode-select --install`) and CMake (`brew install cmake`). Then:
 
 ```
-cd host
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build          # protocol, instrument file and preset tuning tests
-open "build/WarblStream_artefacts/Release/WARBL Stream.app"
+open "build/WhistleSim_artefacts/Release/WhistleSim.app"
 ```
 
 **Linux** (untested; Debian/Ubuntu package names): install the build tools and JUCE's dependencies:
@@ -34,60 +35,26 @@ open "build/WarblStream_artefacts/Release/WARBL Stream.app"
 sudo apt install build-essential cmake git pkg-config libasound2-dev libjack-jackd2-dev \
     libfreetype-dev libfontconfig1-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
     libxinerama-dev libxrandr-dev libxrender-dev
-cd host
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build
-"build/WarblStream_artefacts/Release/WARBL Stream"
+"build/WhistleSim_artefacts/Release/WhistleSim"
 ```
 
 **Windows** (untested): install Visual Studio 2022 with the "Desktop development with C++" workload, CMake and git. In a "Developer PowerShell for VS 2022":
 
 ```
-cd host
 cmake -B build
 cmake --build build --config Release
 ctest --test-dir build -C Release
-& "build\WarblStream_artefacts\Release\WARBL Stream.exe"
+& "build\WhistleSim_artefacts\Release\WhistleSim.exe"
 ```
 
-Settings and your presets are kept in `~/Library/Application Support/WARBL Stream/` on macOS, `~/.config/WARBL Stream/` on Linux and `%APPDATA%\WARBL Stream\` on Windows. The check tools (`WhistleCheck`, `ReverbCheck`, `WarblSimulator`) are built alongside, in `build/<Tool>_artefacts/Release/`.
+Settings and your presets are kept in `~/Library/Application Support/WhistleSim/` on macOS, `~/.config/WhistleSim/` on Linux and `%APPDATA%\WhistleSim\` on Windows. The check tools (`WhistleCheck`, `ReverbCheck`, `WarblSimulator`) are built alongside, in `build/<Tool>_artefacts/Release/`.
 
 ### The firmware
 
-The firmware is built with **arduino-cli** (or the Arduino IDE, see the repository's main README) and the Adafruit nRF52 board package, with WARBL's own board definition. These steps were used for this fork, on macOS; paths for Linux and Windows are given where they differ.
-
-1. **Install arduino-cli** (macOS: `brew install arduino-cli`; Linux and Windows: see arduino.github.io/arduino-cli) and **Python 3** (for the UF2 converter).
-2. **Install the Adafruit nRF52 boards, version 1.7.0:**
-   ```
-   arduino-cli config init
-   arduino-cli config add board_manager.additional_urls https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
-   arduino-cli core update-index
-   arduino-cli core install adafruit:nrf52@1.7.0
-   ```
-   On Linux the package's upload tool also needs `pip3 install --user adafruit-nrfutil`.
-3. **Add the WARBL2 board:** copy `warbl2_firmware/boards.local.txt` into the board package's folder:
-   - macOS: `~/Library/Arduino15/packages/adafruit/hardware/nrf52/1.7.0/`
-   - Linux: `~/.arduino15/packages/adafruit/hardware/nrf52/1.7.0/`
-   - Windows: `%LOCALAPPDATA%\Arduino15\packages\adafruit\hardware\nrf52\1.7.0\`
-4. **Install the libraries** (their own dependencies, Adafruit BusIO and Adafruit Unified Sensor, come with them):
-   ```
-   arduino-cli lib install "MIDI Library@5.0.2" "Adafruit LSM6DS@4.7.4" "ResponsiveAnalogRead@1.2.1" "SensorFusion@1.0.6"
-   ```
-5. **Compile**, from the repository's top folder:
-   ```
-   arduino-cli compile --fqbn adafruit:nrf52:warbl2 --output-dir build-firmware warbl2_firmware
-   ```
-   On macOS put `LC_ALL=en_US.UTF-8` in front: the package's nrfutil step fails without a UTF-8 locale. A successful build ends with "Sketch uses … bytes".
-6. **Make the UF2 file** that WARBL's bootloader takes:
-   ```
-   python3 <board package folder>/tools/uf2conv/uf2conv.py -c -f 0xADA52840 -o warbl2-sensor-stream.uf2 build-firmware/warbl2_firmware.ino.hex
-   ```
-   (`<board package folder>` is the folder from step 3.)
-7. **Flash it:** double-click WARBL's reset button (or hold button 1 while plugging it in). A drive called WARBLBOOT appears; copy the `.uf2` file onto it. WARBL restarts with the new firmware by itself.
-8. **Check:** start the app, tick **Stream** and press **Request info**. The Monitor tab should show "loop 2 ms", about 500 frames/s, "new hole readings in ~100 % of frames" and no lost frames.
-
-The tone-hole co-processor (`ATmega_firmware/`) is unchanged in this fork: WARBL only reprograms it when `ATMEGA_FIRMWARE_VERSION` in `Defines.h` changes, so leave that alone unless you change the ATmega code. To go back to the official firmware, flash a release `.uf2` from warbl.xyz the same way.
+Build and flash the firmware from [petrushy/WARBL2](https://github.com/petrushy/WARBL2/tree/sensor-stream), branch `sensor-stream`, as its `SENSOR_STREAM.md` describes. Then start the app, tick **Stream** and press **Request info**: the Monitor tab should show "loop 2 ms", about 500 frames/s, "new hole readings in ~100 % of frames" and no lost frames.
 
 ## Without a WARBL
 
@@ -95,7 +62,7 @@ The tone-hole co-processor (`ATmega_firmware/`) is unchanged in this fork: WARBL
 - **Play scale** (Monitor or Instrument tab, or the space bar) plays the current instrument through its own fingerings from the lowest note up two octaves. There's no synthesizer: the physical model is fingered and blown like a player would. The breath pressure for each note is the one at which the model plays it closest to its pitch, found by playing the model first (a few seconds; cached until the instrument changes), with its breath noise on as when the scale is played. A pressure is only chosen if the note sounds clearly (at least −40 dBFS) and also one step softer. The planner then plays the whole scale and gives any note that does not sound there 15 % more breath: near its threshold a flute note can start on its own but not after the previous note (hysteresis). Notes are tongued, about 0.5 s each. `WhistleCheck scale [preset] [file.wav]` plays the same scale offline, measures every note and can save it.
 - `build/WarblSimulator_artefacts/Release/WarblSimulator` is the same simulated player as a virtual MIDI device, for testing the MIDI path or other programs.
 
-Command-line options for testing (on `"WARBL Stream.app/Contents/MacOS/WARBL Stream"`): `--simulate`, `--play` (scale at start), `--output "<audio device>"`, and `--snapshot out.png`, which saves a picture of the window after 6 s and quits.
+Command-line options for testing (on `"WhistleSim.app/Contents/MacOS/WhistleSim"`): `--simulate`, `--play` (scale at start), `--output "<audio device>"`, and `--snapshot out.png`, which saves a picture of the window after 6 s and quits.
 
 Note that a MacBook with the lid closed and no external display runs no audio at all: the app then shows "blocks 0".
 
@@ -175,10 +142,10 @@ The model only records this while the tab is visible. `--model` opens the tab (w
 
 ## Saving
 
-- **The app remembers its state between runs.** It saves the current instrument, the sensor response, the reverb (room or IR file, level, pre-delay), the audio device and buffer size, and the open tab to `~/Library/Application Support/WARBL Stream/WARBL Stream.settings`.
+- **The app remembers its state between runs.** It saves the current instrument, the sensor response, the reverb (room or IR file, level, pre-delay), the audio device and buffer size, and the open tab to `~/Library/Application Support/WhistleSim/WhistleSim.settings`.
 - **Reference pitch:** **A =** on the tuning row (440 Hz by default; e.g. 442, or 415 for baroque pitch) is part of the instrument and is saved with it. The tuner, the tuning table, the key shown and the test scale aim for it. Press **Tune holes** after changing it.
 - **Tuning failures:** when moving holes can't put every note in tune at their sizes (a hole would have to sit past the one below it, or above the top of its range), **Tune holes** also changes the sizes of the holes that are stuck, as a maker would (smaller holes sit higher for the same note, larger lower), and lists them. When tuning to a new key it first scales the hole positions with the bore. `WhistleCheck fit` tunes every preset to every key: all succeed, a few only with resizing.
-- **Your presets:** **Save preset...** on the Instrument tab stores the current whistle (geometry and voicing, not the Sensors settings) under a name; it then appears in the preset list under **My presets**, after the built-in ones. Saving under an existing name of yours updates it; **Delete** (with confirmation) moves the selected preset of yours to the Trash and loads the next one of yours (or the first built-in preset if none are left). They are `.whistle` files in `~/Library/Application Support/WARBL Stream/Presets/`.
+- **Your presets:** **Save preset...** on the Instrument tab stores the current whistle (geometry and voicing, not the Sensors settings) under a name; it then appears in the preset list under **My presets**, after the built-in ones. Saving under an existing name of yours updates it; **Delete** (with confirmation) moves the selected preset of yours to the Trash and loads the next one of yours (or the first built-in preset if none are left). They are `.whistle` files in `~/Library/Application Support/WhistleSim/Presets/`.
 - **Instrument files:** **Export...** and **Import...** write and read whistle designs as `.whistle` files anywhere. These are JSON, with lengths in millimetres, so you can read and edit them by hand. Fields left out get the default whistle's values. A loaded design shows its tuning in the key it is in.
 - **Sensor curves aren't in instrument files.** They describe the player and their WARBL rather than the instrument.
 
@@ -221,11 +188,11 @@ Rooms: small wooden room (0.4 s), studio live room (0.6 s), chamber music hall (
 
 The stream also works over Bluetooth MIDI (firmware from 2026-11-05). Connect WARBL as a Bluetooth MIDI device (macOS: Audio MIDI Setup → MIDI Studio → Bluetooth), unplug the USB cable (a USB host always wins), and tick **Stream**: the app sends its commands to every WARBL port, and WARBL streams back over the transport the command came on.
 
-Over Bluetooth, WARBL can only send at each connection event, every 7.5–15 ms (WARBL asks for 7.5; macOS usually grants 11.25 or 15). So it collects the samples of one interval (every 2 ms) and sends them as one **batch**: the first sequence number and the first and last timestamps, the count, one accelerometer reading (top 8 bits per axis, enough for tilt) and flags, then per sample the 14-bit pressure and the nine holes with 8 bits (no gyro). Eight samples are about 119 bytes as SysEx, so a batch fits one BLE packet. Adafruit's BLE MIDI service sends SysEx three bytes per packet, so the firmware carries a copy of it (`warbl2_firmware/WarblBLEMidi.*`, BSD licence, same UUIDs) with one addition that sends a whole SysEx in as few packets as the connection's MTU allows.
+Over Bluetooth, WARBL can only send at each connection event, every 7.5–15 ms (WARBL asks for 7.5; macOS usually grants 11.25 or 15). So it collects the samples of one interval (every 2 ms) and sends them as one **batch**: the first sequence number and the first and last timestamps, the count, one accelerometer reading (top 8 bits per axis, enough for tilt) and flags, then per sample the 14-bit pressure and the nine holes with 8 bits (no gyro). Eight samples are about 119 bytes as SysEx, so a batch fits one BLE packet. Adafruit's BLE MIDI service sends SysEx three bytes per packet, so the firmware carries a copy of it (`WarblBLEMidi.*` in the firmware, BSD licence, same UUIDs) with one addition that sends a whole SysEx in as few packets as the connection's MTU allows.
 
 **Bluetooth pauses while streaming over USB:** a phone or tablet that connects to WARBL (the blue LED blinks twice at each connection) interrupts its loop and sensor readings and can take some of its MIDI, which made both the stream and WARBL's MIDI erratic. When the app turns the stream on over USB, WARBL turns Bluetooth off (red LED blinks three times: connections dropped, no advertising) and back on (blue, three times) when the stream stops, or when the USB host goes away (cable pulled, computer asleep). A stream over Bluetooth leaves it on. If Bluetooth was already off (button action), it stays off.
 
-**The stream needs renewing (keep-alive):** while streaming, WARBL's SysEx frames (~500 a second) go to every app listening to its USB MIDI port, CelticSounds and the Config Tool included, which can make them lag. The app quits the stream when it quits normally, but a crash or a forced quit used to leave WARBL streaming until restarted. Now the app sets a keep-alive bit (bit 2 of STREAM_CONFIG) and repeats the command every second; WARBL stops the stream by itself 3 s after the last one (and turns Bluetooth back on). Without the bit (older hosts, `stream_monitor.py`) the stream runs until turned off, as before. While WARBL Stream is open it streams, so quit it before playing other MIDI apps.
+**The stream needs renewing (keep-alive):** while streaming, WARBL's SysEx frames (~500 a second) go to every app listening to its USB MIDI port, CelticSounds and the Config Tool included, which can make them lag. The app quits the stream when it quits normally, but a crash or a forced quit used to leave WARBL streaming until restarted. Now the app sets a keep-alive bit (bit 2 of STREAM_CONFIG) and repeats the command every second; WARBL stops the stream by itself 3 s after the last one (and turns Bluetooth back on). Without the bit (older hosts, `stream_monitor.py`) the stream runs until turned off, as before. While WhistleSim is open it streams, so quit it before playing other MIDI apps.
 
 **Breath resolution (stream protocol 2):** WARBL reads its pressure sensor at 14 bits for the stream (~0.42 Pa per count; the SAADC already averages 8 samples) and gives its own MIDI logic the same 12-bit reading as before, so WARBL's MIDI behaviour is unchanged. The ambient pressure at startup (the host's breath zero) also comes at 14 bits; with protocol 1 it was the firmware's 10-bit value, which could put every breath reading off by up to ~7 Pa, a lot for a recorder's softest notes (~50 Pa measured). The sensor's own noise is ~1–1.5 counts at 12 bits (a recording at rest: 1.6), so 14 bits mostly resolve that noise rather than reveal a quieter signal; `WhistleCheck jitter recorder 0 p=170` shows that breath noise of the measured size (~3 Pa at the model) adds under 1 dB of noise between the harmonics. The app decodes both protocol versions (pressures in 14-bit units either way), sends its commands as version 1, which every firmware accepts, and records the pressure column as `pressure14`.
 
@@ -242,7 +209,7 @@ Findings (2026-11-06, Goldie and Löfberg high D, Goldie low D):
 
 ## Recording a session
 
-**Record** on the Monitor tab (or `--record` on the command line) saves what you play into `~/Downloads/WARBL Stream recordings/`: the sound as you hear it (stereo WAV) and every sensor frame (CSV: device and arrival time, sequence number, the nine raw hole readings, raw pressure, flags), with the instrument, the Sensors settings and WARBL's calibration in the CSV's header. That is enough to replay a performance through the model offline and find out what made a glitch. Press it again to stop; the files are named by date and time.
+**Record** on the Monitor tab (or `--record` on the command line) saves what you play into `~/Downloads/WhistleSim recordings/`: the sound as you hear it (stereo WAV) and every sensor frame (CSV: device and arrival time, sequence number, the nine raw hole readings, raw pressure, flags), with the instrument, the Sensors settings and WARBL's calibration in the CSV's header. That is enough to replay a performance through the model offline and find out what made a glitch. Press it again to stop; the files are named by date and time.
 
 `WhistleCheck replay <recording.csv> [from=<s>] [to=<s>] [st=] [outmax=<Pa>] [wav=<prefix>]` feeds the recorded frames through the same sensor mapping and model as the app, at their recorded spacing, and prints a timeline around every fingering change: model breath, which holes are covered (x), open (o) or in between (h), the pitch from the last 15 ms and the level. `st=` and `outmax=` try another jet Strouhal number or breath output maximum on the same playing. Found this way (2026-11-04): "plops" in a quick A-D-A at ~1300 Pa were low D cracking to high D (its octave break is ~950 Pa at Strouhal 0.020) and then sliding up through the octave as the fingers lifted; at Strouhal 0.014-0.016 the same playing stays in the low register.
 

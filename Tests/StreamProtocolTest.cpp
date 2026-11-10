@@ -1,4 +1,4 @@
-// Checks the host decoder against the firmware's packing (BitWriter mirrors SysExBitWriter in Sensor_stream.ino).
+// Checks the host decoder against the firmware's packing (BitWriter mirrors SysExBitWriter in the firmware's Sensor_stream.ino).
 
 #include "StreamProtocol.h"
 

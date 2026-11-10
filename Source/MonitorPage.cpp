@@ -250,7 +250,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
 
     playButton.onClick = [this] { audio.playScale(); };
     recordButton.setTooltip ("Records what you play: the sound (WAV) and every sensor frame with your settings (CSV), into "
-                             "Downloads/WARBL Stream recordings, so a problem can be replayed and analysed offline.");
+                             "Downloads/WhistleSim recordings, so a problem can be replayed and analysed offline.");
     recordButton.onClick = [this] { toggleRecording(); };
     playButton.setTooltip ("Plays the instrument (Instrument tab) through a scale of its own fingerings, two octaves up, with the breath each note needs (space bar does the same).");
     simulateButton.setTooltip ("Plays a scripted scale as if from WARBL, through the same path as the real stream.");
@@ -349,7 +349,7 @@ void MonitorPage::toggleRecording()
     {
         recorder.stop();
         recordButton.setButtonText ("Record");
-        recordingMessage = "Saved " + recorder.getBaseName() + ".wav and .csv in Downloads/WARBL Stream recordings";
+        recordingMessage = "Saved " + recorder.getBaseName() + ".wav and .csv in Downloads/WhistleSim recordings";
         recordingMessageUntilMs = juce::Time::getMillisecondCounterHiRes() + 8000.0;
         return;
     }

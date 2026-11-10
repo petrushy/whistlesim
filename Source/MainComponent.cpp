@@ -74,8 +74,8 @@ void sensorsFromVar (const juce::var& o, AudioEngine& a)
 MainComponent::MainComponent()
 {
     juce::PropertiesFile::Options options;
-    options.applicationName = "WARBL Stream";
-    options.folderName = "WARBL Stream";
+    options.applicationName = "WhistleSim";
+    options.folderName = "WhistleSim";
     options.filenameSuffix = "settings";
     options.osxLibrarySubFolder = "Application Support";
     properties.setStorageParameters (options);
@@ -89,7 +89,7 @@ MainComponent::MainComponent()
     monitor->recordingHeader = [this]
     {
         juce::StringArray lines;
-        lines.add ("WARBL Stream recording " + juce::Time::getCurrentTime().toISO8601 (true));
+        lines.add ("WhistleSim recording " + juce::Time::getCurrentTime().toISO8601 (true));
         lines.add ("instrument " + juce::JSON::toString (whistle::toVar (instrument->getInstrument()), true));
         lines.add ("sensors " + juce::JSON::toString (sensorsToVar (audio), true));
         return lines;
@@ -185,7 +185,7 @@ void MainComponent::showAbout()
     }
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (new AboutPanel());
-    options.dialogTitle = "About WARBL Stream";
+    options.dialogTitle = "About WhistleSim";
     options.dialogBackgroundColour = juce::Colour (0xff1e1f22);
     options.componentToCentreAround = this;
     options.useNativeTitleBar = true;

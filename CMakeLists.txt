@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(WarblStream VERSION 0.1.0 LANGUAGES C CXX)
+project(WhistleSim VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,13 +13,14 @@ FetchContent_Declare(JUCE
     GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
 
-# Sensor stream test app: receives the WARBL2 sensor stream, plots it, measures timing,
-# and has a click output for measuring end-to-end latency.
-juce_add_gui_app(WarblStream
-    PRODUCT_NAME "WARBL Stream"
-    COMPANY_NAME "WARBL")
+# The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
+# Not a WARBL product, so the company and bundle ID are the project's own.
+juce_add_gui_app(WhistleSim
+    PRODUCT_NAME "WhistleSim"
+    COMPANY_NAME "WhistleSim"
+    BUNDLE_ID "io.github.petrushy.whistlesim")
 
-target_sources(WarblStream PRIVATE
+target_sources(WhistleSim PRIVATE
     Source/Main.cpp
     Source/MainComponent.cpp
     Source/MonitorPage.cpp
@@ -37,15 +38,15 @@ target_sources(WarblStream PRIVATE
     Source/Whistle/InstrumentFile.cpp
     Source/Whistle/ScalePlan.cpp)
 
-target_include_directories(WarblStream PRIVATE Source)
+target_include_directories(WhistleSim PRIVATE Source)
 
-target_compile_definitions(WarblStream PRIVATE
+target_compile_definitions(WhistleSim PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
-    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:WarblStream,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:WarblStream,JUCE_VERSION>")
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:WhistleSim,JUCE_PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:WhistleSim,JUCE_VERSION>")
 
-target_link_libraries(WarblStream
+target_link_libraries(WhistleSim
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_devices

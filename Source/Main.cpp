@@ -2,7 +2,7 @@
 
 #include "MainComponent.h"
 
-class WarblStreamApplication : public juce::JUCEApplication
+class WhistleSimApplication : public juce::JUCEApplication
 {
 public:
     const juce::String getApplicationName() override { return JUCE_APPLICATION_NAME_STRING; }
@@ -21,7 +21,7 @@ public:
        #if JUCE_MAC
         // The app menu's usual first item.
         juce::PopupMenu appleItems;
-        appleItems.addItem ("About WARBL Stream...", [this]
+        appleItems.addItem ("About WhistleSim...", [this]
         {
             if (auto* main = dynamic_cast<MainComponent*> (mainWindow->getContentComponent()))
                 main->showAbout();
@@ -129,4 +129,4 @@ private:
     std::unique_ptr<MainWindow> mainWindow;
 };
 
-START_JUCE_APPLICATION (WarblStreamApplication)
+START_JUCE_APPLICATION (WhistleSimApplication)

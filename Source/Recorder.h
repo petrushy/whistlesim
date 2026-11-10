@@ -1,5 +1,5 @@
 // Records a playing session for analysis: the app's sound (stereo WAV, as heard) and every sensor frame with the
-// settings needed to replay it through the model offline (CSV). Files go to ~/Downloads/WARBL Stream recordings.
+// settings needed to replay it through the model offline (CSV). Files go to ~/Downloads/WhistleSim recordings.
 
 #pragma once
 

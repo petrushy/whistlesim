@@ -1,4 +1,4 @@
-// WARBL2 sensor stream protocol (see warbl2_firmware/Sensor_stream.ino).
+// WARBL2 sensor stream protocol (the firmware side is Sensor_stream.ino in petrushy/WARBL2, branch sensor-stream; see its SENSOR_STREAM.md).
 // No JUCE dependency, so the same decoder can be used by the test app, a synth plugin, or tests.
 //
 // SysEx (without F0/F7): 7D 57 <protocol version> <type> <payload>
