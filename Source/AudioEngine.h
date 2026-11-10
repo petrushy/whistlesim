@@ -144,7 +144,13 @@ private:
     // Fingers landing (audio thread): each hole's last heights above the hole (m, newest first), and whether it has lifted since it last landed.
     std::array<std::array<float, 4>, whistle::kNumHoles> fingerHeights {};
     std::array<bool, whistle::kNumHoles> fingerArmed {};
-    float limiterEnvelope = 0.0f;  // Audio thread: the output's peak, falling back slowly
+    // Output limiter (audio thread): the output's peak (held, then falling back slowly), the gain applied, and the
+    // look-ahead delay that lets the gain come down smoothly before a peak arrives.
+    float limiterEnvelope = 0.0f;
+    int limiterPeakHold = 0;  // Samples left before the held peak may fall
+    float limiterGain = 1.0f;
+    std::array<juce::HeapBlock<float>, 2> limiterDelay;
+    int limiterDelayLength = 1, limiterWrite = 0;
     float limiterHeldDb = 0.0f;
     int limiterHoldSamples = 0;
     std::vector<whistle::ScaleStep> scaleSteps;  // Audio thread copy

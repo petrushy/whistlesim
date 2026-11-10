@@ -331,6 +331,15 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
 
     reverb.prepare (rate, maxBlock);
     whistleModel.prepare (rate);
+
+    // The limiter looks 1.5 ms ahead (that much more output latency).
+    limiterDelayLength = std::max (1, (int) std::lround (0.0015 * rate));
+    for (auto& d : limiterDelay)
+        d.allocate ((size_t) limiterDelayLength, true);
+    limiterWrite = 0;
+    limiterEnvelope = 0.0f;
+    limiterPeakHold = 0;
+    limiterGain = 1.0f;
 }
 
 void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, float* const* outputs, int numOutputs,
@@ -495,29 +504,62 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
         }
     }
 
+    // Headroom: 5 dB below the model's own level (Output level 0 dB), before the room and the limiter. Played
+    // loudly, with the reverb on top, the output otherwise sat at the limiter's ceiling 70-98 % of the time.
+    constexpr float headroom = 0.5623f;  // -5 dB
+    juce::FloatVectorOperations::multiply (windowDry.get(), headroom, numSamples);
+    juce::FloatVectorOperations::multiply (bodyDry.get(), headroom, numSamples);
+
     placeAtEars (numSamples);
     juce::FloatVectorOperations::add (outputs[0], ears[0].get(), ears[2].get(), numSamples);
     juce::FloatVectorOperations::add (outputs[1], ears[1].get(), ears[3].get(), numSamples);
     reverb.process (ears[0].get(), ears[1].get(), ears[2].get(), ears[3].get(), outputs[0], outputs[1], numSamples);
 
     // Output limiter: the model can get louder than full scale (a hard-blown upper register, plus the reverb), and
-    // the device would cut the peaks off, which sounds broken. Instead the level is turned down at once when a peak
-    // would pass -1 dBFS and comes back over ~150 ms.
+    // the device would cut the peaks off, which sounds broken. Instead the level is turned down when a peak would
+    // pass -1 dBFS and comes back over ~150 ms. The gain must not jump: turned down at once on every new peak (as
+    // before 2026-11-10), a held note at the ceiling had its gain stepped ~175 times a second, up to 0.7 dB within a
+    // sample, as the breath noise's peaks poked above the last: a metallic "trrrr". So the peak is held for 250 ms
+    // and falls back over ~0.5 s (through a held note the gain hardly moves: ~4 small changes a second, against
+    // ~175 steps), and the output is delayed 1.5 ms so the gain can come down smoothly before a peak arrives (time
+    // constant a sixth of that: within 0.3 % in time). Once the peak has fallen, the gain recovers over ~50 ms.
     {
         constexpr float ceiling = 0.89f;  // -1 dBFS
-        const float release = 1.0f - std::exp (-1.0f / (0.15f * (float) sampleRate));
+        const float fs = (float) sampleRate;
+        const float release = 1.0f - std::exp (-1.0f / (0.5f * fs));
+        const float attack = 1.0f - std::exp (-6.0f / (float) limiterDelayLength);
+        const float recover = 1.0f - std::exp (-1.0f / (0.05f * fs));
+        const int holdSamples = (int) (0.25f * fs);
         float* left = outputs[0];
         float* right = numOutputs > 1 ? outputs[1] : nullptr;
         float leastGain = 1.0f;
         for (int i = 0; i < numSamples; ++i)
         {
             const float peak = std::max (std::abs (left[i]), right != nullptr ? std::abs (right[i]) : 0.0f);
-            limiterEnvelope = peak > limiterEnvelope ? peak : limiterEnvelope + release * (peak - limiterEnvelope);
-            const float gain = limiterEnvelope > ceiling ? ceiling / limiterEnvelope : 1.0f;
-            left[i] *= gain;
+            if (peak >= limiterEnvelope)
+            {
+                limiterEnvelope = peak;
+                limiterPeakHold = holdSamples;
+            }
+            else if (limiterPeakHold > 0)
+                --limiterPeakHold;
+            else
+                limiterEnvelope += release * (peak - limiterEnvelope);
+            const float target = limiterEnvelope > ceiling ? ceiling / limiterEnvelope : 1.0f;
+            limiterGain += (target < limiterGain ? attack : recover) * (target - limiterGain);
+
+            // Out: the sample from 1.5 ms ago, at the gain that has had that long to come down for it.
+            const float delayedLeft = limiterDelay[0][limiterWrite];
+            limiterDelay[0][limiterWrite] = left[i];
+            left[i] = delayedLeft * limiterGain;
             if (right != nullptr)
-                right[i] *= gain;
-            leastGain = std::min (leastGain, gain);
+            {
+                const float delayedRight = limiterDelay[1][limiterWrite];
+                limiterDelay[1][limiterWrite] = right[i];
+                right[i] = delayedRight * limiterGain;
+            }
+            limiterWrite = limiterWrite + 1 < limiterDelayLength ? limiterWrite + 1 : 0;
+            leastGain = std::min (leastGain, limiterGain);
         }
         const float reductionDb = -20.0f * std::log10 (leastGain);
         limiterHoldSamples -= numSamples;
