@@ -1,6 +1,9 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "MainComponent.h"
+#if JUCE_IOS
+ #include "PhoneShell.h"
+#endif
 
 class WhistleSimApplication : public juce::JUCEApplication
 {
@@ -23,7 +26,7 @@ public:
         juce::PopupMenu appleItems;
         appleItems.addItem ("About WhistleSim...", [this]
         {
-            if (auto* main = dynamic_cast<MainComponent*> (mainWindow->getContentComponent()))
+            if (auto* main = getMain())
                 main->showAbout();
         });
         juce::MenuBarModel::setMacMainMenu (&menu, &appleItems);
@@ -35,7 +38,7 @@ public:
         // "--output <device>" picks the audio output; "--play" plays the test phrase at start.
         // "--monitor", "--instrument", "--sensors", "--model" open that tab; "--about" the About window (the
         // snapshot is then of that window).
-        if (auto* main = dynamic_cast<MainComponent*> (mainWindow->getContentComponent()))
+        if (auto* main = getMain())
         {
             // A snapshot run may run next to the player's own copy of the app: compute the sound, but play none.
             if (args.contains ("--snapshot"))
@@ -70,12 +73,12 @@ public:
         const auto index = args.indexOf ("--snapshot");
         if (index >= 0 && index + 1 < args.size())
         {
-            if (auto* main = dynamic_cast<MainComponent*> (mainWindow->getContentComponent()))
+            if (auto* main = getMain())
                 main->setSaveStateOnExit (false);  // Don't overwrite the user's settings from a test run.
             const juce::File file (args[index + 1].unquoted());
             juce::Timer::callAfterDelay (6000, [this, file]
             {
-                if (auto* main = dynamic_cast<MainComponent*> (mainWindow->getContentComponent()))
+                if (auto* main = getMain())
                     std::printf ("audio CPU %.1f %%\n", main->getMonitor().getCpuUsage() * 100.0);
                 auto* shown = mainWindow->getContentComponent();
                 if (auto* main = dynamic_cast<MainComponent*> (shown); main != nullptr && main->getAboutPanel() != nullptr)
@@ -97,6 +100,30 @@ public:
     }
     void systemRequestedQuit() override { quit(); }
 
+    // iOS sends the app to the background instead of quitting it, and may then end it without calling shutdown().
+    void suspended() override
+    {
+        if (auto* main = getMain())
+            main->appSuspended();
+    }
+    void resumed() override
+    {
+        if (auto* main = getMain())
+            main->appResumed();
+    }
+
+    MainComponent* getMain() const
+    {
+        if (mainWindow == nullptr)
+            return nullptr;
+        auto* content = mainWindow->getContentComponent();
+       #if JUCE_IOS
+        if (auto* shell = dynamic_cast<PhoneShell*> (content))
+            return &shell->getMain();
+       #endif
+        return dynamic_cast<MainComponent*> (content);
+    }
+
     class MainWindow : public juce::DocumentWindow
     {
     public:
@@ -104,9 +131,14 @@ public:
             : DocumentWindow (name, juce::Colour (0xff1e1f22), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
+           #if JUCE_IOS
+            setContentOwned (new PhoneShell (std::make_unique<MainComponent>()), false);
+            setFullScreen (true);
+           #else
             setContentOwned (new MainComponent(), true);
             setResizable (true, true);
             centreWithSize (getWidth(), getHeight());
+           #endif
             setVisible (true);
         }
 

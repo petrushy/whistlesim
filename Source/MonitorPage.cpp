@@ -1,4 +1,6 @@
 #include "MonitorPage.h"
+#include "OverlayPanel.h"
+#include "PickedFile.h"
 
 namespace
 {
@@ -193,6 +195,15 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
         addAndMakeVisible (b);
     }
 
+   #if JUCE_IOS || JUCE_ANDROID
+    // A Bluetooth MIDI device only shows up here after it has been paired from inside an app (on a Mac, Audio MIDI
+    // Setup does it instead). The device list callback connects once the pairing is done.
+    pairButton.setWantsKeyboardFocus (false);
+    pairButton.setTooltip ("Pairs WARBL over Bluetooth MIDI. Turn on WARBL's Bluetooth first.");
+    pairButton.onClick = [] { juce::BluetoothMidiDevicePairingDialogue::open(); };
+    addAndMakeVisible (pairButton);
+   #endif
+
     for (auto* c : std::initializer_list<juce::Component*> { &holeView, &pressureScope, &accelScope, &gyroScope, &timingView })
         addAndMakeVisible (c);
 
@@ -250,7 +261,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
 
     playButton.onClick = [this] { audio.playScale(); };
     recordButton.setTooltip ("Records what you play: the sound (WAV) and every sensor frame with your settings (CSV), into "
-                             "Downloads/WhistleSim recordings, so a problem can be replayed and analysed offline.");
+                             + Recorder::getFolderDescription() + ", so a problem can be replayed and analysed offline.");
     recordButton.onClick = [this] { toggleRecording(); };
     playButton.setTooltip ("Plays the instrument (Instrument tab) through a scale of its own fingerings, two octaves up, with the breath each note needs (space bar does the same).");
     simulateButton.setTooltip ("Plays a scripted scale as if from WARBL, through the same path as the real stream.");
@@ -271,7 +282,9 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
         irChooser = std::make_unique<juce::FileChooser> ("Choose an impulse response", juce::File(), "*.wav;*.aif;*.aiff;*.flac");
         irChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& chooser)
         {
-            const auto file = chooser.getResult();
+            // Kept in the app on iOS, so it can be reloaded at the next start.
+            const auto file = readableChosenFile (chooser, juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                               .getChildFile ("Impulse responses"));
             if (file == juce::File())
                 return;
             const auto error = audio.reverb.loadFile (file);
@@ -308,7 +321,11 @@ void MonitorPage::tryConnect()
     }
     else
     {
+       #if JUCE_IOS || JUCE_ANDROID
+        statusLabel.setText ("WARBL not found (connect it with a USB cable, pair it over Bluetooth, or use Simulate WARBL)", juce::dontSendNotification);
+       #else
         statusLabel.setText ("WARBL not found (connect it with a USB cable, or use Simulate WARBL)", juce::dontSendNotification);
+       #endif
     }
 }
 
@@ -332,6 +349,12 @@ void MonitorPage::showAudioSettings()
     auto selector = std::make_unique<juce::AudioDeviceSelectorComponent> (audio.deviceManager, 0, 0, 2, 2, false, false, true, false);
     selector->setSize (500, 400);
 
+   #if JUCE_IOS
+    auto panel = std::make_unique<OverlayPanel> (std::move (selector), "Audio settings");
+    panel->onClose = [this] { overlay.reset(); };
+    panel->showOver (*this);
+    overlay = std::move (panel);
+   #else
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (selector.release());
     options.dialogTitle = "Audio settings";
@@ -340,6 +363,7 @@ void MonitorPage::showAudioSettings()
     options.useNativeTitleBar = true;
     options.resizable = false;
     options.launchAsync();
+   #endif
 }
 
 void MonitorPage::toggleRecording()
@@ -349,7 +373,7 @@ void MonitorPage::toggleRecording()
     {
         recorder.stop();
         recordButton.setButtonText ("Record");
-        recordingMessage = "Saved " + recorder.getBaseName() + ".wav and .csv in Downloads/WhistleSim recordings";
+        recordingMessage = "Saved " + recorder.getBaseName() + ".wav and .csv in " + Recorder::getFolderDescription();
         recordingMessageUntilMs = juce::Time::getMillisecondCounterHiRes() + 8000.0;
         return;
     }
@@ -495,6 +519,7 @@ void MonitorPage::resized()
     simulateButton.setBounds (clickRow.removeFromRight (150));
     bluetoothSimButton.setBounds (clickRow.removeFromRight (120));
     smoothBluetoothButton.setBounds (clickRow.removeFromRight (160));
+    pairButton.setBounds (clickRow.removeFromLeft (150).reduced (2));
 
     auto reverbRow = area.removeFromTop (28);
     reverbLabel.setBounds (reverbRow.removeFromLeft (60));

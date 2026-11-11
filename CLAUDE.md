@@ -16,6 +16,7 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
     build/WhistleCheck_artefacts/Release/WhistleCheck chart 0       # whistle (or a name: chart recorder): predicted + played tuning
     build/ReverbCheck_artefacts/Release/ReverbCheck <dir>          # reverb times / balance vs. targets, WAVs
 
+- iOS (app only, no tools or tests): `cmake -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/build/_deps/juce-src"`, then `xcodebuild -project build-ios/WhistleSim.xcodeproj -scheme WhistleSim -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`. iOS-only code is under `#if JUCE_IOS` (`PhoneShell.h` scales the desktop window for now; `PickedFile.h` copies files the iOS picker returns into the app). Signing for the user's iPhone: README, "iPhone and iPad".
 - The first configure downloads JUCE 9.0.5. LTO is deliberately off, because linking took many minutes.
 - To check the app without anyone at the screen, use `build/WhistleSim_artefacts/Release/WhistleSim.app/Contents/MacOS/WhistleSim --simulate --instrument --snapshot out.png`. Other options: `--sensors`, `--monitor`, `--model` (a live look inside the model; `--play` gives it something to show), `--about`, `--play`, `--output <device>`. Read the PNG.
 - App state lives in `~/Library/Application Support/WhistleSim/WhistleSim.settings`; it's the user's real settings. A `--snapshot` run doesn't save state on exit, doesn't connect to MIDI devices (so it can't disturb the user's WARBL session; use `--simulate`), outputs silence (it still computes the sound, so the CPU figure is real), and may run alongside the user's own copy of the app. If a test edits the file, put it back afterwards.
@@ -23,7 +24,7 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 
 ## CI and releases
 
-- `.github/workflows/ci.yml` builds and runs the tests on macOS, Linux (Ubuntu 24.04) and Windows (VS 2022) for every push to `main` and every pull request. Code must build with GCC and MSVC too, not only Apple Clang.
+- `.github/workflows/ci.yml` builds and runs the tests on macOS, Linux (Ubuntu 24.04) and Windows (VS 2022) for every push to `main` and every pull request. Code must build with GCC and MSVC too, not only Apple Clang, and for iOS (the `ios` job).
 - `.github/workflows/release.yml`: pushing a tag `vX.Y.Z` builds on all three platforms (macOS universal arm64 + x86_64; Windows with the C++ runtime linked in), tests and packages each, and publishes them as one GitHub Release. The tag must equal `VERSION` in `CMakeLists.txt` (the About window shows it), so bump that first. The app is ad-hoc signed, not notarized. Running the workflow by hand is a dry run that keeps the packages as workflow artifacts.
 - The workflows take JUCE from a cached clone (`JUCE_VERSION` in both files); keep it in step with `GIT_TAG` in `CMakeLists.txt`.
 

@@ -56,3 +56,25 @@ jobs:
         run: cmake --build build --config Release --parallel 4
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  # The iPhone/iPad app: compiles for the iOS Simulator (no signing), so desktop changes don't break it unnoticed.
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache JUCE
+        id: juce-cache
+        uses: actions/cache@v4
+        with:
+          path: .juce
+          key: juce-${{ env.JUCE_VERSION }}-${{ runner.os }}
+      - name: Fetch JUCE
+        if: steps.juce-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git .juce
+      - name: Configure
+        run: cmake -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/.juce"
+      - name: Build
+        run: |
+          xcodebuild -project build-ios/WhistleSim.xcodeproj -scheme WhistleSim -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

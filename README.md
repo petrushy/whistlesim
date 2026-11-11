@@ -56,6 +56,25 @@ ctest --test-dir build -C Release
 
 Settings and your presets are kept in `~/Library/Application Support/WhistleSim/` on macOS, `~/.config/WhistleSim/` on Linux and `%APPDATA%\WhistleSim\` on Windows. The check tools (`WhistleCheck`, `ReverbCheck`, `WarblSimulator`) are built alongside, in `build/<Tool>_artefacts/Release/`.
 
+### iPhone and iPad (in development)
+
+The same app builds for iOS 16 or newer. For now it shows the desktop window scaled to the screen's width (landscape, scroll up and down); a phone layout comes later. You need Xcode (not only the command line tools) and an Apple ID; a free one is enough to install the app on your own iPhone, but then the app stops opening after 7 days and has to be installed again from Xcode (settings and presets are kept).
+
+1. In Xcode → Settings → Accounts, add your Apple ID. It makes a "Personal Team". Its 10-character team ID is shown in Keychain Access, as the Organizational Unit of the "Apple Development" certificate (Xcode makes the certificate on the first build; until then, choose the team in the project's Signing & Capabilities and copy the ID from the build settings' `DEVELOPMENT_TEAM`).
+2. Configure and open the Xcode project (`build-ios`, next to `build`; the JUCE copy from the desktop build is reused):
+
+   ```
+   cmake -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=<team ID> \
+       -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/build/_deps/juce-src"
+   open build-ios/WhistleSim.xcodeproj
+   ```
+3. Connect the iPhone with a cable, unlock it and trust the Mac. Turn on **Developer Mode** (Settings → Privacy & Security, at the bottom; it only appears once the phone has been connected to Xcode) and let the phone restart.
+4. In Xcode choose the **WhistleSim** scheme and your iPhone, set the scheme's Run configuration to **Release** (Product → Scheme → Edit Scheme; Debug runs the model far slower), and press Run. The first time, the phone asks you to trust the developer: Settings → General → VPN & Device Management.
+
+To install over Wi-Fi later (WARBL then has the iPhone's port): Window → Devices and Simulators → your iPhone → "Connect via network", once, with the cable in.
+
+On the phone: WARBL plugs straight into a USB-C iPhone (or through Apple's camera adapter on a Lightning one), or pair it over Bluetooth with **Pair Bluetooth...** on the Monitor tab. Bluetooth headphones add ~150–250 ms, too much to play with: use the speaker, wired headphones, or a USB-C hub with a USB audio adapter. The app keeps playing with the screen locked while WARBL is connected, and stops the sound in the background otherwise. Recordings, and impulse responses you load, are in the Files app under On My iPhone → WhistleSim.
+
 ### The firmware
 
 Build and flash the firmware from [petrushy/WARBL2](https://github.com/petrushy/WARBL2/tree/sensor-stream), branch `sensor-stream`, as its `SENSOR_STREAM.md` describes. Then start the app, tick **Stream** and press **Request info**: the Monitor tab should show "loop 2 ms", about 500 frames/s, "new hole readings in ~100 % of frames" and no lost frames.

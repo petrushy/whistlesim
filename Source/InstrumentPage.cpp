@@ -1,4 +1,5 @@
 #include "InstrumentPage.h"
+#include "PickedFile.h"
 
 namespace
 {
@@ -869,6 +870,25 @@ void InstrumentPage::deletePreset()
 
 void InstrumentPage::saveToFile()
 {
+   #if JUCE_IOS
+    // iOS saves by exporting a file that already exists: write it into the app's temporary folder, then let the
+    // user choose where the copy goes.
+    const auto temp = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                          .getChildFile (juce::File::createLegalFileName (geometry.name) + ".whistle");
+    if (! temp.replaceWithText (whistle::toJson (getInstrument())))
+    {
+        tuneStatus.setText ("Couldn't write " + temp.getFileName(), juce::dontSendNotification);
+        return;
+    }
+    fileChooser = std::make_unique<juce::FileChooser> ("Save whistle", temp, "*.whistle");
+    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode, [this, temp] (const juce::FileChooser& chooser)
+    {
+        temp.deleteFile();
+        if (chooser.getURLResult().isEmpty())
+            return;
+        tuneStatus.setText ("Saved " + chosenFileName (chooser) + ".whistle", juce::dontSendNotification);
+    });
+   #else
     const auto folder = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     fileChooser = std::make_unique<juce::FileChooser> ("Save whistle", folder.getChildFile (juce::File::createLegalFileName (geometry.name) + ".whistle"),
                                                       "*.whistle");
@@ -891,6 +911,7 @@ void InstrumentPage::saveToFile()
             tuneStatus.setText ("Couldn't write " + file.getFileName(), juce::dontSendNotification);
         }
     });
+   #endif
 }
 
 void InstrumentPage::loadFromFile()
@@ -898,12 +919,16 @@ void InstrumentPage::loadFromFile()
     fileChooser = std::make_unique<juce::FileChooser> ("Load whistle", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory), "*.whistle");
     fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& chooser)
     {
-        const auto file = chooser.getResult();
+        const auto file = readableChosenFile (chooser, juce::File::getSpecialLocation (juce::File::tempDirectory));
         if (file == juce::File())
             return;
 
         juce::String error;
-        if (auto instrument = whistle::fromJson (file.loadFileAsString(), error))
+        const auto json = file.loadFileAsString();
+       #if JUCE_IOS
+        file.deleteFile();  // Only a copy (see readableChosenFile).
+       #endif
+        if (auto instrument = whistle::fromJson (json, error))
         {
             setInstrument (*instrument);
             tuneStatus.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);

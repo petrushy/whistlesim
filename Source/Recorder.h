@@ -1,5 +1,6 @@
 // Records a playing session for analysis: the app's sound (stereo WAV, as heard) and every sensor frame with the
-// settings needed to replay it through the model offline (CSV). Files go to ~/Downloads/WhistleSim recordings.
+// settings needed to replay it through the model offline (CSV). Files go to ~/Downloads/WhistleSim recordings
+// (iOS: the app's Recordings folder, which the Files app shows under On My iPhone > WhistleSim).
 
 #pragma once
 
@@ -19,6 +20,7 @@ public:
     void stop();
     bool isRecording() const { return recording.load(); }
     juce::File getFolder() const;
+    static juce::String getFolderDescription();  // Where the files are, as the user finds them
     juce::String getBaseName() const { return baseName; }
 
     // Message thread: one sensor frame.

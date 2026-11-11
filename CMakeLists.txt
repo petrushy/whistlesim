@@ -4,7 +4,14 @@ project(WhistleSim VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
+# iOS (-G Xcode -DCMAKE_SYSTEM_NAME=iOS) builds only the app; see "iPhone and iPad" in the README.
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(WHISTLESIM_IOS ON)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0" CACHE STRING "")
+else()
+    set(WHISTLESIM_IOS OFF)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
+endif()
 
 include(FetchContent)
 FetchContent_Declare(JUCE
@@ -13,12 +20,29 @@ FetchContent_Declare(JUCE
     GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
 
+# iOS: keep playing with the screen locked, pair WARBL over Bluetooth MIDI, and show the app's Documents folder
+# (recordings, impulse responses) in the Files app. Landscape only while the app uses its desktop layout.
+set(WHISTLESIM_IOS_OPTIONS)
+if (WHISTLESIM_IOS)
+    set(WHISTLESIM_IOS_OPTIONS
+        BACKGROUND_AUDIO_ENABLED TRUE
+        BLUETOOTH_PERMISSION_ENABLED TRUE
+        BLUETOOTH_PERMISSION_TEXT "WhistleSim connects to WARBL over Bluetooth MIDI."
+        FILE_SHARING_ENABLED TRUE
+        PLIST_TO_MERGE "<plist><dict><key>LSSupportsOpeningDocumentsInPlace</key><true/></dict></plist>"
+        STATUS_BAR_HIDDEN TRUE
+        REQUIRES_FULL_SCREEN TRUE
+        IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight)
+endif()
+
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
 # Not a WARBL product, so the company and bundle ID are the project's own.
 juce_add_gui_app(WhistleSim
     PRODUCT_NAME "WhistleSim"
     COMPANY_NAME "WhistleSim"
-    BUNDLE_ID "io.github.petrushy.whistlesim")
+    BUNDLE_ID "io.github.petrushy.whistlesim"
+    ${WHISTLESIM_IOS_OPTIONS})
 
 target_sources(WhistleSim PRIVATE
     Source/Main.cpp
@@ -55,6 +79,15 @@ target_link_libraries(WhistleSim
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
+
+if (WHISTLESIM_IOS)
+    # Sign with the team given at configure time (-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=...); Xcode makes the
+    # certificate and provisioning profile itself.
+    set_target_properties(WhistleSim PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGN_STYLE Automatic
+        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Apple Development")
+    return()  # The tools and tests are command-line programs: Mac, Linux and Windows only.
+endif()
 
 # Protocol unit test (no JUCE).
 enable_testing()

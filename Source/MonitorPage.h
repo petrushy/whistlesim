@@ -95,6 +95,7 @@ private:
     juce::ToggleButton bluetoothSimButton { "as Bluetooth" }, smoothBluetoothButton { "Smooth Bluetooth" };
     juce::ToggleButton streamButton { "Stream" }, suppressButton { "Suppress notes" }, simulateButton { "Simulate WARBL" };
     juce::TextButton infoButton { "Request info" }, audioButton { "Audio settings..." }, resetButton { "Reset stats" };
+    juce::TextButton pairButton { "Pair Bluetooth..." };  // iOS and Android only
 
     juce::Label reverbLabel { {}, "Reverb" }, wetLabel { {}, "Level" }, preDelayLabel { {}, "Pre-delay" }, spreadLabel { {}, "Spread" },
         reverbStatus;
@@ -108,6 +109,7 @@ private:
     double recordingMessageUntilMs = 0.0;
     juce::TextButton loadIrButton { "Load IR file..." }, playButton { "Play scale" }, recordButton { "Record" };
     std::unique_ptr<juce::FileChooser> irChooser;
+    std::unique_ptr<juce::Component> overlay;  // iOS: Audio settings, shown over the page (see OverlayPanel.h)
 
     HoleView holeView;
     ScopeView pressureScope { "Breath pressure measured (Pa above ambient)", -150.0f, 2500.0f };

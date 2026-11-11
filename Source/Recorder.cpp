@@ -13,7 +13,21 @@ Recorder::~Recorder()
 
 juce::File Recorder::getFolder() const
 {
+   #if JUCE_IOS
+    // The app's Documents folder is the one the Files app shows.
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Recordings");
+   #else
     return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads").getChildFile ("WhistleSim recordings");
+   #endif
+}
+
+juce::String Recorder::getFolderDescription()
+{
+   #if JUCE_IOS
+    return "Files > On My iPhone > WhistleSim > Recordings";
+   #else
+    return "Downloads/WhistleSim recordings";
+   #endif
 }
 
 bool Recorder::start (double sampleRate, const juce::StringArray& header)
