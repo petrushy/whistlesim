@@ -46,6 +46,16 @@ public:
     // A finger has just landed on this hole at this speed (m/s). Audio thread; plugged holes are the caller's to skip.
     void fingerLands (int hole, float speed);
 
+    // A finger landing is still pushing air into the bore or knocking the body (audio thread). It sounds without
+    // breath, so the engine must not rest the model meanwhile.
+    bool isTapping() const
+    {
+        for (size_t i = 0; i < (size_t) kNumHoles; ++i)
+            if (tapPosition[i] < tapRise[i] + tapFall[i])
+                return true;
+        return false;
+    }
+
     // Adds the radiated sound (mono) to out.
     void render (float* out, int numSamples);
     // The same as two sources, so they can be placed apart: what comes out of the window, and what comes out of

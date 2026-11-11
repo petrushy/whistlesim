@@ -473,14 +473,16 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
     if (numSamples > dryCapacity || numOutputs < 2 || outputs[0] == nullptr || outputs[1] == nullptr)
         return;
 
-    // Rest: with no breath, and the sound (reverb tail included) below -100 dBFS for half a second, skip the model
-    // and the room and play silence. They otherwise cost as much computing silence as playing (on an iPhone that
-    // was a lot of battery for an app left open). Breath, the scale or manual play (all give a mouth pressure)
-    // wake it within the block: the model and the room carry on from the silent state they rested in.
+    // Rest: with no breath, no finger landing, and the sound (reverb tail included) below -100 dBFS for half a
+    // second, skip the model and the room and play silence. They otherwise cost as much computing silence as
+    // playing (on an iPhone that was a lot of battery for an app left open). Breath, the scale or manual play (all
+    // give a mouth pressure) or a finger landing on a hole (it sounds without breath) wake it within the block:
+    // the model and the room carry on from the silent state they rested in. The landing is detected above, from
+    // the frames, so its tap starts in this block rather than playing late at the next breath.
     const bool breathing = haveControls ? controls.mouthPressure > 0.0f : lastControls.mouthPressure > 0.0f;
-    if (breathing)
+    if (breathing || (whistleEnabled && whistleModel.isTapping()))  // A tap only advances while the model runs
         quietSamples = 0;
-    const bool rest = ! breathing && quietSamples > (int) (0.5 * sampleRate);
+    const bool rest = quietSamples > (int) (0.5 * sampleRate);
     resting.store (rest, std::memory_order_relaxed);
     if (rest)
     {
