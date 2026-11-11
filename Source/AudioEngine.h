@@ -116,6 +116,7 @@ public:
     // Output limiter: how far it turned the sound down (dB, the most in the last ~2 s; 0 = not limiting).
     std::atomic<float> limiterReductionDb { 0.0f };
     std::atomic<uint64_t> blocksProcessed { 0 };  // Shows whether audio is running.
+    std::atomic<bool> resting { false };          // Nothing to play: the model and the room are skipped (see the callback)
 
 private:
     void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int,
@@ -168,6 +169,7 @@ private:
     void placeAtEars (int numSamples);
     double sampleRate = 48000.0;
     int samplesSinceControls = 0;
+    int quietSamples = 0;  // How long the output has stayed below the rest threshold
     uint32_t lastFrameTime = 0;  // Device timestamp of the last frame
     bool haveFrameTime = false;
     double frameInterval = 0.002;  // s, smoothed

@@ -473,6 +473,21 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
     if (numSamples > dryCapacity || numOutputs < 2 || outputs[0] == nullptr || outputs[1] == nullptr)
         return;
 
+    // Rest: with no breath, and the sound (reverb tail included) below -100 dBFS for half a second, skip the model
+    // and the room and play silence. They otherwise cost as much computing silence as playing (on an iPhone that
+    // was a lot of battery for an app left open). Breath, the scale or manual play (all give a mouth pressure)
+    // wake it within the block: the model and the room carry on from the silent state they rested in.
+    const bool breathing = haveControls ? controls.mouthPressure > 0.0f : lastControls.mouthPressure > 0.0f;
+    if (breathing)
+        quietSamples = 0;
+    const bool rest = ! breathing && quietSamples > (int) (0.5 * sampleRate);
+    resting.store (rest, std::memory_order_relaxed);
+    if (rest)
+    {
+        recorder.addAudio (outputs, numOutputs, numSamples);  // Silence, so the recording keeps its timing
+        return;
+    }
+
     // Instrument as two sources -> placed at the two ears (dry) + room reverb for each.
     juce::FloatVectorOperations::clear (windowDry.get(), numSamples);
     juce::FloatVectorOperations::clear (bodyDry.get(), numSamples);
@@ -576,6 +591,15 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
         }
         limiterReductionDb.store (limiterHeldDb, std::memory_order_relaxed);
     }
+
+    float outputPeak = 0.0f;
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        const auto range = juce::FloatVectorOperations::findMinAndMax (outputs[ch], numSamples);
+        outputPeak = std::max (outputPeak, std::max (-range.getStart(), range.getEnd()));
+    }
+    constexpr float restThreshold = 1.0e-5f;  // -100 dBFS
+    quietSamples = outputPeak < restThreshold ? quietSamples + numSamples : 0;
 
     recorder.addAudio (outputs, numOutputs, numSamples);
 
