@@ -10,7 +10,7 @@ class OverlayPanel : public juce::Component
 {
 public:
     OverlayPanel (std::unique_ptr<juce::Component> contentToShow, const juce::String& titleToShow)
-        : content (std::move (contentToShow)), title (titleToShow)
+        : content (std::move (contentToShow)), title (titleToShow), contentSize (content->getWidth(), content->getHeight())
     {
         addAndMakeVisible (*content);
         closeButton.onClick = [this] { close(); };
@@ -19,9 +19,10 @@ public:
 
     std::function<void()> onClose;
 
-    // Covers `parent`; the panel sits near its top, where the button that opened it is.
-    void showOver (juce::Component& parent)
+    // Covers `parent`; the panel sits near its top (`top` from it), where the button that opened it is.
+    void showOver (juce::Component& parent, int top = 50)
     {
+        topMargin = top;
         parent.addAndMakeVisible (this);
         setBounds (parent.getLocalBounds());
         toFront (true);
@@ -41,13 +42,16 @@ public:
 
     void resized() override
     {
-        const int width = juce::jmin (getWidth() - 20, content->getWidth());
-        const int height = juce::jmin (getHeight() - 60, content->getHeight() + titleHeight);
-        box = juce::Rectangle<int> ((getWidth() - width) / 2, 50, width, height);
+        // Content wider than the screen (a phone) is scaled down to fit, rather than cut off.
+        const float scale = juce::jmin (1.0f, (float) (getWidth() - 20) / (float) juce::jmax (1, contentSize.x));
+        const int width = juce::roundToInt ((float) contentSize.x * scale);
+        const int height = juce::jmin (getHeight() - topMargin - 10, juce::roundToInt ((float) contentSize.y * scale) + titleHeight);
+        box = juce::Rectangle<int> ((getWidth() - width) / 2, topMargin, width, height);
         auto area = box;
         auto titleRow = area.removeFromTop (titleHeight);
         closeButton.setBounds (titleRow.removeFromRight (90).reduced (6));
-        content->setBounds (area);
+        content->setBounds (0, 0, contentSize.x, juce::roundToInt ((float) area.getHeight() / scale));
+        content->setTransform (juce::AffineTransform::scale (scale).translated ((float) area.getX(), (float) area.getY()));
     }
 
     void mouseDown (const juce::MouseEvent& e) override
@@ -75,4 +79,6 @@ private:
     juce::String title;
     juce::TextButton closeButton { "Close" };
     juce::Rectangle<int> box;
+    juce::Point<int> contentSize;  // As the content made itself
+    int topMargin = 50;
 };

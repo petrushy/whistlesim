@@ -1,9 +1,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "MainComponent.h"
-#if JUCE_IOS
- #include "PhoneShell.h"
-#endif
+#include "Phone/DesktopView.h"
+#include "Phone/PhoneUI.h"
 
 class WhistleSimApplication : public juce::JUCEApplication
 {
@@ -63,8 +62,22 @@ public:
                 main->showSensors();
             if (args.contains ("--model"))
                 main->showModel();
+            auto* phoneUI = dynamic_cast<PhoneUI*> (mainWindow->getContentComponent());
             if (args.contains ("--about"))
-                main->showAbout();
+            {
+                if (phoneUI != nullptr)
+                    phoneUI->showAbout();
+                else
+                    main->showAbout();
+            }
+            // "--phone-tab <n>" (with --phone): 0 Play, 1 Room, 2 Setup, 3 Details.
+            const auto phoneTab = args.indexOf ("--phone-tab");
+            if (phoneUI != nullptr && phoneTab >= 0 && phoneTab + 1 < args.size())
+                phoneUI->showTab (args[phoneTab + 1].getIntValue());
+            if (phoneUI != nullptr && args.contains ("--phone-wide"))  // The phone turned sideways
+                phoneUI->setSize (852, 393);
+            if (phoneUI != nullptr && args.contains ("--phone-presets"))  // The preset list open
+                phoneUI->showPresetList();
             const auto preset = args.indexOf ("--preset");
             if (preset >= 0 && preset + 1 < args.size())
                 main->loadPreset (args[preset + 1].getIntValue());
@@ -117,10 +130,10 @@ public:
         if (mainWindow == nullptr)
             return nullptr;
         auto* content = mainWindow->getContentComponent();
-       #if JUCE_IOS
-        if (auto* shell = dynamic_cast<PhoneShell*> (content))
-            return &shell->getMain();
-       #endif
+        if (auto* phoneUI = dynamic_cast<PhoneUI*> (content))
+            return &phoneUI->getMain();
+        if (auto* tablet = dynamic_cast<TabletRoot*> (content))
+            return &tablet->getMain();
         return dynamic_cast<MainComponent*> (content);
     }
 
@@ -132,10 +145,18 @@ public:
         {
             setUsingNativeTitleBar (true);
            #if JUCE_IOS
-            setContentOwned (new PhoneShell (std::make_unique<MainComponent>()), false);
+            // An iPad has room for the desktop window; an iPhone gets its own screens.
+            if (juce::SystemStats::getDeviceDescription().startsWithIgnoreCase ("iPad"))
+                setContentOwned (new TabletRoot (std::make_unique<MainComponent>()), false);
+            else
+                setContentOwned (new PhoneUI (std::make_unique<MainComponent>()), false);
             setFullScreen (true);
            #else
-            setContentOwned (new MainComponent(), true);
+            // "--phone": the iPhone screens in a phone-sized window, for trying them on a Mac.
+            if (getCommandLineParameterArray().contains ("--phone"))
+                setContentOwned (new PhoneUI (std::make_unique<MainComponent>()), true);
+            else
+                setContentOwned (new MainComponent(), true);
             setResizable (true, true);
             centreWithSize (getWidth(), getHeight());
            #endif

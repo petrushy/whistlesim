@@ -16,6 +16,8 @@ public:
     void resized() override;
 
     MonitorPage& getMonitor() { return *monitor; }
+    InstrumentPage& getInstrumentPage() const { return *instrument; }
+    StreamReceiver& getReceiver() { return receiver; }
     void showMonitor() { tabs.setCurrentTabIndex (0); }
     void showInstrument() { tabs.setCurrentTabIndex (1); }
     void showSensors() { tabs.setCurrentTabIndex (2); }

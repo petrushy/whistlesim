@@ -58,7 +58,7 @@ Settings and your presets are kept in `~/Library/Application Support/WhistleSim/
 
 ### iPhone and iPad (in development)
 
-The same app builds for iOS 16 or newer. For now it shows the desktop window scaled to the screen's width (landscape, scroll up and down); a phone layout comes later. You need Xcode (not only the command line tools) and an Apple ID; a free one is enough to install the app on your own iPhone, but then the app stops opening after 7 days and has to be installed again from Xcode (settings and presets are kept).
+The same app builds for iOS 16 or newer. On an iPhone it has screens of its own, with tabs at the bottom: **Play** (the connection, the instrument with a list of presets, the whistle showing your fingers, breath and sound meters, the room and reverb, Play scale and Record), **Room** (the room and reverb settings, explained), **Setup** (WARBL, Bluetooth pairing, the simulator, the delay from breath to sound and the buffer size, About) and **Details** (the desktop pages, larger with the phone turned sideways). An iPad shows the desktop window, scaled to the screen. On a Mac, `--phone` opens the iPhone screens in a phone-sized window (`--phone-wide` turned sideways, `--phone-tab <0-3>` opens a tab). You need Xcode (not only the command line tools) and an Apple ID; a free one is enough to install the app on your own iPhone, but then the app stops opening after 7 days and has to be installed again from Xcode (settings and presets are kept).
 
 1. In Xcode → Settings → Accounts, add your Apple ID. It makes a "Personal Team". Its 10-character team ID is shown in Keychain Access, as the Organizational Unit of the "Apple Development" certificate (Xcode makes the certificate on the first build; until then, choose the team in the project's Signing & Capabilities and copy the ID from the build settings' `DEVELOPMENT_TEAM`).
 2. Configure and open the Xcode project (`build-ios`, next to `build`; the JUCE copy from the desktop build is reused):
@@ -73,7 +73,7 @@ The same app builds for iOS 16 or newer. For now it shows the desktop window sca
 
 To install over Wi-Fi later (WARBL then has the iPhone's port): Window → Devices and Simulators → your iPhone → "Connect via network", once, with the cable in.
 
-On the phone: WARBL plugs straight into a USB-C iPhone (or through Apple's camera adapter on a Lightning one), or pair it over Bluetooth with **Pair Bluetooth...** on the Monitor tab. Bluetooth headphones add ~150–250 ms, too much to play with: use the speaker, wired headphones, or a USB-C hub with a USB audio adapter. The app keeps playing with the screen locked while WARBL is connected, and stops the sound in the background otherwise. Recordings, and impulse responses you load, are in the Files app under On My iPhone → WhistleSim.
+On the phone: WARBL plugs straight into a USB-C iPhone (or through Apple's camera adapter on a Lightning one), or pair it over Bluetooth with **Pair over Bluetooth...** under Setup. Bluetooth headphones add ~150–250 ms, too much to play with: use the speaker, wired headphones, or a USB-C hub with a USB audio adapter. The app keeps playing with the screen locked while WARBL is connected, and stops the sound in the background otherwise. Recordings, and impulse responses you load, are in the Files app under On My iPhone → WhistleSim.
 
 ### The firmware
 

@@ -21,7 +21,7 @@ FetchContent_Declare(JUCE
 FetchContent_MakeAvailable(JUCE)
 
 # iOS: keep playing with the screen locked, pair WARBL over Bluetooth MIDI, and show the app's Documents folder
-# (recordings, impulse responses) in the Files app. Landscape only while the app uses its desktop layout.
+# (recordings, impulse responses) in the Files app. An iPhone has its own screens, upright or sideways.
 set(WHISTLESIM_IOS_OPTIONS)
 if (WHISTLESIM_IOS)
     set(WHISTLESIM_IOS_OPTIONS
@@ -32,8 +32,9 @@ if (WHISTLESIM_IOS)
         PLIST_TO_MERGE "<plist><dict><key>LSSupportsOpeningDocumentsInPlace</key><true/></dict></plist>"
         STATUS_BAR_HIDDEN TRUE
         REQUIRES_FULL_SCREEN TRUE
-        IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-        IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight)
+        IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
+            UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight)
 endif()
 
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
@@ -60,7 +61,8 @@ target_sources(WhistleSim PRIVATE
     Source/Whistle/Acoustics.cpp
     Source/Whistle/WhistleModel.cpp
     Source/Whistle/InstrumentFile.cpp
-    Source/Whistle/ScalePlan.cpp)
+    Source/Whistle/ScalePlan.cpp
+    Source/Phone/PhoneUI.cpp)
 
 target_include_directories(WhistleSim PRIVATE Source)
 

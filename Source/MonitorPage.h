@@ -81,6 +81,8 @@ public:
     double getCpuUsage() const { return audio.deviceManager.getCpuUsage(); }
 
 private:
+    friend class DesktopControls;  // The iPhone screens drive these controls
+
     void timerCallback() override;
     void tryConnect();
     void applyStreamSettings();
