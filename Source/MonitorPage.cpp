@@ -350,10 +350,10 @@ void MonitorPage::showAudioSettings()
     selector->setSize (500, 400);
 
    #if JUCE_IOS
-    auto panel = std::make_unique<OverlayPanel> (std::move (selector), "Audio settings");
-    panel->onClose = [this] { overlay.reset(); };
-    panel->showOver (*this);
-    overlay = std::move (panel);
+    auto settingsPanel = std::make_unique<OverlayPanel> (std::move (selector), "Audio settings");
+    settingsPanel->onClose = [this] { overlay.reset(); };
+    settingsPanel->showOver (*this);
+    overlay = std::move (settingsPanel);
    #else
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (selector.release());
