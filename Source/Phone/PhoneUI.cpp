@@ -134,7 +134,7 @@ public:
         g.fillAll (colours::card);
         g.setColour (colours::separator);
         g.fillRect (0, 0, getWidth(), 1);
-        static const char* names[] = { "Play", "Room", "Setup", "Details" };
+        static const char* names[] = { "Play", "Instrument", "Room", "Setup", "Details" };
         const float slot = (float) getWidth() / (float) numTabs;
         for (int i = 0; i < numTabs; ++i)
         {
@@ -183,7 +183,21 @@ private:
                 g.strokePath (p, stroke);
                 break;
             }
-            case setup:  // Two sliders
+            case setup:  // A cog
+            {
+                const auto c = r.getCentre();
+                for (int i = 0; i < 8; ++i)
+                {
+                    const float angle = juce::MathConstants<float>::twoPi * (float) i / 8.0f;
+                    p.startNewSubPath (c.x + 7.0f * std::sin (angle), c.y - 7.0f * std::cos (angle));
+                    p.lineTo (c.x + 10.5f * std::sin (angle), c.y - 10.5f * std::cos (angle));
+                }
+                g.strokePath (p, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::butt));
+                g.drawEllipse (juce::Rectangle<float> (14.0f, 14.0f).withCentre (c), 1.8f);
+                g.fillEllipse (juce::Rectangle<float> (4.0f, 4.0f).withCentre (c));
+                break;
+            }
+            case instrument:  // Two sliders
             {
                 for (int i = 0; i < 2; ++i)
                 {
@@ -440,6 +454,327 @@ private:
 };
 
 //==============================================================================
+namespace
+{
+// A section heading that folds its items away: tap it to show or hide them.
+class FoldingHeading : public juce::Component
+{
+public:
+    FoldingHeading (juce::String titleToShow, juce::String subtitleToShow, bool startExpanded)
+        : title (std::move (titleToShow)), subtitle (std::move (subtitleToShow)), expanded (startExpanded)
+    {
+        setRepaintsOnMouseActivity (true);
+    }
+
+    std::function<void()> onToggle;
+    std::vector<juce::Component*> members;
+
+    void apply()
+    {
+        for (auto* m : members)
+            m->setVisible (expanded);
+        repaint();
+    }
+
+    int preferredHeight (int width) const
+    {
+        return 48 + (expanded && subtitle.isNotEmpty() ? textHeight (subtitle, font (sizes::caption), width - 2 * sizes::gutter) + 10 : 0);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (isMouseButtonDown() ? colours::cardPressed : colours::card);
+        g.fillRoundedRectangle (getLocalBounds().toFloat(), (float) sizes::cardRadius);
+        auto area = getLocalBounds().reduced (sizes::gutter, 0);
+        auto top = area.removeFromTop (48);
+        // A chevron pointing right when folded, down when open.
+        const auto c = top.removeFromRight (16).toFloat().getCentre();
+        juce::Path p;
+        if (expanded)
+        {
+            p.startNewSubPath (c.x - 7.0f, c.y - 3.0f);
+            p.lineTo (c.x, c.y + 4.0f);
+            p.lineTo (c.x + 7.0f, c.y - 3.0f);
+        }
+        else
+        {
+            p.startNewSubPath (c.x - 3.0f, c.y - 7.0f);
+            p.lineTo (c.x + 4.0f, c.y);
+            p.lineTo (c.x - 3.0f, c.y + 7.0f);
+        }
+        g.setColour (colours::secondary);
+        g.strokePath (p, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (colours::text);
+        g.setFont (font (sizes::body, true));
+        g.drawText (title, top, juce::Justification::centredLeft);
+        if (expanded && subtitle.isNotEmpty())
+            drawWrapped (g, subtitle, font (sizes::caption), colours::secondary, area.withTrimmedBottom (8));
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (! isTap (e, *this))
+            return;
+        expanded = ! expanded;
+        apply();
+        if (onToggle != nullptr)
+            onToggle();
+    }
+
+private:
+    juce::String title, subtitle;
+    bool expanded;
+};
+
+// The tuning the geometry predicts, one fingering a line: the note, the fingering (filled, open and half circles;
+// plugged holes left out) and how far the resonance is from the note.
+class TuningList : public juce::Component
+{
+public:
+    void set (const std::vector<TuningTable::Entry>& newEntries)
+    {
+        const bool same = newEntries.size() == entries.size()
+                          && std::equal (newEntries.begin(), newEntries.end(), entries.begin(), [] (const auto& a, const auto& b)
+                                         { return a.note == b.note && a.pattern == b.pattern && std::lround (a.cents) == std::lround (b.cents); });
+        if (same)
+            return;
+        const bool resize = newEntries.size() != entries.size();
+        entries = newEntries;
+        repaint();
+        if (resize && onHeightChange != nullptr)
+            onHeightChange();
+    }
+
+    std::function<void()> onHeightChange;
+    int preferredHeight() const { return 24 + 28 * (int) entries.size(); }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto area = getLocalBounds();
+        auto header = area.removeFromTop (24);
+        g.setColour (colours::secondary);
+        g.setFont (font (sizes::caption));
+        g.drawText ("Note", header.removeFromLeft (64), juce::Justification::centredLeft);
+        g.drawText ("Off by", header.removeFromRight (70), juce::Justification::centredRight);
+        g.drawText ("Fingering", header, juce::Justification::centredLeft);
+        for (const auto& e : entries)
+        {
+            auto line = area.removeFromTop (28);
+            juce::String pattern;
+            for (auto ch : e.pattern)
+            {
+                if (ch == 'x')
+                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f"));
+                else if (ch == 'o')
+                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8b"));
+                else if (ch == 'h' || ch == 'p')
+                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x90"));
+                else if (ch == '|')
+                    pattern += "  ";
+            }
+            const int cents = (int) std::lround (e.cents);
+            g.setFont (font (sizes::body));
+            g.setColour (colours::text);
+            g.drawText (e.note, line.removeFromLeft (64), juce::Justification::centredLeft);
+            g.setColour (std::abs (cents) > 10 ? colours::finger : colours::text);
+            g.drawText ((cents > 0 ? "+" : "") + juce::String (cents) + " c", line.removeFromRight (70), juce::Justification::centredRight);
+            g.setColour (colours::text);
+            g.drawText (pattern, line, juce::Justification::centredLeft);
+        }
+    }
+
+private:
+    std::vector<TuningTable::Entry> entries;
+};
+
+// Buttons in a grid of equal cells.
+class ButtonGrid : public juce::Component
+{
+public:
+    explicit ButtonGrid (int columnsToUse) : columns (columnsToUse) {}
+
+    int preferredHeight() const
+    {
+        const int rows = (getNumChildComponents() + columns - 1) / columns;
+        return rows * 46 + (rows - 1) * 8;
+    }
+
+    void resized() override
+    {
+        const int width = (getWidth() - (columns - 1) * 8) / columns;
+        for (int i = 0; i < getNumChildComponents(); ++i)
+            getChildComponent (i)->setBounds ((i % columns) * (width + 8), (i / columns) * 54, width, 46);
+    }
+
+private:
+    int columns;
+};
+
+// "Tone holes (unticked = plugged): ..." -> "Tone holes"; the part in brackets, if any, as a subtitle.
+std::pair<juce::String, juce::String> splitHeading (const juce::String& heading)
+{
+    const auto title = heading.upToFirstOccurrenceOf (" (", false, false);
+    auto rest = heading.fromFirstOccurrenceOf (" (", false, false).upToLastOccurrenceOf (")", false, false);
+    return { title, rest.isNotEmpty() ? rest.substring (0, 1).toUpperCase() + rest.substring (1) + "." : juce::String() };
+}
+} // namespace
+
+//==============================================================================
+class PhoneUI::InstrumentScreen : public Screen
+{
+public:
+    explicit InstrumentScreen (PhoneUI& ownerToUse) : owner (ownerToUse), c (ownerToUse.controls)
+    {
+        // The instrument and its presets
+        presetCard.titleSize = 20.0f;
+        presetCard.onTap = [this] { owner.showPresetList(); };
+        saveButton.onClick = [this]
+        {
+            owner.present (std::make_unique<NameSheet> ("Save preset", "A name for this instrument. A preset of yours with the same name is replaced.",
+                                                        c.instrumentName(), [this] (const juce::String& name) { c.savePreset (name); }));
+        };
+        deleteButton.onClick = [this] { c.deletePreset(); };
+        exportButton.onClick = [this] { c.exportInstrument(); };
+        importButton.onClick = [this] { c.importInstrument(); };
+        for (auto* b : { &saveButton, &deleteButton, &exportButton, &importButton })
+            fileButtons.addAndMakeVisible (b);
+        content.add (title, [] (int) { return 36; });
+        content.add (presetCard, [] (int) { return 66; }, 4);
+        content.add (fileButtons, [this] (int) { return fileButtons.preferredHeight(); });
+        content.add (status, [this] (int w) { return status.preferredHeight (w); });
+        status.onHeightChange = [this] { resized(); };
+
+        // Key and tuning
+        addSection ("Key and tuning", "What the tuning table, the scale and Tune holes aim for. The sound never uses a chart: it comes "
+                                      "from the instrument's shape.", true);
+        addPicker ("Key", c.keyBox());
+        addPicker ("Octave", c.octaveBox());
+        addPicker ("Fingering chart", c.chartBox());
+        addSlider ("Pitch standard (A4)", c.pitchStandard(), c.pitchStandard().getTooltip());
+        tuneButton.onClick = [this] { c.tuneHoles(); };
+        addMember (tuneButton, [] (int) { return 46; }, 4);
+        addSwitch ("Tune C natural with L1's size", c.crossFingerings(), c.crossFingerings().getTooltip());
+
+        addSection ("Predicted tuning", "Each fingering's resonance against its note, from the instrument's shape: a design aid, more "
+                                        "than 10 cents off is highlighted.", false);
+        tuningList.onHeightChange = [this] { resized(); };
+        addMember (tuningList, [this] (int) { return tuningList.preferredHeight(); });
+
+        // The dimension and voicing settings, in the desktop's groups.
+        for (const auto& group : c.instrumentSettings())
+        {
+            auto [heading, subtitle] = splitHeading (group.heading);
+            const bool holes = std::any_of (group.settings.begin(), group.settings.end(), [] (const auto& s) { return s.hole >= 0; });
+            if (holes)
+                subtitle = "Switch a hole off to plug it (its sensor is then ignored). Position is from the window's edge to the hole's "
+                           "centre. Nearer the window or larger: the notes it vents are higher. Tune holes sets these.";
+            addSection (heading, subtitle, false);
+            if (heading.startsWith ("Bore"))
+                addPicker ("Material (wall thickness and roughness)", c.materialBox());
+            for (const auto& setting : group.settings)
+            {
+                if (setting.hole >= 0 && ! setting.diameter)
+                {
+                    static const char* fingers[] = { "left thumb, at the back", "left index finger", "left middle finger", "left ring finger",
+                                                     "right index finger", "right middle finger", "right ring finger", "right little finger" };
+                    addSwitch (setting.name + " (" + fingers[juce::jlimit (0, whistle::kNumHoles - 1, setting.hole)] + ")",
+                               c.holeUsed (setting.hole), {}, 10);
+                }
+                if (setting.hole >= 0)
+                    addSlider (setting.diameter ? "Diameter" : "Position", *setting.slider, {});
+                else
+                    addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
+            }
+            if (holes)
+                addSwitch ("Bell closes the foot", c.bell(), c.bell().getTooltip(), 10);
+        }
+
+        for (auto& section : sections)
+            section->apply();
+        content.attachTo (*this);
+    }
+
+    void refresh() override
+    {
+        presetCard.setTitle (c.presetBox().getText());
+        deleteButton.setEnabled (c.canDeletePreset());
+        status.setLines ({ { c.instrumentStatus(), sizes::caption, colours::secondary } });
+        for (auto& [card, box] : pickers)
+            card->setTitle (box->getText());
+        for (auto& s : sliders)
+            if (s->isShowing())
+                s->refresh();
+        for (auto& s : switches)
+            if (s->isShowing())
+                s->refresh();
+        if (tuningList.isShowing())
+            tuningList.set (c.tuningTable());
+    }
+
+    void resized() override { content.layout (getLocalBounds()); }
+
+private:
+    void addSection (const juce::String& heading, const juce::String& subtitle, bool expanded)
+    {
+        auto section = std::make_unique<FoldingHeading> (heading, subtitle, expanded);
+        auto* s = section.get();
+        s->onToggle = [this] { resized(); };
+        content.add (*s, [s] (int w) { return s->preferredHeight (w); }, 10);
+        sections.push_back (std::move (section));
+    }
+
+    void addMember (juce::Component& component, std::function<int (int)> height, int gap = 0)
+    {
+        content.add (component, std::move (height), gap);
+        sections.back()->members.push_back (&component);
+    }
+
+    void addPicker (const juce::String& caption, juce::ComboBox& box)
+    {
+        auto card = std::make_unique<TapCard> (caption);
+        card->titleSize = sizes::body;
+        card->onTap = [this, caption, &box]
+        {
+            owner.present (std::make_unique<ChoiceSheet> (caption, itemsOf (box), box.getSelectedId(),
+                                                          [&box] (int id) { box.setSelectedId (id, juce::sendNotificationSync); }));
+        };
+        addMember (*card, [] (int) { return 60; });
+        pickers.push_back ({ std::move (card), &box });
+    }
+
+    void addSlider (const juce::String& name, juce::Slider& slider, const juce::String& description)
+    {
+        auto s = std::make_unique<SettingSlider> (name, slider, description);
+        auto* p = s.get();
+        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, 4);
+        sliders.push_back (std::move (s));
+    }
+
+    void addSwitch (const juce::String& name, juce::ToggleButton& button, const juce::String& description, int gap = 4)
+    {
+        auto s = std::make_unique<SettingSwitch> (name, button, description);
+        auto* p = s.get();
+        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, gap);
+        switches.push_back (std::move (s));
+    }
+
+    PhoneUI& owner;
+    DesktopControls& c;
+    ScrollingContent content;
+    Heading title { "Instrument", sizes::title };
+    TapCard presetCard { "Preset" };
+    ButtonGrid fileButtons { 2 };
+    juce::TextButton saveButton { "Save as preset..." }, deleteButton { "Delete preset" }, exportButton { "Export file..." },
+        importButton { "Import file..." }, tuneButton { "Tune holes" };
+    InfoBlock status;
+    TuningList tuningList;
+    std::vector<std::unique_ptr<FoldingHeading>> sections;
+    std::vector<std::pair<std::unique_ptr<TapCard>, juce::ComboBox*>> pickers;
+    std::vector<std::unique_ptr<SettingSlider>> sliders;
+    std::vector<std::unique_ptr<SettingSwitch>> switches;
+};
+
+//==============================================================================
 class PhoneUI::RoomScreen : public Screen
 {
 public:
@@ -659,6 +994,7 @@ PhoneUI::PhoneUI (std::unique_ptr<MainComponent> mainToShow) : main (std::move (
     main->setLookAndFeel (&desktopLookAndFeel);
 
     screens[play] = std::make_unique<PlayScreen> (*this);
+    screens[instrument] = std::make_unique<InstrumentScreen> (*this);
     screens[room] = std::make_unique<RoomScreen> (*this);
     screens[setup] = std::make_unique<SetupScreen> (*this);
     screens[details] = std::make_unique<DetailsScreen> (*this);

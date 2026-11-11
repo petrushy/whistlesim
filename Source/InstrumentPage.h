@@ -41,6 +41,7 @@ public:
     };
 
     void setEntries (std::vector<Entry> e) { entries = std::move (e); repaint(); }
+    const std::vector<Entry>& getEntries() const { return entries; }
     void paint (juce::Graphics&) override;
 
 private:
@@ -104,7 +105,8 @@ private:
     void refreshPresetList();
     void selectPresetNamed (const juce::String&);
     void loadUserPreset (int index);
-    void savePreset();
+    void savePreset();                              // Asks for a name, then savePresetNamed
+    void savePresetNamed (const juce::String& name);  // Replaces a preset of the player's with that name
     void deletePreset();
     juce::ToggleButton crossButton { "Also tune cross-fingerings with hole size (whistle: C natural sets L1)" };
     juce::ToggleButton bellButton { "Bell   (the bell sensor closes the open foot)" };

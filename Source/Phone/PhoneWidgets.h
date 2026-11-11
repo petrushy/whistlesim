@@ -245,6 +245,79 @@ private:
     std::vector<std::unique_ptr<Row>> rows;
 };
 
+// Asks for a name (saving a preset): a text field with the keyboard up, Save and Cancel.
+class NameSheet : public Sheet
+{
+public:
+    NameSheet (juce::String titleToShow, juce::String messageToShow, const juce::String& initialName, std::function<void (const juce::String&)> onSaveName)
+        : title (std::move (titleToShow)), message (std::move (messageToShow)), onSave (std::move (onSaveName))
+    {
+        editor.setFont (font (20.0f));
+        editor.setText (initialName, false);
+        editor.setIndents (12, 12);
+        editor.setColour (juce::TextEditor::backgroundColourId, colours::card);
+        editor.setColour (juce::TextEditor::textColourId, colours::text);
+        editor.setColour (juce::TextEditor::outlineColourId, colours::separator);
+        editor.setColour (juce::TextEditor::focusedOutlineColourId, colours::accent);
+        editor.setColour (juce::CaretComponent::caretColourId, colours::accent);
+        editor.onReturnKey = [this] { save(); };
+        addAndMakeVisible (editor);
+        saveButton.setColour (juce::TextButton::buttonColourId, colours::accent);
+        saveButton.onClick = [this] { save(); };
+        cancelButton.onClick = [this] { if (dismiss) dismiss(); };
+        addAndMakeVisible (saveButton);
+        addAndMakeVisible (cancelButton);
+        setOpaque (true);
+        // The keyboard comes up once the field is on screen.
+        juce::Timer::callAfterDelay (150, [safe = juce::Component::SafePointer<NameSheet> (this)]
+        {
+            if (safe != nullptr)
+            {
+                safe->editor.grabKeyboardFocus();
+                safe->editor.selectAll();
+            }
+        });
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (colours::background);
+        g.setColour (colours::text);
+        g.setFont (font (sizes::body, true));
+        g.drawText (title, header, juce::Justification::centred);
+        drawWrapped (g, message, font (sizes::caption), colours::secondary, messageArea);
+    }
+
+    void resized() override
+    {
+        auto area = insets.subtractedFrom (getLocalBounds()).reduced (sizes::gutter, 0);
+        header = area.removeFromTop (52);
+        cancelButton.setBounds (header.withWidth (90).reduced (0, 8));
+        saveButton.setBounds (header.withLeft (header.getRight() - 90).reduced (0, 8));
+        area.removeFromTop (12);
+        messageArea = area.removeFromTop (textHeight (message, font (sizes::caption), area.getWidth()) + 4);
+        area.removeFromTop (8);
+        editor.setBounds (area.removeFromTop (50));
+    }
+
+private:
+    void save()
+    {
+        const auto name = editor.getText().trim();
+        if (name.isEmpty())
+            return;
+        onSave (name);
+        if (dismiss)
+            dismiss();
+    }
+
+    juce::String title, message;
+    std::function<void (const juce::String&)> onSave;
+    juce::TextEditor editor;
+    juce::TextButton saveButton { "Save" }, cancelButton { "Cancel" };
+    juce::Rectangle<int> header, messageArea;
+};
+
 // The items of a desktop ComboBox (with its section headings), for a ChoiceSheet.
 inline std::vector<ChoiceSheet::Item> itemsOf (juce::ComboBox& box, const juce::String& firstHeading = {})
 {
@@ -415,6 +488,16 @@ public:
             repaint();
         };
         addAndMakeVisible (slider);
+
+        // Fine steps: a finger can't place a slider to 0.1 mm. Held, they repeat.
+        for (auto* b : { &lessButton, &moreButton })
+        {
+            b->setRepeatSpeed (400, 70);
+            b->setColour (juce::TextButton::buttonColourId, colours::card);
+            addAndMakeVisible (b);
+        }
+        lessButton.onClick = [this] { nudge (-1); };
+        moreButton.onClick = [this] { nudge (1); };
     }
 
     void refresh()
@@ -423,6 +506,11 @@ public:
         {
             slider.setValue (desktop.getValue(), juce::dontSendNotification);
             repaint();
+        }
+        if (isEnabled() != desktop.isEnabled())  // e.g. a plugged hole's sliders
+        {
+            setEnabled (desktop.isEnabled());
+            setAlpha (desktop.isEnabled() ? 1.0f : 0.4f);
         }
     }
 
@@ -443,12 +531,27 @@ public:
             drawWrapped (g, description, font (sizes::caption), colours::secondary, getLocalBounds().withTrimmedTop (22 + 40 + 2));
     }
 
-    void resized() override { slider.setBounds (getLocalBounds().withTrimmedTop (22).withHeight (40).expanded (2, 0)); }
+    void resized() override
+    {
+        auto row = getLocalBounds().withTrimmedTop (22).withHeight (40);
+        lessButton.setBounds (row.removeFromLeft (40).reduced (2, 4));
+        moreButton.setBounds (row.removeFromRight (40).reduced (2, 4));
+        slider.setBounds (row.reduced (4, 0));
+    }
 
 private:
+    void nudge (int direction)
+    {
+        const double step = desktop.getInterval() > 0.0 ? desktop.getInterval() : (desktop.getMaximum() - desktop.getMinimum()) / 200.0;
+        desktop.setValue (desktop.getValue() + direction * step, juce::sendNotificationSync);
+        slider.setValue (desktop.getValue(), juce::dontSendNotification);
+        repaint();
+    }
+
     juce::String name, description;
     juce::Slider& desktop;
     juce::Slider slider;
+    juce::TextButton lessButton { juce::String::fromUTF8 ("\xe2\x88\x92") }, moreButton { "+" };
 };
 
 // An on/off setting as a switch that follows a desktop toggle button (setting it does what clicking that does).

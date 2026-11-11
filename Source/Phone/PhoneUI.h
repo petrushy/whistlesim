@@ -1,5 +1,7 @@
 // The iPhone app's screens, with a tab bar at the bottom:
 //   Play     the front page: connection, instrument (preset), the live whistle, room and reverb, scale, record
+//   Instrument  presets (save, export, import), key and tuning, the tuning table, and every dimension and voicing
+//            setting in folding sections
 //   Room     the room (reverb) and its settings
 //   Setup    WARBL (connection, Bluetooth, simulator), sound output (latency, buffer), About
 //   Details  the desktop pages, for fine-tuning and diagnostics (larger with the phone turned sideways)
@@ -20,6 +22,7 @@ public:
     enum Tab
     {
         play,
+        instrument,
         room,
         setup,
         details,
@@ -43,6 +46,7 @@ public:
 private:
     class TabBar;
     class PlayScreen;
+    class InstrumentScreen;
     class RoomScreen;
     class SetupScreen;
     class DetailsScreen;

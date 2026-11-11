@@ -805,27 +805,30 @@ void InstrumentPage::savePreset()
     juce::Component::SafePointer<InstrumentPage> safeThis (this);
     window->enterModalState (true, juce::ModalCallbackFunction::create ([safeThis, safeWindow] (int result)
     {
-        if (result != 1 || safeThis == nullptr || safeWindow == nullptr)
-            return;
-        auto& page = *safeThis;
-        const auto name = juce::File::createLegalFileName (safeWindow->getTextEditorContents ("name").trim());
-        if (name.isEmpty())
-            return;
-        const auto folder = userPresetFolder();
-        folder.createDirectory();
-        const auto file = folder.getChildFile (name + ".whistle");
-        page.geometry.name = name;
-        if (file.replaceWithText (whistle::toJson (page.getInstrument())))
-        {
-            page.refreshPresetList();
-            page.selectPresetNamed (name);
-            page.tuneStatus.setText ("Saved preset " + name, juce::dontSendNotification);
-        }
-        else
-        {
-            page.tuneStatus.setText ("Couldn't write " + file.getFullPathName(), juce::dontSendNotification);
-        }
+        if (result == 1 && safeThis != nullptr && safeWindow != nullptr)
+            safeThis->savePresetNamed (safeWindow->getTextEditorContents ("name"));
     }), true);
+}
+
+void InstrumentPage::savePresetNamed (const juce::String& requestedName)
+{
+    const auto name = juce::File::createLegalFileName (requestedName.trim());
+    if (name.isEmpty())
+        return;
+    const auto folder = userPresetFolder();
+    folder.createDirectory();
+    const auto file = folder.getChildFile (name + ".whistle");
+    geometry.name = name;
+    if (file.replaceWithText (whistle::toJson (getInstrument())))
+    {
+        refreshPresetList();
+        selectPresetNamed (name);
+        tuneStatus.setText ("Saved preset " + name, juce::dontSendNotification);
+    }
+    else
+    {
+        tuneStatus.setText ("Couldn't write " + file.getFullPathName(), juce::dontSendNotification);
+    }
 }
 
 void InstrumentPage::deletePreset()
