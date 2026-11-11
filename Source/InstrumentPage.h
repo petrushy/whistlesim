@@ -107,7 +107,9 @@ private:
     void loadUserPreset (int index);
     void savePreset();                              // Asks for a name, then savePresetNamed
     void savePresetNamed (const juce::String& name);  // Replaces a preset of the player's with that name
-    void deletePreset();
+    void deletePreset();                             // Asks first, then deleteUserPreset
+    void deleteUserPreset (const juce::File&);       // Deletes it and goes on to the next preset
+    juce::File selectedUserPreset() const;           // The player's preset selected in the list, if one is
     juce::ToggleButton crossButton { "Also tune cross-fingerings with hole size (whistle: C natural sets L1)" };
     juce::ToggleButton bellButton { "Bell   (the bell sensor closes the open foot)" };
     HelpDot bellHelp { "Bell", [this] { return bellButton.getTooltip(); } };

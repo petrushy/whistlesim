@@ -831,12 +831,17 @@ void InstrumentPage::savePresetNamed (const juce::String& requestedName)
     }
 }
 
-void InstrumentPage::deletePreset()
+juce::File InstrumentPage::selectedUserPreset() const
 {
     const int index = presetBox.getSelectedId() - kUserPresetId;
-    if (index < 0 || index >= (int) userPresets.size())
+    return index >= 0 && index < (int) userPresets.size() ? userPresets[(size_t) index] : juce::File();
+}
+
+void InstrumentPage::deletePreset()
+{
+    const auto file = selectedUserPreset();
+    if (file == juce::File())
         return;
-    const auto file = userPresets[(size_t) index];
     juce::Component::SafePointer<InstrumentPage> safeThis (this);
     juce::AlertWindow::showAsync (juce::MessageBoxOptions()
                                       .withIconType (juce::MessageBoxIconType::QuestionIcon)
@@ -848,27 +853,30 @@ void InstrumentPage::deletePreset()
                                       .withAssociatedComponent (this),
                                   [safeThis, file] (int result)
     {
-        if (result != 1 || safeThis == nullptr)
-            return;
-        auto& page = *safeThis;
-        if (file.moveToTrash() || file.deleteFile())
-        {
-            // Go on to the next preset of the player's (or the one before, if it was the last), or the first
-            // built-in one if none are left.
-            const auto deletedName = file.getFileNameWithoutExtension();
-            const int position = (int) std::distance (page.userPresets.begin(), std::find (page.userPresets.begin(), page.userPresets.end(), file));
-            page.refreshPresetList();
-            if (! page.userPresets.empty())
-                page.presetBox.setSelectedId (kUserPresetId + std::min (position, (int) page.userPresets.size() - 1), juce::sendNotificationSync);
-            else
-                page.presetBox.setSelectedId (1, juce::sendNotificationSync);
-            page.tuneStatus.setText ("Deleted preset " + deletedName, juce::dontSendNotification);
-        }
-        else
-        {
-            page.tuneStatus.setText ("Couldn't delete " + file.getFullPathName(), juce::dontSendNotification);
-        }
+        if (result == 1 && safeThis != nullptr)
+            safeThis->deleteUserPreset (file);
     });
+}
+
+void InstrumentPage::deleteUserPreset (const juce::File& file)
+{
+    if (file.moveToTrash() || file.deleteFile())
+    {
+        // Go on to the next preset of the player's (or the one before, if it was the last), or the first
+        // built-in one if none are left.
+        const auto deletedName = file.getFileNameWithoutExtension();
+        const int position = (int) std::distance (userPresets.begin(), std::find (userPresets.begin(), userPresets.end(), file));
+        refreshPresetList();
+        if (! userPresets.empty())
+            presetBox.setSelectedId (kUserPresetId + std::min (position, (int) userPresets.size() - 1), juce::sendNotificationSync);
+        else
+            presetBox.setSelectedId (1, juce::sendNotificationSync);
+        tuneStatus.setText ("Deleted preset " + deletedName, juce::dontSendNotification);
+    }
+    else
+    {
+        tuneStatus.setText ("Couldn't delete " + file.getFullPathName(), juce::dontSendNotification);
+    }
 }
 
 void InstrumentPage::saveToFile()

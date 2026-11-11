@@ -318,6 +318,68 @@ private:
     juce::Rectangle<int> header, messageArea;
 };
 
+// A question with two answers (e.g. "Delete preset?"), as a card in the middle of the dimmed screen. The action
+// button is red when `destructive`. Tapping outside the card cancels.
+class ConfirmSheet : public Sheet
+{
+public:
+    ConfirmSheet (juce::String titleToShow, juce::String messageToShow, const juce::String& actionName, bool destructive,
+                  std::function<void()> onConfirmed)
+        : title (std::move (titleToShow)), message (std::move (messageToShow)), onConfirm (std::move (onConfirmed))
+    {
+        actionButton.setButtonText (actionName);
+        actionButton.setColour (juce::TextButton::buttonColourId, destructive ? colours::record : colours::accent);
+        actionButton.onClick = [this]
+        {
+            onConfirm();
+            if (dismiss)
+                dismiss();
+        };
+        cancelButton.setColour (juce::TextButton::buttonColourId, colours::cardPressed);
+        cancelButton.onClick = [this] { if (dismiss) dismiss(); };
+        addAndMakeVisible (actionButton);
+        addAndMakeVisible (cancelButton);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (juce::Colours::black.withAlpha (0.6f));
+        g.setColour (colours::card);
+        g.fillRoundedRectangle (card.toFloat(), 18.0f);
+        auto area = card.reduced (20, 18);
+        g.setColour (colours::text);
+        g.setFont (font (sizes::body + 1.0f, true));
+        g.drawText (title, area.removeFromTop (26), juce::Justification::centredLeft);
+        area.removeFromTop (6);
+        drawWrapped (g, message, font (sizes::body - 2.0f), colours::secondary, area.withHeight (messageHeight + 4));
+    }
+
+    void resized() override
+    {
+        const auto area = insets.subtractedFrom (getLocalBounds());
+        const int width = std::min (340, area.getWidth() - 2 * sizes::gutter);
+        messageHeight = textHeight (message, font (sizes::body - 2.0f), width - 40);
+        const int height = 18 + 26 + 6 + messageHeight + 18 + 46 + 18;
+        card = juce::Rectangle<int> (width, height).withCentre (area.getCentre());
+        auto buttons = card.reduced (20, 18).removeFromBottom (46);
+        cancelButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).withTrimmedRight (6));
+        actionButton.setBounds (buttons.withTrimmedLeft (6));
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (! card.contains (e.getPosition()) && dismiss)
+            dismiss();
+    }
+
+private:
+    juce::String title, message;
+    std::function<void()> onConfirm;
+    juce::TextButton actionButton, cancelButton { "Cancel" };
+    juce::Rectangle<int> card;
+    int messageHeight = 0;
+};
+
 // The items of a desktop ComboBox (with its section headings), for a ChoiceSheet.
 inline std::vector<ChoiceSheet::Item> itemsOf (juce::ComboBox& box, const juce::String& firstHeading = {})
 {

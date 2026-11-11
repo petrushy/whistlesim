@@ -7,7 +7,8 @@
 class AboutPanel : public juce::Component
 {
 public:
-    AboutPanel()
+    // `textWidth`: narrower on a phone, where the links go one under the other.
+    explicit AboutPanel (int textWidth = kTextWidth) : narrow (textWidth < kTextWidth)
     {
         const juce::Colour heading (juce::Colours::white), body (0xffd8d8d8), quiet (0xff9a9ca3);
         juce::AttributedString s;
@@ -24,7 +25,7 @@ public:
                   "firmware that adds the sensor stream, and is built with the JUCE framework.\n\n"
                   "Free software under the GNU General Public License, version 3.",
                   juce::FontOptions (14.0f), body);
-        text.createLayout (s, (float) kTextWidth);
+        text.createLayout (s, (float) textWidth);
 
         for (auto* link : { &warbl, &source, &framework })
         {
@@ -32,7 +33,7 @@ public:
             link->setColour (juce::HyperlinkButton::textColourId, juce::Colour (0xff4fa3e0));
             addAndMakeVisible (*link);
         }
-        setSize (kTextWidth + 2 * kMargin, juce::roundToInt (text.getHeight()) + 2 * kMargin + kLinkHeight + kLinkGap);
+        setSize (textWidth + 2 * kMargin, juce::roundToInt (text.getHeight()) + 2 * kMargin + (narrow ? 3 : 1) * kLinkHeight + kLinkGap);
     }
 
     void paint (juce::Graphics& g) override
@@ -43,6 +44,13 @@ public:
 
     void resized() override
     {
+        if (narrow)
+        {
+            auto links = getLocalBounds().reduced (kMargin).removeFromBottom (3 * kLinkHeight);
+            for (auto* link : { &warbl, &source, &framework })
+                link->setBounds (links.removeFromTop (kLinkHeight));
+            return;
+        }
         auto row = getLocalBounds().reduced (kMargin).removeFromBottom (kLinkHeight);
         warbl.setBounds (row.removeFromLeft (100));
         source.setBounds (row.removeFromLeft (230));
@@ -52,6 +60,7 @@ public:
 private:
     static constexpr int kTextWidth = 480, kMargin = 24, kLinkHeight = 24, kLinkGap = 14;
 
+    bool narrow;
     juce::TextLayout text;
     juce::HyperlinkButton warbl { "warbl.xyz", juce::URL ("https://warbl.xyz") };
     juce::HyperlinkButton source { "github.com/petrushy/whistlesim", juce::URL ("https://github.com/petrushy/whistlesim") };

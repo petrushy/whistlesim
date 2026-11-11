@@ -3,7 +3,6 @@
 #include "../AboutPanel.h"
 #include "../OverlayPanel.h"
 #include "../Recorder.h"
-#include "DesktopView.h"
 
 using namespace phone;
 
@@ -134,7 +133,7 @@ public:
         g.fillAll (colours::card);
         g.setColour (colours::separator);
         g.fillRect (0, 0, getWidth(), 1);
-        static const char* names[] = { "Play", "Instrument", "Room", "Setup", "Details" };
+        static const char* names[] = { "Play", "Instrument", "Room", "Setup" };
         const float slot = (float) getWidth() / (float) numTabs;
         for (int i = 0; i < numTabs; ++i)
         {
@@ -197,7 +196,7 @@ private:
                 g.fillEllipse (juce::Rectangle<float> (4.0f, 4.0f).withCentre (c));
                 break;
             }
-            case instrument:  // Two sliders
+            default:  // Instrument: two sliders
             {
                 for (int i = 0; i < 2; ++i)
                 {
@@ -208,18 +207,6 @@ private:
                 g.strokePath (p, stroke);
                 g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ r.getX() + r.getWidth() * 0.65f, r.getY() + r.getHeight() * 0.3f }));
                 g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ r.getX() + r.getWidth() * 0.3f, r.getY() + r.getHeight() * 0.7f }));
-                break;
-            }
-            default:  // Details: a list
-            {
-                for (int i = 0; i < 3; ++i)
-                {
-                    const float y = r.getY() + r.getHeight() * (0.2f + 0.3f * (float) i);
-                    p.startNewSubPath (r.getX() + 6.0f, y);
-                    p.lineTo (r.getRight(), y);
-                    g.fillEllipse (juce::Rectangle<float> (3.0f, 3.0f).withCentre ({ r.getX() + 1.5f, y }));
-                }
-                g.strokePath (p, stroke);
                 break;
             }
         }
@@ -633,7 +620,11 @@ public:
             owner.present (std::make_unique<NameSheet> ("Save preset", "A name for this instrument. A preset of yours with the same name is replaced.",
                                                         c.instrumentName(), [this] (const juce::String& name) { c.savePreset (name); }));
         };
-        deleteButton.onClick = [this] { c.deletePreset(); };
+        deleteButton.onClick = [this]
+        {
+            owner.present (std::make_unique<ConfirmSheet> ("Delete preset", "Delete your preset \"" + c.presetToDelete() + "\"? The next preset in the list is loaded.",
+                                                           "Delete", true, [this] { c.deletePreset(); }));
+        };
         exportButton.onClick = [this] { c.exportInstrument(); };
         importButton.onClick = [this] { c.importInstrument(); };
         for (auto* b : { &saveButton, &deleteButton, &exportButton, &importButton })
@@ -962,42 +953,16 @@ private:
 };
 
 //==============================================================================
-class PhoneUI::DetailsScreen : public Screen
-{
-public:
-    explicit DetailsScreen (PhoneUI& owner) : view (owner.getMain(), DesktopView::Fit::width)
-    {
-        hint.setLines ({ { "The desktop pages: the stream, the instrument's dimensions and voicing, the sensor response and the model "
-                           "inside. Turn the phone sideways for a larger view.",
-                           sizes::caption, colours::secondary } });
-        addAndMakeVisible (hint);
-        addAndMakeVisible (view);
-    }
-
-    void resized() override
-    {
-        auto area = getLocalBounds();
-        auto top = area.removeFromTop (hint.preferredHeight (getWidth() - 2 * sizes::gutter) + 12).reduced (sizes::gutter, 4);
-        hint.setBounds (top);
-        view.setBounds (area);
-    }
-
-private:
-    InfoBlock hint;
-    DesktopView view;
-};
-
-//==============================================================================
 PhoneUI::PhoneUI (std::unique_ptr<MainComponent> mainToShow) : main (std::move (mainToShow))
 {
     setLookAndFeel (&lookAndFeel);
-    main->setLookAndFeel (&desktopLookAndFeel);
+    // The desktop window isn't shown, but runs the engine, the connection and the settings behind the screens.
+    addChildComponent (*main);
 
     screens[play] = std::make_unique<PlayScreen> (*this);
     screens[instrument] = std::make_unique<InstrumentScreen> (*this);
     screens[room] = std::make_unique<RoomScreen> (*this);
     screens[setup] = std::make_unique<SetupScreen> (*this);
-    screens[details] = std::make_unique<DetailsScreen> (*this);
     for (auto& screen : screens)
         addChildComponent (*screen);
 
@@ -1017,9 +982,8 @@ PhoneUI::~PhoneUI()
     overlay.reset();
     sheet.reset();
     for (auto& screen : screens)
-        screen.reset();  // Before the desktop window they show and drive
+        screen.reset();  // Before the desktop window they drive
     tabBar.reset();
-    main->setLookAndFeel (nullptr);
     setLookAndFeel (nullptr);
 }
 
@@ -1058,7 +1022,8 @@ void PhoneUI::showPresetList()
 
 void PhoneUI::showAbout()
 {
-    auto panel = std::make_unique<OverlayPanel> (std::make_unique<AboutPanel>(), "About WhistleSim");
+    // The text laid out for the screen's width, not shrunk.
+    auto panel = std::make_unique<OverlayPanel> (std::make_unique<AboutPanel> (std::min (480, getWidth() - 20 - 48)), "About WhistleSim");
     panel->onClose = [this] { overlay.reset(); };
     panel->showOver (*this, safeArea().getTop() + 12);
     overlay = std::move (panel);

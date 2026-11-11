@@ -38,8 +38,9 @@ public:
     juce::String instrumentStatus() { return instrument().tuneStatus.getText(); }
     juce::String instrumentName() { return instrument().geometry.name; }
     void savePreset (const juce::String& name) { instrument().savePresetNamed (name); }
-    bool canDeletePreset() { return instrument().deleteButton.isEnabled(); }
-    void deletePreset() { instrument().deletePreset(); }
+    bool canDeletePreset() { return instrument().selectedUserPreset() != juce::File(); }
+    juce::String presetToDelete() { return instrument().selectedUserPreset().getFileNameWithoutExtension(); }
+    void deletePreset() { instrument().deleteUserPreset (instrument().selectedUserPreset()); }  // Without asking
     void exportInstrument() { instrument().saveToFile(); }
     void importInstrument() { instrument().loadFromFile(); }
     const std::vector<TuningTable::Entry>& tuningTable() { return instrument().tuningTable.getEntries(); }

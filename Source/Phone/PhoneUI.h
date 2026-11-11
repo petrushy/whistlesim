@@ -4,8 +4,7 @@
 //            setting in folding sections
 //   Room     the room (reverb) and its settings
 //   Setup    WARBL (connection, Bluetooth, simulator), sound output (latency, buffer), About
-//   Details  the desktop pages, for fine-tuning and diagnostics (larger with the phone turned sideways)
-// The desktop window (MainComponent) lives on behind them: it owns the engine, runs the connection and keeps the
+// The desktop window (MainComponent) lives on behind them, not shown: it owns the engine, runs the connection and keeps the
 // settings, and the phone screens drive its controls (see DesktopControls). So the sound is the desktop app's.
 // On a Mac, `--phone` shows this in a phone-sized window, for trying layouts.
 
@@ -25,7 +24,6 @@ public:
         instrument,
         room,
         setup,
-        details,
         numTabs
     };
 
@@ -49,7 +47,6 @@ private:
     class InstrumentScreen;
     class RoomScreen;
     class SetupScreen;
-    class DetailsScreen;
 
     struct Screen : public juce::Component
     {
@@ -59,8 +56,7 @@ private:
     void timerCallback() override;
     juce::BorderSize<int> safeArea() const;
 
-    phone::LookAndFeel lookAndFeel;          // Outlives everything that uses it
-    juce::LookAndFeel_V4 desktopLookAndFeel;  // The desktop pages keep their own look
+    phone::LookAndFeel lookAndFeel;  // Outlives everything that uses it
     std::unique_ptr<MainComponent> main;
     DesktopControls controls { *main };
     std::array<std::unique_ptr<Screen>, numTabs> screens;

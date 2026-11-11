@@ -70,7 +70,7 @@ public:
                 else
                     main->showAbout();
             }
-            // "--phone-tab <n>" (with --phone): 0 Play, 1 Instrument, 2 Room, 3 Setup, 4 Details.
+            // "--phone-tab <n>" (with --phone): 0 Play, 1 Instrument, 2 Room, 3 Setup.
             const auto phoneTab = args.indexOf ("--phone-tab");
             if (phoneUI != nullptr && phoneTab >= 0 && phoneTab + 1 < args.size())
                 phoneUI->showTab (args[phoneTab + 1].getIntValue());
