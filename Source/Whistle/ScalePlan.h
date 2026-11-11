@@ -6,6 +6,7 @@
 
 #include "Acoustics.h"
 
+#include <map>
 #include <string>
 
 namespace whistle
@@ -33,7 +34,10 @@ int scaleControlsAt (const std::vector<ScaleStep>&, double t, Controls&);
 // Notes the model doesn't play within 60 cents of their pitch are left out. The plan is checked by playing
 // the whole scale: near its threshold a note may sound on its own but not after the previous one (flutes
 // have hysteresis there), so such notes get more breath.
-std::vector<ScaleStep> planScale (const Geometry&, const Voicing&, double lowestHz, int semitones = 24);
+// aimCents (optional, by note name): play those notes that far from the note instead of in tune, e.g. as sharp or
+// flat as a recorded player did, which is to blow about as hard.
+std::vector<ScaleStep> planScale (const Geometry&, const Voicing&, double lowestHz, int semitones = 24,
+                                  const std::map<std::string, float>* aimCents = nullptr);
 
 // Plays the scale as the app does (one model, 64-sample blocks at `rate`) and returns the pitch of each note's
 // steady part (0 if it doesn't sound clearly). Keeps the sound in `audio` if given.

@@ -89,6 +89,7 @@ Controls controlsFor (const Openness& open)
 // Returns the sound at `rate`.
 static float vortexArg = 1.0f;
 static bool geometryArgs = false;
+static bool rawCrossings = false;  // raw=1: transition and glide time the unfiltered sound's zero crossings (as before 2026-11-10)
 static bool windowLossArg = true;  // windowloss=0: the window as a lossless air mass (as before 2026-11-06)
 
 static std::vector<float> playGesture (const Geometry& g, const Voicing& v, const Openness& open,
@@ -109,6 +110,29 @@ static std::vector<float> playGesture (const Geometry& g, const Voicing& v, cons
         model.render (out.data() + start, std::min (block, (int) out.size() - start));
     }
     return out;
+}
+
+// The sound below `cutoff` Hz (fourth-order Butterworth lowpass), for timing zero crossings: a rich note's own
+// harmonics (a second or third harmonic within ~6 dB of the fundamental) cross zero more than once per period,
+// which read as a jump to another register. With the cutoff at 1.5 x the lower note its harmonics are 10 dB and
+// more down; a real jump still shows, because then the upper register is all there is.
+static std::vector<float> belowCutoff (const std::vector<float>& x, double rate, double cutoff)
+{
+    std::vector<float> y (x);
+    const double w0 = 2.0 * juce::MathConstants<double>::pi * std::min (cutoff, 0.45 * rate) / rate;
+    for (const double q : { 0.5412, 1.3066 })
+    {
+        const double alpha = std::sin (w0) / (2.0 * q), a0 = 1.0 + alpha;
+        const double b1 = (1.0 - std::cos (w0)) / a0, b0 = 0.5 * b1, a1 = -2.0 * std::cos (w0) / a0, a2 = (1.0 - alpha) / a0;
+        double x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+        for (auto& v : y)
+        {
+            const double in = v, o = b0 * in + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1; x1 = in; y2 = y1; y1 = o;
+            v = (float) o;
+        }
+    }
+    return y;
 }
 
 // RMS level (dBFS) of out[from, to).
@@ -143,7 +167,7 @@ static void saveWavArg (int argc, char* argv[], const juce::String& name, const 
 // A preset by number or by part of its name (e.g. "recorder", "narrow head").
 static int presetArg (const char* arg)
 {
-    const juce::String text (arg);
+    const auto text = juce::String::fromUTF8 (arg);  // Names like Löfgren, as the shell passes them
     if (text.containsOnly ("0123456789"))
         return juce::jlimit (0, (int) presets().size() - 1, text.getIntValue());
     for (size_t i = 0; i < presets().size(); ++i)
@@ -181,6 +205,7 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("slow=")) v.slowJetGrowth = value;
         if (arg.startsWith ("stages=")) v.jetStages = (int) value;
         if (arg.startsWith ("spread=")) v.jetSpreading = value;
+        if (arg.startsWith ("bend=")) v.jetBend = value;
         if (arg.startsWith ("tap=")) v.fingerTap = value;
         if (arg.startsWith ("soft=")) v.fingerSoftness = value;
         if (arg.startsWith ("knock=")) v.bodyKnock = value;
@@ -203,10 +228,13 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("edge=")) g.edgeOffset = value * 0.001;
         if (arg.startsWith ("vortex=")) vortexArg = (float) value;
         if (arg.startsWith ("windowloss=")) windowLossArg = value > 0.5;
+        if (arg.startsWith ("raw=")) rawCrossings = value > 0.5;
         // The fipple's size (mm); the instrument is retuned afterwards where it matters (analyse).
         if (arg.startsWith ("window=")) { g.windowLength = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("width=")) { g.windowWidth = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("flue=")) { g.windwayHeight = value * 0.001; geometryArgs = true; }
+        if (arg.startsWith ("headd=")) { g.headDiameter = value * 0.001; geometryArgs = true; }  // With headl=: a head section, retuned
+        if (arg.startsWith ("headl=")) { g.headLength = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("top=")) { g.boreDiameterTop = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("foot=")) { g.boreDiameterFoot = value * 0.001; geometryArgs = true; }
     }
@@ -485,10 +513,12 @@ int main (int argc, char* argv[])
                 }
                 std::vector<std::pair<double, double>> crossings;  // time, period
                 double last = -1.0;
-                for (size_t i = (size_t) (0.39 * rate); i + 1 < out.size(); ++i)
-                    if (out[i] < 0.0f && out[i + 1] >= 0.0f)
+                const double lowerNote = lowestNote (g) * std::pow (2.0, std::min (from.semitones, to.semitones) / 12.0);
+                const auto band = rawCrossings ? out : belowCutoff (out, rate, 1.5 * lowerNote);
+                for (size_t i = (size_t) (0.39 * rate); i + 1 < band.size(); ++i)
+                    if (band[i] < 0.0f && band[i + 1] >= 0.0f)
                     {
-                        const double t = (double) i / rate + out[i] / (out[i] - out[i + 1]) / rate;
+                        const double t = (double) i / rate + band[i] / (band[i] - band[i + 1]) / rate;
                         if (last > 0.0)
                             crossings.push_back ({ t, t - last });
                         last = t;
@@ -885,7 +915,7 @@ int main (int argc, char* argv[])
             return notes;
         };
 
-        auto print = [] (const char* title, const std::vector<NoteAnalysis>& notes)
+        auto print = [] (const char* title, const std::vector<NoteAnalysis>& notes, const std::vector<NoteAnalysis>* reference = nullptr)
         {
             std::printf ("%s\n  note    at(s)  len      Hz  cents wobble  level  attack centroid   H2  H3  H4  H5  H6  H7  H8  H9 H10 |  noise 1-2k 2-4k 4-8k 8-12k\n", title);
             for (const auto& n : notes)
@@ -896,8 +926,10 @@ int main (int argc, char* argv[])
                     std::printf ("%4.0f", n.harmonics[(size_t) k]);
                 std::printf (" | %10.0f %4.0f %4.0f %5.0f\n", n.noise[0], n.noise[1], n.noise[2], n.noise[3]);
             }
-            // Averages per octave (the second from 1.9 x the first note), in dB re the fundamental; brightness as
-            // the centroid over the fundamental.
+            // Averages per octave, in dB re the fundamental; brightness as the centroid over the fundamental. The
+            // second octave starts between the seventh and the octave (1.94 x the first note): at 1.9 x, a C# played
+            // 20 cents sharp over a flat bottom note counted as second octave.
+            constexpr double kOctaveSplit = 1.94;
             double lowest = 1e9;
             for (const auto& n : notes)
                 lowest = std::min (lowest, n.hz);
@@ -907,7 +939,7 @@ int main (int argc, char* argv[])
                 double bright = 0.0, noise = 0.0;
                 int count = 0;
                 for (const auto& n : notes)
-                    if ((n.hz >= 1.9 * lowest) == (octave == 1) && n.hz < 3.8 * lowest)
+                    if ((n.hz >= kOctaveSplit * lowest) == (octave == 1) && n.hz < 2.0 * kOctaveSplit * lowest)
                     {
                         for (int k = 2; k <= 5; ++k)
                             sum[(size_t) k] += n.harmonics[(size_t) k];
@@ -919,6 +951,51 @@ int main (int argc, char* argv[])
                     std::printf ("  average, octave %d (%d notes): H2 %5.1f  H3 %5.1f  H4 %5.1f  H5 %5.1f   centroid %.2f x f0   noise 2-4k %5.1f\n",
                                  octave + 1, count, sum[2] / count, sum[3] / count, sum[4] / count, sum[5] / count, bright / count, noise / count);
             }
+            // Against a recording: the octave averages of H2-H8 over the notes both have (the model also plays C
+            // natural, which the recorded scales skip), model minus recording, and the mean size of those differences.
+            if (reference == nullptr || reference->empty() || notes.empty())
+                return;
+            double referenceLowest = 1e9, total = 0.0;
+            for (const auto& n : *reference)
+                referenceLowest = std::min (referenceLowest, n.hz);
+            int octaves = 0;
+            for (int octave = 0; octave < 2; ++octave)
+            {
+                auto average = [octave] (const std::vector<NoteAnalysis>& these, const std::vector<NoteAnalysis>& others, double low, int& count)
+                {
+                    std::array<double, 9> sum {};
+                    count = 0;
+                    for (const auto& n : these)
+                    {
+                        const bool inOther = std::any_of (others.begin(), others.end(), [&n] (const NoteAnalysis& o) { return noteName (o.hz) == noteName (n.hz); });
+                        if (! inOther || (n.hz >= kOctaveSplit * low) != (octave == 1) || n.hz >= 2.0 * kOctaveSplit * low)
+                            continue;
+                        for (int k = 2; k <= 8; ++k)
+                            sum[(size_t) k] += n.harmonics[(size_t) k];
+                        ++count;
+                    }
+                    for (auto& v : sum)
+                        v /= std::max (1, count);
+                    return sum;
+                };
+                int count = 0, referenceCount = 0;
+                const auto mine = average (notes, *reference, lowest, count);
+                const auto theirs = average (*reference, notes, referenceLowest, referenceCount);
+                if (count == 0 || referenceCount == 0)
+                    continue;
+                std::printf ("  minus the recording, octave %d (%d notes both have):", octave + 1, count);
+                double size = 0.0;
+                for (int k = 2; k <= 8; ++k)
+                {
+                    std::printf ("  H%d %+5.1f", k, mine[(size_t) k] - theirs[(size_t) k]);
+                    size += std::abs (mine[(size_t) k] - theirs[(size_t) k]) / 7.0;
+                }
+                std::printf ("   mean size %.1f dB\n", size);
+                total += size;
+                ++octaves;
+            }
+            if (octaves == 2)
+                std::printf ("  both octaves: %.1f dB\n", total / 2.0);
         };
 
         juce::AudioFormatManager formats;
@@ -933,7 +1010,8 @@ int main (int argc, char* argv[])
         juce::AudioBuffer<float> audio ((int) reader->numChannels, (int) reader->lengthInSamples);
         reader->read (&audio, 0, (int) reader->lengthInSamples, 0, true, true);
         std::vector<float> recorded (audio.getReadPointer (0), audio.getReadPointer (0) + audio.getNumSamples());
-        print ((file.getFileName() + " (recording)").toRawUTF8(), analyse (recorded, reader->sampleRate));
+        const auto recordedNotes = analyse (recorded, reader->sampleRate);
+        print ((file.getFileName() + " (recording)").toRawUTF8(), recordedNotes);
 
         if (argc > 3 && juce::String (argv[3]) != "all")
         {
@@ -946,10 +1024,22 @@ int main (int argc, char* argv[])
             if (geometryArgs && ! tuneToScale (g, lowestNote (g), true))
                 std::printf ("(retuned for the new fipple: not every tuned note reached)\n");
             const double rate = reader->sampleRate;
-            auto steps = planScale (g, voicing, lowestNote (g), 21);  // D up to B in the second octave, as the recordings
+            // blow=recorded: each note as sharp or flat as the recording has it (so about as hard as the player blew)
+            // instead of in tune. Without it the model's upper first-octave notes are blown harder than its bottom
+            // second-octave ones, which no player does.
+            std::map<std::string, float> recordedCents;
+            bool blowAsRecorded = false;
+            for (int i = 4; i < argc; ++i)
+                blowAsRecorded = blowAsRecorded || juce::String (argv[i]) == "blow=recorded";
+            for (const auto& n : recordedNotes)
+                recordedCents[noteName (n.hz)] = (float) n.cents;
+            auto steps = planScale (g, voicing, lowestNote (g), 21, blowAsRecorded ? &recordedCents : nullptr);  // D up to B in the second octave, as the recordings
+            for (const auto& s : steps)
+                std::printf ("%s %.0f Pa  ", s.name.c_str(), s.pressure);
+            std::printf ("\n");
             std::vector<float> modelOut;
             playScale (g, voicing, steps, rate, &modelOut);
-            print ((g.name + " (model, scale at the in-tune pressures)").toRawUTF8(), analyse (modelOut, rate));
+            print ((g.name + " (model, scale at the in-tune pressures)").toRawUTF8(), analyse (modelOut, rate), &recordedNotes);
             saveWavArg (argc, argv, "model-scale", modelOut, rate);
         }
         return 0;
@@ -1372,8 +1462,9 @@ int main (int argc, char* argv[])
                 fb = measurePitch (out, rate, clarity);
                 int odd = 0;
                 double last = -1.0;
+                const auto band = rawCrossings || fa <= 0.0 || fb <= 0.0 ? out : belowCutoff (out, rate, 1.5 * std::min (fa, fb));
                 for (size_t i = (size_t) (0.4 * rate); i + 1 < (size_t) (0.45 * rate); ++i)
-                    if (out[i] < 0.0f && out[i + 1] >= 0.0f)
+                    if (band[i] < 0.0f && band[i + 1] >= 0.0f)
                     {
                         const double t = (double) i / rate;
                         if (last > 0.0 && fa > 0.0 && fb > 0.0)

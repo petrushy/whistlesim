@@ -30,6 +30,7 @@ int main()
         Instrument in;
         in.geometry = preset;
         in.voicing = { 0.031f, 0.55f, 0.4f, -3.5f, 0.7f, 0.3f, 0.6f, 0.45f, 2.5f, 0.8f };
+        in.voicing.jetBend = 7.5f;
 
         juce::String error;
         const auto out = fromJson (toJson (in), error);
@@ -60,6 +61,7 @@ int main()
                && near (out->voicing.windwayMass, 0.3f) && near (out->voicing.windwayFriction, 0.6f)
                && near (out->voicing.vortexLoss, 0.45f) && near (out->voicing.attackChiff, 2.5f)
                && near (out->voicing.fingerGapDamping, 0.8f));
+        CHECK (near (out->voicing.jetBend, 7.5f));
     }
 
     // A file with only some fields: the rest come from the first preset.
@@ -74,6 +76,7 @@ int main()
             CHECK (near (partial->geometry.boreLength, 0.25));
             CHECK (near (partial->geometry.boreDiameterTop, presets().front().boreDiameterTop));
             CHECK (near (partial->geometry.holes[3].position, presets().front().holes[3].position));
+            CHECK (near (partial->voicing.jetBend, 0.0f));  // Files from before the jet bend play as they did
         }
     }
 

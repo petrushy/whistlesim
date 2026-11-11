@@ -64,6 +64,22 @@ Voicing presetVoicing (size_t index)
         // octaves (0.05 gave -64 in the second octave as played).
         v.breathNoise = 0.04f;
     }
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie style (bright)"))
+    {
+        // The Goldie style voiced for the upper harmonics of the recorded Goldie (Real-examples/Goldie-High-D-RODE.wav,
+        // WhistleCheck analyse): a jet of constant width (no spreading) and little vortex loss switches harder at the
+        // edge, which is where the harmonics from the fourth up come from (H4-H8 within ~5 dB of the recording in
+        // both octaves; the Goldie style is 9-23 dB short of them). The jet bend, with the edge nearly centred, makes
+        // the second octave purer instead of the spreading (H2 -27 dB there, -18 in the first). The jet band is a
+        // little higher, which keeps the octave breaks where the Goldie style has them. Still too strong: H3, by ~7 dB.
+        // Played on 2026-11-10: good, if a little too bright.
+        v.jetStrouhal = 0.018f;
+        v.jetSpreading = 0.0f;
+        v.vortexLoss = 0.18f;
+        v.slowJetGrowth = 0.45f;
+        v.jetBend = 4.5f;
+        v.breathNoise = 0.055f;  // The recording's -66 dB between the harmonics (2-4 kHz) in both octaves
+    }
     // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
     // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Goldie style's).
@@ -74,6 +90,9 @@ Voicing presetVoicing (size_t index)
         v.jetSpreading = 0.5f;
         v.vortexLoss = 0.84f;
         v.jetGain = 1.0f;
+        // The quietest of the recorded whistles between its harmonics (-75 and -68 dB in the two octaves): with the
+        // Goldie fipple's 0.04 the model was 7-11 dB noisier.
+        v.breathNoise = 0.016f;
     }
     if (index < presets().size() && presets()[index].name.startsWith (lofgren))
     {
@@ -93,6 +112,19 @@ Voicing presetVoicing (size_t index)
         v.jetStages = 1;
         v.vortexLoss = 0.4f;
         v.jetGain = 0.75f;  // With the octave in tune, more let quick fingering changes flip into it on the way
+    }
+    if (index < presets().size() && presets()[index].name.startsWith ("Low D whistle (bright)"))
+    {
+        // Voiced after the recorded low D (Real-examples/Goldie-Low-D-RODE.wav), whose low register is far richer than
+        // the Low D whistle preset's: with the edge 0.25 mm into the pipe, less vortex loss and the jet's full gain
+        // the first octave's H2 is -7 dB (recorded -7) and H4, H6 and H8 within 1 dB of the recording (H5 and H7 6-7 dB
+        // short). Its H3 stays ~10 dB short (-17 against -8). Quick fingering changes are as steady as the Low D
+        // whistle's, now that the check times the fundamental only (WhistleCheck transition, glide). Played on
+        // 2026-11-10: good, if a little too bright.
+        v.vortexLoss = 0.25f;
+        v.jetGain = 1.05f;
+        v.slowJetGrowth = 0.08f;
+        v.breathNoise = 0.07f;  // The recording's -61 dB between the harmonics
     }
     if (index < presets().size() && presets()[index].chart == FingeringChart::baroqueRecorder)
     {
@@ -288,7 +320,23 @@ const std::vector<Geometry>& presets()
                 generation.edgeOffset = 0.00015;
                 lofgren.name = juce::String::fromUTF8 ("D whistle, Löfgren style");
                 lofgren.edgeOffset = 0.0002;  // Its first octave's strong second harmonic (H2 -11 dB)
-                instruments.insert (instruments.begin() + (long) i + 1, { generation, lofgren });
+                // The same whistle voiced after the RODE recording of the Goldie (presetVoicing): the edge nearer the
+                // jet's centre line, since its jet is bent off it at a soft breath (Voicing::jetBend).
+                auto bright = instruments[i];
+                bright.name = "D whistle, Goldie style (bright)";
+                bright.edgeOffset = 0.00005;
+                instruments.insert (instruments.begin() + (long) i + 1, { bright, generation, lofgren });
+                break;
+            }
+        // The low D voiced after its RODE recording: the edge further into the pipe for the strong second harmonic
+        // of its low register (recorded -7 dB).
+        for (size_t i = 0; i < instruments.size(); ++i)
+            if (instruments[i].name == "Low D whistle")
+            {
+                auto bright = instruments[i];
+                bright.name = "Low D whistle (bright)";
+                bright.edgeOffset = 0.00025;
+                instruments.insert (instruments.begin() + (long) i + 1, bright);
                 break;
             }
 
