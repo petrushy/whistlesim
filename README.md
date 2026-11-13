@@ -91,7 +91,7 @@ Note that a MacBook with the lid closed and no external display runs no audio at
 
 ## Whistle model (Instrument tab)
 
-The sound comes from a time-domain simulation of a whistle (`Source/Whistle/`). There is no fingering lookup: pitch, half-holing, slides, cuts and overblowing all come out of the simulated air column.
+The sound comes from a time-domain simulation of a whistle (`Source/Whistle/`). There is no fingering lookup: pitch, half-holing, slides, cuts and overblowing all come out of the simulated air column. [docs/simulation.svg](docs/simulation.svg) draws the whole path, from WARBL's sensors to the room, and the physics of each block.
 
 - **Bore:** sound waves travel up and down the tube in short sections (digital waveguides), with wall losses, a radiating open foot, and the window opening at the top as a mass of air in series with the bore.
 - **Holes:** every tone hole is a junction whose openness comes straight from its WARBL sensor (calibrated coverage). An open hole lets low frequencies escape, and a partly covered hole lets out less.
