@@ -1874,7 +1874,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "inside")  // inside [preset] [fingering index] [edge= vortex= st=]: the jet and the window flow while a note plays
+    if (mode == "inside")  // inside [preset] [fingering index] [high] [edge= vortex= st=]: the jet and the window flow while a note plays
     {
         const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
         auto g = presets()[index];
@@ -1882,10 +1882,12 @@ int main (int argc, char* argv[])
         auto voicing = presetVoicing (index);
         voicing.breathNoise = 0.0f;
         int which = 0;
+        bool highHarmonics = false;
         for (int i = 3; i < argc; ++i)
         {
             const juce::String arg (argv[i]);
             if (arg.containsOnly ("0123456789")) which = arg.getIntValue();
+            if (arg == "high") highHarmonics = true;
         }
         voicing.breathNoise = 0.0f;  // Off unless noise= is given
         jetVoicingArgs (argc, argv, 3, voicing);
@@ -1940,7 +1942,7 @@ int main (int argc, char* argv[])
                 return 2.0 * std::hypot (re, im) / (double) n;
             };
             const std::vector<float> tail (out.end() - (long) (0.2 * rate), out.end());
-            const float hw = 0.4f * (float) g.windwayHeight;
+            const float hw = 1.0f;  // The log holds the deflection already in the jet's half-widths
             float lo = 1.0e9f, hi = -1.0e9f;
             size_t saturated = 0;
             for (size_t i = 0; i < jetLog.size(); i += 4)
@@ -1964,7 +1966,23 @@ int main (int argc, char* argv[])
             rel (flowLog, 1, 0, inner);
             rel (jetLog, 4, 1, inner);
             rel (tail, 1, 0, rate);
-            std::printf ("%6.0f /%5.0f\n", harmonic (jetLog, 4, 2, inner, 1), harmonic (jetLog, 4, 3, inner, 1));
+            std::printf ("%6.0f /%5.0f", harmonic (jetLog, 4, 2, inner, 1), harmonic (jetLog, 4, 3, inner, 1));
+            if (highHarmonics)  // high: the sound's H5-H10 too
+            {
+                const double h1 = harmonic (tail, 1, 0, rate, 1);
+                std::printf ("   ");
+                for (int k = 5; k <= 10; ++k)
+                    std::printf (" %3.0f", 20.0 * std::log10 (harmonic (tail, 1, 0, rate, k) / h1 + 1.0e-9));
+                // and H6-H10 of the jet flow and of the window flow, each re its own H1
+                for (const auto& [x, stride, offset] : { std::tuple { &jetLog, (size_t) 4, (size_t) 0 }, std::tuple { &jetLog, (size_t) 4, (size_t) 1 }, std::tuple { &flowLog, (size_t) 1, (size_t) 0 } })
+                {
+                    const double r1 = harmonic (*x, stride, offset, inner, 1);
+                    std::printf ("   ");
+                    for (int k = 6; k <= 10; ++k)
+                        std::printf (" %3.0f", 20.0 * std::log10 (harmonic (*x, stride, offset, inner, k) / r1 + 1.0e-9));
+                }
+            }
+            std::printf ("\n");
         }
         return 0;
     }
@@ -2087,10 +2105,10 @@ int main (int argc, char* argv[])
         windwayArgs (argc, argv, 3, g);
         auto voicing = presetVoicing (index);
         voicing.breathNoise = 0.0f;
-        float vortex = 1.0f;
+        jetVoicingArgs (argc, argv, 3, voicing);
+        bool high = false;  // high: H1 and H6-H10, window against body
         for (int i = 3; i < argc; ++i)
-            if (juce::String (argv[i]).startsWith ("vortex="))
-                vortex = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getFloatValue();
+            if (juce::String (argv[i]) == "high") high = true;
         double pressure = 700.0;
         for (int i = 3; i < argc; ++i)
             if (juce::String (argv[i]).startsWith ("p="))
@@ -2110,7 +2128,7 @@ int main (int argc, char* argv[])
                 model.setVoicing (voicing);
                 model.testWindowRadiation = window;
                 model.testBodyRadiation = body;
-                model.vortexLoss = vortex * vortexArg;
+                model.vortexLoss = voicing.vortexLoss * vortexArg;  // vortex= scales the preset's
                 auto controls = controlsFor (c.openness (g));
                 std::vector<float> out ((size_t) (0.6 * rate), 0.0f);
                 const int block = (int) (rate * 0.002);
@@ -2144,6 +2162,15 @@ int main (int argc, char* argv[])
             };
             auto db = [] (double a) { return 20.0 * std::log10 (a + 1.0e-9); };
             std::printf ("  %s  ", c.holePattern (g).c_str());
+            if (high)
+            {
+                const double h1 = harmonic (all, 1);
+                std::printf ("H1 %5.1f dB; H6-H10 re H1, window/body:", db (h1));
+                for (int k = 6; k <= 10; ++k)
+                    std::printf ("  %4.0f/%4.0f", db (harmonic (window, k) / h1), db (harmonic (body, k) / h1));
+                std::printf ("\n");
+                continue;
+            }
             for (int k = 1; k <= 3; ++k)
             {
                 const double a = harmonic (all, k), w = harmonic (window, k), b = harmonic (body, k);

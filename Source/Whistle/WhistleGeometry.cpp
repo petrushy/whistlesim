@@ -80,6 +80,21 @@ Voicing presetVoicing (size_t index)
         v.jetBend = 4.5f;
         v.breathNoise = 0.055f;  // The recording's -66 dB between the harmonics (2-4 kHz) in both octaves
     }
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie (measured)"))
+    {
+        // Searched against a recording of this whistle (Real-examples/Goldie-High-D-RODE-measured.wav, fit_voicing.py
+        // measured pernote=0.5). How bright a note is above H6 follows how far the jet swings across the edge, in its
+        // half-widths (WhistleCheck inside high): ~2 gives H7-H10 near -55 dB, ~4 near -38; the recording wants
+        // ~2.5-3. The Goldie style's spreading swings 1.5-2 and less the harder it is blown (no response to breath);
+        // vortex loss 0.10 let it swing 3.5-4 on every note (A and B 15-20 dB too bright above H7). 0.24 swings ~3
+        // in the first octave and ~2 in the second. Little spreading keeps the second octave from going dull.
+        v.jetStrouhal = 0.0185f;
+        v.jetSpreading = 0.1f;
+        v.vortexLoss = 0.24f;
+        v.jetGain = 0.96f;
+        v.slowJetGrowth = 0.52f;
+        v.jetBend = 8.7f;
+    }
     // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
     // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Goldie style's).
@@ -275,10 +290,8 @@ const std::vector<Geometry>& presets()
                 g.headLength = 0.0122;
                 g.headStraightLength = 0.0082;
                 g.headDiameter = 0.0114;
-                // The Goldie style's voicing and edge. One searched against the recording of this whistle (vortex 0.10,
-                // bend 8.7, spread 0.6, edge 0.05 mm) matched its octave averages within 2.5 dB but played oddly uneven:
-                // A and B 15-20 dB too bright above H7, the second octave dull. Played on 2026-11-14.
-                g.edgeOffset = 0.00015;
+                // Nearly centred, for the voicing below (searched with this edge).
+                g.edgeOffset = 0.00005;
                 return g;
             }(),
             [&]

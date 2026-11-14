@@ -614,7 +614,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float vortexDrop = -vortexLoss.load (std::memory_order_relaxed) * 0.5f * rho * (windowVelocity / 0.6f) * std::abs (windowVelocity / 0.6f);
     const float source = jetDrive + vortexDrop + edgeNoise + testSource;
     if (jetLog != nullptr)
-        jetLog->insert (jetLog->end(), { deflection - edge, jetFlow, jetDrive, vortexDrop });
+        jetLog->insert (jetLog->end(), { (deflection - edge) / jetHalfWidth, jetFlow, jetDrive, vortexDrop });
 
     // 3. Window end. The jet's pressure pushes the air in the window (mass M) into the bore:
     //    p_top = source - M dU/dt, with p_top = p+ + p- and U = (p+ - p-) / Z0, solved for the outgoing p+
