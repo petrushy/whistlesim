@@ -44,7 +44,7 @@ Voicing presetVoicing (size_t index)
 
     const juce::String generation ("D whistle, Generation style"), lofgren (juce::String::fromUTF8 ("D whistle, Löfgren style"));
     if (index < presets().size()
-        && (presets()[index].name.startsWith ("D whistle, Goldie style") || presets()[index].name.contains ("whistle, wood")
+        && (presets()[index].name.startsWith ("D whistle, Goldie") || presets()[index].name.contains ("whistle, wood")
             || presets()[index].name.startsWith (generation) || presets()[index].name.startsWith (lofgren)))
     {
         // Fitted to Real-examples/High-D-Goldie.wav (WhistleCheck analyse): the thin windway wants a lower jet band,
@@ -79,6 +79,23 @@ Voicing presetVoicing (size_t index)
         v.slowJetGrowth = 0.45f;
         v.jetBend = 4.5f;
         v.breathNoise = 0.055f;  // The recording's -66 dB between the harmonics (2-4 kHz) in both octaves
+    }
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie (measured)"))
+    {
+        // Searched against a recording of the measured whistle itself (Real-examples/Goldie-High-D-RODE-measured.wav,
+        // tools/fit_voicing.py measured), starting from the bright Goldie's voicing: H2-H8 within ~3 dB of the recording
+        // in both octaves (mean 2.8 dB; with the Goldie style's voicing 6.5, H4 and H8 15 dB short in the first octave,
+        // which played as a lack of brilliance). Little vortex loss and some jet bend make the low notes brighten as
+        // they are blown harder (bottom D's H2 -20 dB at 250 Pa, -12 at 700), where the spreading voicing turned purer
+        // and quieter; a little spreading keeps the second octave from getting too bright. With the edge offset in
+        // presets(). Fingering changes as steady as before (WhistleCheck transition), register breaks about the same.
+        v.jetStrouhal = 0.0185f;
+        v.jetSpreading = 0.6f;
+        v.vortexLoss = 0.10f;
+        v.jetGain = 0.96f;
+        v.slowJetGrowth = 0.52f;
+        v.jetBend = 8.7f;
+        v.breathNoise = 0.053f;
     }
     // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
@@ -255,6 +272,26 @@ const std::vector<Geometry>& presets()
                 g.headLength = 0.030;
                 g.headDiameter = 0.0115;  // Narrow, but less than the narrow-head preset's 10.5 mm: its octave played 20-30 c sharp
                 g.edgeOffset = 0.00015;   // Into the pipe: the second harmonic of the recorded Goldie's low notes
+                return g;
+            }(),
+            [&]
+            {
+                // A Goldie high D as measured (docs/Goldie.md): a 12.5 mm bore in a 1.8 mm wall, a 0.97 x 7.7 mm windway
+                // 24 mm long and a 5.8 mm window. The head is a 9 mm square tube (as a round one of the same area,
+                // 10.16 mm) for 14 mm from the flue exit, i.e. 8.2 mm past the edge, then widens to the bore over 4 mm.
+                // The model has one width for the jet and the window: the windway's 7.7 mm, which sets the jet's flow
+                // (the window is 9 mm; its end correction is a little short for it). The bore (265 mm, edge to foot) and
+                // the holes are the real whistle's, not the tuner's: the holes were measured from the flue exit, 5.8 mm
+                // above the edge. The recording of it (Goldie-High-D-RODE.wav) plays its bottom D 12 c flat.
+                auto g = make ("D whistle, Goldie (measured)", 0.2650, 0.0125, 0.0125,
+                               { { { false, 0.0, 0.0 }, { true, 0.1165, 0.0058 }, { true, 0.1364, 0.0065 }, { true, 0.1542, 0.0059 },
+                                   { true, 0.1812, 0.0055 }, { true, 0.1982, 0.0080 }, { true, 0.2242, 0.0075 }, { false, 0.0, 0.0 } } },
+                               0.0018, 1.0, 0.00097, 0.0058, 0.0077);
+                g.windwayLength = 0.024;
+                g.headLength = 0.0122;
+                g.headStraightLength = 0.0082;
+                g.headDiameter = 0.01016;
+                g.edgeOffset = 0.00005;  // Nearly on the jet's centre line, as the bright Goldie (fitted with the voicing)
                 return g;
             }(),
             [&]

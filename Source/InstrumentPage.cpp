@@ -346,6 +346,8 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
         .setTooltip ("An optional section just below the window whose diameter differs from the rest of the bore, blending into it over this length. 0 = no head section.");
     addLength ("Head diameter at the window", geometry.headDiameter, 4.0, 30.0)
         .setTooltip ("The bore's diameter right at the window, when there is a head section. Narrower than the bore makes the second octave sharper against the first, wider makes it flatter.");
+    addLength ("Head: straight part", geometry.headStraightLength, 0.0, 150.0, 0.5)
+        .setTooltip ("How far the head keeps its diameter at the window before it starts blending into the bore. 0 = it blends all the way from the window. Must be shorter than the head section.");
     addLength ("Wall thickness", geometry.wallThickness, 0.2, 8.0)
         .setTooltip ("The tube wall's thickness, which is the height of the short chimney each tone hole makes. Thicker walls put more air in every hole, which lowers the notes it vents.");
     addRow ("Wall roughness (losses)", 1.0, 2.0, 0.01, "x", [this] { return geometry.wallLoss; }, [this] (double v) { geometry.wallLoss = v; })

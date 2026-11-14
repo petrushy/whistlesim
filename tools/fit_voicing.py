@@ -3,7 +3,7 @@
 
     tools/fit_voicing.py <recording> [name=value ...] [options]
 
-    recording   goldie, generation, lofgren, lowd or moeck (see RECORDINGS below)
+    recording   goldie, measured, generation, lofgren, lowd or moeck (see RECORDINGS below)
     name=value  where the search starts, for each voicing setting to search: any of
                 edge (mm), bend (Pa), vortex (x the preset's vortex loss), gain, spread, slow, st, noise.
                 They are passed to WhistleCheck as they are. Settings not named keep the preset's value.
@@ -47,6 +47,8 @@ WHISTLECHECK = os.environ.get("WHISTLECHECK", os.path.join(REPO, "build/WhistleC
 # Recording, the preset voiced after it, and the pressures (Pa) at which quick fingering changes are checked.
 RECORDINGS = {
     "goldie": ("tools/Real-examples/Goldie-High-D-RODE.wav", "Goldie style", (400, 600, 800)),
+    # The same Goldie, recorded again (2026-11-14) after its bore and holes were measured: the preset built from them.
+    "measured": ("tools/Real-examples/Goldie-High-D-RODE-measured.wav", "Goldie (measured)", (400, 600, 800)),
     "generation": ("tools/Real-examples/Generation-High-D-RODE.wav", "Generation style", (400, 600, 800)),
     "lofgren": ("tools/Real-examples/Löfgren-High-D-RODE.wav", "Löfgren style", (400, 600, 800)),
     "lowd": ("tools/Real-examples/Goldie-Low-D-RODE.wav", "Low D whistle", (200, 300, 400)),

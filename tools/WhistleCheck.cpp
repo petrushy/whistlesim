@@ -235,6 +235,8 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("flue=")) { g.windwayHeight = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("headd=")) { g.headDiameter = value * 0.001; geometryArgs = true; }  // With headl=: a head section, retuned
         if (arg.startsWith ("headl=")) { g.headLength = value * 0.001; geometryArgs = true; }
+        if (arg.startsWith ("heads=")) { g.headStraightLength = value * 0.001; geometryArgs = true; }  // The head's straight part
+        if (arg.startsWith ("wall=")) { g.wallThickness = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("top=")) { g.boreDiameterTop = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("foot=")) { g.boreDiameterFoot = value * 0.001; geometryArgs = true; }
     }
@@ -446,10 +448,15 @@ int main (int argc, char* argv[])
             if (juce::String (argv[i]).startsWith ("stages="))
                 stages = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getIntValue();
         windwayArgs (argc, argv, 3, g);
-        if (g.headLength > 0.0)
+        bool retune = true;  // retune=0: play the instrument as it is (a measured one's own holes)
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]) == "retune=0")
+                retune = false;
+        if (g.headLength > 0.0 && retune)
         {
             const bool ok = tuneToScale (g, lowestNote (g), true);
-            std::printf ("Head section %.0f mm long, %.1f mm at the window; retuned: %s\n", g.headLength * 1000.0, g.headDiameter * 1000.0, ok ? "ok" : "closest possible");
+            std::printf ("Head section %.0f mm long (%.0f mm straight), %.1f mm at the window; retuned: %s, bore %.1f mm\n", g.headLength * 1000.0,
+                         g.headStraightLength * 1000.0, g.headDiameter * 1000.0, ok ? "ok" : "closest possible", g.boreLength * 1000.0);
         }
         if (mode == "chartc")
         {

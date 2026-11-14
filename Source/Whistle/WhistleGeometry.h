@@ -50,9 +50,12 @@ struct Geometry
 
     // Optional head section (e.g. a narrower bore around the fipple, as in Goldie whistles): from the window
     // down to headLength the diameter goes linearly from headDiameter to the bore's own diameter there.
-    // headLength = 0 means no head section.
+    // headLength = 0 means no head section. headStraightLength: the head keeps headDiameter this far from the
+    // window and only then blends into the bore (a measured Goldie: 14 mm straight, then a 4 mm change);
+    // 0 = it blends all the way from the window.
     double headLength = 0.0;
     double headDiameter = 0.012;
+    double headStraightLength = 0.0;
 
     std::array<ToneHole, kNumHoles> holes {};
     double wallThickness = 0.0005;  // Sets the height of the tone hole chimneys.
@@ -79,7 +82,10 @@ struct Geometry
         };
         if (headLength > 0.0 && x < headLength)
         {
-            const double t = juce::jlimit (0.0, 1.0, x / headLength);
+            const double straight = juce::jlimit (0.0, headLength, headStraightLength);
+            if (x <= straight)
+                return 0.5 * headDiameter;
+            const double t = juce::jlimit (0.0, 1.0, (x - straight) / (headLength - straight));
             return 0.5 * headDiameter + t * (body (headLength) - 0.5 * headDiameter);
         }
         return body (x);

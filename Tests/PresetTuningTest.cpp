@@ -24,7 +24,10 @@ int main()
             std::printf ("FAILED recorder key/chart: %s, %.2f Hz\n", g.name.toRawUTF8(), lowest);
             ++failures;
         }
-        // Refitting has to find next to nothing: the preset is at the tuner's minimum.
+        // Refitting has to find next to nothing: the preset is at the tuner's minimum. Not for a measured
+        // instrument, whose bore and holes are a real whistle's, however the tuner would place them.
+        if (g.name.contains ("(measured)"))
+            continue;
         const auto now = tuningError (g, lowest);
         auto refitted = g;
         fitTuning (refitted, lowest, true);

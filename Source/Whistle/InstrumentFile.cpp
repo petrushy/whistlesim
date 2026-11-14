@@ -48,6 +48,7 @@ juce::var toVar (const Instrument& instrument)
     set (bore, "wallLoss", g.wallLoss);
     set (bore, "headLength_mm", g.headLength * 1000.0);
     set (bore, "headDiameter_mm", g.headDiameter * 1000.0);
+    set (bore, "headStraightLength_mm", g.headStraightLength * 1000.0);
     root.getDynamicObject()->setProperty ("bore", bore);
 
     // Only the holes that are used; the others are plugged.
@@ -133,6 +134,7 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
     read (bore, "wallLoss", g.wallLoss);
     read (bore, "headLength_mm", g.headLength, 0.001);
     read (bore, "headDiameter_mm", g.headDiameter, 0.001);
+    read (bore, "headStraightLength_mm", g.headStraightLength, 0.001);  // Missing in older files: 0, as before
 
     // Holes are listed by name; the ones not listed are plugged.
     if (const auto* holes = root["holes"].getArray())
@@ -209,6 +211,8 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
     bad (g.boreLength < 0.05 || g.boreLength > 2.0, "Bore length must be between 50 and 2000 mm");
     bad (g.boreDiameterTop < 0.002 || g.boreDiameterFoot < 0.002 || g.headDiameter < 0.002, "Bore diameters must be at least 2 mm");
     bad (g.headLength < 0.0 || g.headLength >= g.boreLength, "The head section must be shorter than the bore");
+    bad (g.headStraightLength < 0.0 || (g.headStraightLength > 0.0 && g.headStraightLength >= g.headLength),
+         "The head's straight part must be shorter than the head section");
     bad (g.referenceA < 380.0 || g.referenceA > 500.0, "The reference A must be between 380 and 500 Hz");
     bad (g.chartTranspose < -24 || g.chartTranspose > 24, "Chart transposition must be between -24 and 24 semitones");
     bad (g.windwayHeight <= 0.0 || g.windwayLength <= 0.0 || g.windowLength <= 0.0 || g.windowWidth <= 0.0, "Fipple sizes must be positive");

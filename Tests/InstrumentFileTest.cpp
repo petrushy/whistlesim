@@ -53,7 +53,7 @@ int main()
         CHECK (a.chart == b.chart && a.bellClosesFoot == b.bellClosesFoot);
         CHECK (a.chartTranspose == b.chartTranspose);
         CHECK (near (presetLowestNote (a), presetLowestNote (b)));
-        CHECK (near (a.headLength, b.headLength) && near (a.headDiameter, b.headDiameter));
+        CHECK (near (a.headLength, b.headLength) && near (a.headDiameter, b.headDiameter) && near (a.headStraightLength, b.headStraightLength));
         CHECK (near (a.windwayHeight, b.windwayHeight) && near (a.windwayLength, b.windwayLength) && near (a.windowLength, b.windowLength) && near (a.windowWidth, b.windowWidth)
                && near (a.edgeOffset, b.edgeOffset));
         CHECK (near (out->voicing.jetStrouhal, 0.031f) && near (out->voicing.jetConvection, 0.55f) && near (out->voicing.breathNoise, 0.4f)

@@ -242,11 +242,18 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
 {
     out = {};
 
+    // A section can't be shorter than the delay lines' 2 samples (7.2 mm at 96 kHz): a shorter one would play
+    // as that long, which a 4 mm head blend once did, a measured Goldie playing ~60 c flat. Head junctions and
+    // splits that would make one are left out; the merged section gets the head's averaged area (below).
+    const double shortestSection = 2.0 * kSpeedOfSound / rate;
+
     // Junction positions: window (0), each hole, foot (L); long stretches are split into short sections.
     std::vector<std::pair<double, int>> points { { 0.0, -1 } };
-    const bool hasHead = g.headLength > 0.001 && g.headLength < g.boreLength - 0.01;
+    const bool hasHead = g.headLength > shortestSection && g.headLength < g.boreLength - 0.01;
     if (hasHead)
         points.push_back ({ g.headLength, -1 });
+    if (hasHead && g.headStraightLength >= shortestSection && g.headStraightLength <= g.headLength - shortestSection)
+        points.push_back ({ g.headStraightLength, -1 });  // Where the straight part ends and the blend begins
     for (int i = 0; i < kNumHoles; ++i)
         if (g.holes[(size_t) i].enabled)
             points.push_back ({ juce::jlimit (0.005, g.boreLength - 0.005, g.holes[(size_t) i].position), i });
@@ -263,7 +270,8 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
             junctions.push_back (points[i]);
             const double span = points[i + 1].first - points[i].first;
             const bool inHead = hasHead && points[i].first < g.headLength;
-            const int pieces = (int) std::ceil (span / ((inHead ? kMaxHeadSectionLength : kMaxSectionLength) * sectionScale));
+            const int wanted = (int) std::ceil (span / ((inHead ? kMaxHeadSectionLength : kMaxSectionLength) * sectionScale));
+            const int pieces = std::max (1, std::min (wanted, (int) std::floor (span / shortestSection)));
             for (int p = 1; p < pieces; ++p)
                 junctions.push_back ({ points[i].first + span * p / pieces, -1 });
         }
@@ -280,7 +288,17 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
     {
         const double x0 = junctions[(size_t) k].first, x1 = junctions[(size_t) k + 1].first;
         double length = x1 - x0;
-        const double a = g.radiusAt (0.5 * (x0 + x1));
+        // The section's area is the one with the same inertance (the harmonic mean over its length): where the
+        // bore changes within a section, at the head, the narrow part counts as it does for the air's mass. For a
+        // straight or gently tapered section this is the area at its middle.
+        double inverseArea = 0.0;
+        constexpr int kAreaSamples = 16;
+        for (int s = 0; s < kAreaSamples; ++s)
+        {
+            const double r = g.radiusAt (x0 + (s + 0.5) / kAreaSamples * (x1 - x0));
+            inverseArea += 1.0 / (kPi * r * r) / kAreaSamples;
+        }
+        const double a = std::sqrt (1.0 / inverseArea / kPi);
 
         // Open end correction 0.61 a (as in Acoustics). The foot's reflection lowpass already delays low
         // frequencies by a / c, there and back: that is a / 2 of extra length, so the section adds the rest.
