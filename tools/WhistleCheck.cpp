@@ -740,6 +740,341 @@ int main (int argc, char* argv[])
         return 0;
     }
 
+    if (mode == "swell")  // swell <file.wav|model:<note>> <preset> [voicing options]: brightness against breath, recorded swells and the model's
+    {
+        // A swell: one note blown from as soft as it speaks to just before it breaks. The recording has no pressure,
+        // so both are compared by level below the swell's loudest point; the model's pressure is shown alongside, and
+        // the pitch (which rises with breath) for matching the two by breath.
+        if (argc < 4)
+        {
+            std::printf ("swell <file.wav> <preset> [voicing options]   (or model:<note> instead of the file, e.g. model:G5)\n");
+            return 1;
+        }
+        const auto index = (size_t) presetArg (argv[3]);
+        auto g = presets()[index];
+        auto voicing = presetVoicing (index);
+        windwayArgs (argc, argv, 4, g);
+        jetVoicingArgs (argc, argv, 4, voicing);
+        voicing.vortexLoss *= vortexArg;
+        const double lowest = lowestNote (g);
+
+        struct Frame { double t = 0.0, level = -200.0, hz = 0.0, pressure = 0.0; std::array<double, 11> h {}; };
+
+        // One frame's spectrum (Hann, ~85 ms) and, if a note near `target` sounds, its pitch and harmonics.
+        auto analyseFrames = [] (const std::vector<float>& x, double rate, double target, const std::vector<double>* pressure)
+        {
+            int order = 10;
+            while ((1 << order) < (int) (0.085 * rate))
+                ++order;
+            const size_t n = (size_t) 1 << order, hop = (size_t) (0.02 * rate);
+            juce::dsp::FFT fft (order);
+            std::vector<float> buffer (2 * n);
+            std::vector<Frame> frames;
+            const double binHz = rate / (double) n;
+            for (size_t start = 0; start + n <= x.size(); start += hop)
+            {
+                double energy = 0.0;
+                std::fill (buffer.begin(), buffer.end(), 0.0f);
+                for (size_t k = 0; k < n; ++k)
+                {
+                    energy += (double) x[start + k] * x[start + k];
+                    buffer[k] = x[start + k] * (float) (0.5 - 0.5 * std::cos (2.0 * juce::MathConstants<double>::pi * (double) k / (double) n));
+                }
+                fft.performFrequencyOnlyForwardTransform (buffer.data());
+                auto peak = [&] (double hz, double cents, double* at = nullptr)
+                {
+                    const double r = std::pow (2.0, cents / 1200.0);
+                    const int lo = std::max (1, (int) (hz / r / binHz)), hi = std::min ((int) n / 2 - 2, (int) (hz * r / binHz) + 1);
+                    int best = lo;
+                    for (int b = lo; b <= hi; ++b)
+                        if (buffer[(size_t) b] > buffer[(size_t) best]) best = b;
+                    if (at != nullptr)
+                    {
+                        const double a = buffer[(size_t) best - 1], m = buffer[(size_t) best], c = buffer[(size_t) best + 1];
+                        const double den = a - 2.0 * m + c;
+                        *at = ((double) best + (den < 0.0 ? 0.5 * (a - c) / den : 0.0)) * binHz;
+                    }
+                    return 20.0 * std::log10 (buffer[(size_t) best] + 1.0e-12);
+                };
+                Frame f;
+                f.t = (double) (start + n / 2) / rate;
+                f.level = 10.0 * std::log10 (energy / (double) n + 1.0e-20);
+                if (pressure != nullptr)
+                    f.pressure = (*pressure)[std::min (pressure->size() - 1, start + n / 2)];
+                double hz = 0.0;
+                const double h1 = peak (target, 150.0, &hz);
+                // The note, not another register: its fundamental clearly above an octave below, and above the octave.
+                // And a tone, not the airy sound below the threshold (the breath noise ringing the bore's resonance):
+                // the spectrum halfway between the first harmonics at least 25 dB below the fundamental.
+                auto between = [&]
+                {
+                    std::vector<double> m;
+                    for (int k = 1; k <= 4; ++k)
+                        m.push_back (peak ((k + 0.5) * hz, 8.0));
+                    std::sort (m.begin(), m.end());
+                    return 0.5 * (m[1] + m[2]);
+                };
+                if (hz > 0.0 && h1 > peak (hz * 0.5, 40.0) + 12.0 && h1 > peak (hz * 2.0, 40.0) + 3.0 && h1 > peak (hz * 1.5, 40.0) + 6.0
+                    && h1 > between() + 25.0)
+                {
+                    f.hz = hz;
+                    for (int k = 1; k <= 10; ++k)
+                        f.h[(size_t) k] = k * hz < 0.45 * rate ? peak (k * hz, 25.0) - h1 : -120.0;
+                }
+                frames.push_back (f);
+            }
+            return frames;
+        };
+
+        // The chart fingering for a note (any register; a second-octave note plays its fingering's second register).
+        auto fingeringFor = [&] (double hz) -> const ChartFingering*
+        {
+            const ChartFingering* best = nullptr;
+            double bestCents = 1.0e9;
+            for (const auto& c : chartFor (g.chart))
+            {
+                const double cents = std::abs (1200.0 * std::log2 (hz / (lowest * std::pow (2.0, c.semitones / 12.0))));
+                if (cents < bestCents) { bestCents = cents; best = &c; }
+            }
+            return bestCents < 60.0 ? best : nullptr;
+        };
+
+        // The model's swell: breath rising evenly in dB from 40 Pa to 6 kPa over 10 s.
+        auto modelSwell = [&] (const ChartFingering& c, std::vector<double>& pressure)
+        {
+            constexpr double rate = 48000.0, seconds = 10.0, lo = 40.0, hi = 6000.0;
+            WhistleModel model;
+            model.setGeometry (g);
+            model.prepare (rate);
+            model.setVoicing (voicing);
+            model.vortexLoss = voicing.vortexLoss;
+            auto controls = controlsFor (c.openness (g));
+            std::vector<float> out ((size_t) (seconds * rate), 0.0f);
+            pressure.assign (out.size(), 0.0);
+            const int block = (int) (rate * 0.002);
+            for (int start = 0; start < (int) out.size(); start += block)
+            {
+                const double p = lo * std::pow (hi / lo, start / (seconds * rate));
+                controls.mouthPressure = (float) p;
+                model.setControls (controls);
+                const int count = std::min (block, (int) out.size() - start);
+                model.render (out.data() + start, count);
+                for (int k = 0; k < count; ++k) pressure[(size_t) (start + k)] = p;
+            }
+            return out;
+        };
+
+        // Swells in the recording: runs of >= 1 s with one pitch (within 150 c), within 45 dB of the loudest.
+        struct Swell { double from = 0.0, to = 0.0, hz = 0.0; std::vector<Frame> frames; };
+        std::vector<Swell> swells;
+        double recordingRate = 48000.0;
+        std::vector<float> recorded;
+        const juce::String source = juce::String::fromUTF8 (argv[2]);
+        const bool modelOnly = source.startsWith ("model:");
+        if (modelOnly)
+        {
+            // A check of the tool: the model's own swell analysed as if it were a recording.
+            const juce::String name = source.fromFirstOccurrenceOf (":", false, false);
+            const ChartFingering* c = nullptr;
+            for (const auto& entry : chartFor (g.chart))
+                if (noteName (lowest * std::pow (2.0, entry.semitones / 12.0)) == name.toStdString()) { c = &entry; break; }
+            if (c == nullptr) { std::printf ("No chart note %s\n", name.toRawUTF8()); return 1; }
+            std::vector<double> pressure;
+            recorded = modelSwell (*c, pressure);
+            const double hz = lowest * std::pow (2.0, c->semitones / 12.0);
+            Swell s;
+            s.hz = hz;
+            s.frames = analyseFrames (recorded, recordingRate, hz, nullptr);
+            s.to = (double) recorded.size() / recordingRate;
+            swells.push_back (s);
+        }
+        else
+        {
+            juce::AudioFormatManager formats;
+            formats.registerBasicFormats();
+            const juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile (source);
+            std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (file));
+            if (reader == nullptr) { std::printf ("Can't read %s\n", argv[2]); return 1; }
+            juce::AudioBuffer<float> audio ((int) reader->numChannels, (int) reader->lengthInSamples);
+            reader->read (&audio, 0, (int) reader->lengthInSamples, 0, true, true);
+            recorded.assign (audio.getReadPointer (0), audio.getReadPointer (0) + audio.getNumSamples());
+            recordingRate = reader->sampleRate;
+
+            // Coarse pitch every 20 ms: the strongest peak 200-2600 Hz, moved down an octave (or a fifth's worth)
+            // when that has a peak nearly as strong.
+            const auto coarse = [&]
+            {
+                std::vector<Frame> out;
+                for (const auto& f : analyseFrames (recorded, recordingRate, 0.0, nullptr)) out.push_back (f);
+                return out;
+            }();
+            int order = 10;
+            while ((1 << order) < (int) (0.085 * recordingRate)) ++order;
+            const size_t n = (size_t) 1 << order, hop = (size_t) (0.02 * recordingRate);
+            juce::dsp::FFT fft (order);
+            std::vector<float> buffer (2 * n);
+            const double binHz = recordingRate / (double) n;
+            std::vector<double> pitch (coarse.size(), 0.0);
+            double loudest = -200.0;
+            for (const auto& f : coarse) loudest = std::max (loudest, f.level);
+            for (size_t i = 0; i < coarse.size(); ++i)
+            {
+                if (coarse[i].level < loudest - 45.0) continue;
+                std::fill (buffer.begin(), buffer.end(), 0.0f);
+                for (size_t k = 0; k < n; ++k)
+                    buffer[k] = recorded[i * hop + k] * (float) (0.5 - 0.5 * std::cos (2.0 * juce::MathConstants<double>::pi * (double) k / (double) n));
+                fft.performFrequencyOnlyForwardTransform (buffer.data());
+                auto mag = [&] (double hz) { double m = 0.0; for (int b = (int) (hz * 0.97 / binHz); b <= (int) (hz * 1.03 / binHz) + 1; ++b) m = std::max (m, (double) buffer[(size_t) b]); return m; };
+                int best = (int) (200.0 / binHz);
+                for (int b = best; b < (int) (2600.0 / binHz); ++b)
+                    if (buffer[(size_t) b] > buffer[(size_t) best]) best = b;
+                double hz = best * binHz;
+                for (int d : { 3, 2 })
+                    if (hz / d > 200.0 && mag (hz / d) > 0.25 * buffer[(size_t) best]) { hz /= d; break; }
+                pitch[i] = hz;
+            }
+            size_t i = 0;
+            while (i < pitch.size())
+            {
+                if (pitch[i] <= 0.0) { ++i; continue; }
+                size_t j = i + 1;
+                while (j < pitch.size() && pitch[j] > 0.0 && std::abs (1200.0 * std::log2 (pitch[j] / pitch[i])) < 150.0) ++j;
+                if (j - i >= 50)
+                {
+                    std::vector<double> run (pitch.begin() + (long) i, pitch.begin() + (long) j);
+                    std::sort (run.begin(), run.end());
+                    Swell s;
+                    s.hz = run[run.size() / 2];
+                    s.from = (double) i * 0.02;
+                    s.to = (double) j * 0.02;
+                    const size_t a = i * hop, b = std::min (recorded.size(), j * hop + n);
+                    s.frames = analyseFrames (std::vector<float> (recorded.begin() + (long) a, recorded.begin() + (long) b), recordingRate, s.hz, nullptr);
+                    for (auto& f : s.frames) f.t += s.from;
+                    swells.push_back (s);
+                }
+                i = j;
+            }
+        }
+
+        std::printf ("%s: %d swell(s); against %s.\n"
+                     "Rows: level below the swell's loudest point. Pitch in cents re the swell's median; bright = mean of H7-H10 (dB re H1).\n",
+                     source.toRawUTF8(), (int) swells.size(), g.name.toRawUTF8());
+        for (const auto& s : swells)
+        {
+            const auto* c = fingeringFor (s.hz);
+            std::printf ("\n%s %.0f Hz (%.1f-%.1f s)%s%s\n", noteName (s.hz).c_str(), s.hz, s.from, s.to, c ? ", fingering " : "  (no chart note)",
+                         c ? c->holePattern (g).c_str() : "");
+            if (c == nullptr) continue;
+            const double nominal = lowest * std::pow (2.0, c->semitones / 12.0);
+            std::vector<double> pressure;
+            const auto played = modelSwell (*c, pressure);
+            const auto model = analyseFrames (played, 48000.0, nominal, &pressure);
+
+            // Per 3 dB level band below each swell's loudest sounding frame: medians.
+            // Only the unbroken run of tone around the loudest frame (gaps up to 60 ms): a faint tone at a much
+            // softer breath, cut off from the note by silence, is another regime.
+            auto bands = [] (const std::vector<Frame>& frames)
+            {
+                double top = -200.0;
+                size_t loudestAt = 0;
+                for (size_t k = 0; k < frames.size(); ++k)
+                    if (frames[k].hz > 0.0 && frames[k].level > top) { top = frames[k].level; loudestAt = k; }
+                auto runEnd = [&] (int direction)
+                {
+                    long k = (long) loudestAt, last = k;
+                    for (int gap = 0; k >= 0 && k < (long) frames.size() && gap <= 3; k += direction)
+                        if (frames[(size_t) k].hz > 0.0) { last = k; gap = 0; } else ++gap;
+                    return (size_t) last;
+                };
+                const size_t first = runEnd (-1), last = runEnd (1);
+                std::vector<std::vector<const Frame*>> out (12);
+                for (size_t k = first; k <= last && ! frames.empty(); ++k)
+                    if (const auto& f = frames[k]; f.hz > 0.0)
+                    {
+                        const int band = (int) ((top - f.level) / 3.0);
+                        if (band >= 0 && band < 12) out[(size_t) band].push_back (&f);
+                    }
+                return out;
+            };
+            // The same run, by pitch: 10-cent bands below its highest pitch (98th percentile), where both a player's
+            // swell and the model's stop, just short of the break. The pitch rises with the breath, so this lines the
+            // two up by breath without knowing the recording's pressure.
+            auto pitchBands = [&bands] (const std::vector<Frame>& frames)
+            {
+                std::vector<const Frame*> run;
+                for (const auto& band : bands (frames))
+                    for (const auto* f : band) run.push_back (f);
+                std::vector<double> hz;
+                for (const auto* f : run) hz.push_back (f->hz);
+                std::sort (hz.begin(), hz.end());
+                std::vector<std::vector<const Frame*>> out (12);
+                if (hz.empty()) return std::make_pair (out, 0.0);
+                const double top = hz[(size_t) (0.98 * (double) (hz.size() - 1))];
+                double loudest = -200.0;
+                for (const auto* f : run) loudest = std::max (loudest, f->level);
+                for (const auto* f : run)
+                {
+                    const int band = (int) std::floor (1200.0 * std::log2 (top / f->hz) / 10.0);
+                    if (band >= 0 && band < 12) out[(size_t) band].push_back (f);
+                }
+                return std::make_pair (out, loudest);
+            };
+            auto median = [] (std::vector<double> v) { if (v.empty()) return std::nan (""); std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+            auto medianPitch = [&] (const std::vector<Frame>& frames) { std::vector<double> v; for (const auto& f : frames) if (f.hz > 0.0) v.push_back (f.hz); return median (v); };
+            const auto rec = bands (s.frames), mod = bands (model);
+            const double recMid = medianPitch (s.frames), modMid = medianPitch (model);
+            std::printf ("   level  | recording: frames  pitch   H2  H3  H5 bright | model: frames  pitch   H2  H3  H5 bright     Pa\n");
+            for (size_t b = 0; b < 12; ++b)
+            {
+                if (rec[b].empty() && mod[b].empty()) continue;
+                std::printf ("  %3d dB  |", -3 * (int) b);
+                for (int side = 0; side < 2; ++side)
+                {
+                    const auto& fs = side == 0 ? rec[b] : mod[b];
+                    const double mid = side == 0 ? recMid : modMid;
+                    if (fs.empty()) { std::printf ("%s%34s", side == 0 ? "" : " |", ""); continue; }
+                    std::vector<double> cents, h2, h3, h5, bright, pa;
+                    for (const auto* f : fs)
+                    {
+                        cents.push_back (1200.0 * std::log2 (f->hz / mid));
+                        h2.push_back (f->h[2]); h3.push_back (f->h[3]); h5.push_back (f->h[5]);
+                        bright.push_back ((f->h[7] + f->h[8] + f->h[9] + f->h[10]) / 4.0);
+                        pa.push_back (f->pressure);
+                    }
+                    std::printf ("%s %9d %+6.0f %4.0f %3.0f %3.0f %6.0f", side == 0 ? "" : " |       ", (int) fs.size(), median (cents), median (h2), median (h3), median (h5), median (bright));
+                    if (side == 1) std::printf ("  %5.0f", median (pa));
+                }
+                std::printf ("\n");
+            }
+            const auto [recP, recTop] = pitchBands (s.frames);
+            const auto [modP, modTop] = pitchBands (model);
+            std::printf ("   pitch  | recording: frames  level   H2  H3  H5 bright | model: frames  level   H2  H3  H5 bright     Pa\n");
+            for (size_t b = 0; b < 12; ++b)
+            {
+                if (recP[b].empty() && modP[b].empty()) continue;
+                std::printf ("  %4d c  |", -10 * (int) b);
+                for (int side = 0; side < 2; ++side)
+                {
+                    const auto& fs = side == 0 ? recP[b] : modP[b];
+                    const double top = side == 0 ? recTop : modTop;
+                    if (fs.empty()) { std::printf ("%s%34s", side == 0 ? "" : " |", ""); continue; }
+                    std::vector<double> level, h2, h3, h5, bright, pa;
+                    for (const auto* f : fs)
+                    {
+                        level.push_back (f->level - top);
+                        h2.push_back (f->h[2]); h3.push_back (f->h[3]); h5.push_back (f->h[5]);
+                        bright.push_back ((f->h[7] + f->h[8] + f->h[9] + f->h[10]) / 4.0);
+                        pa.push_back (f->pressure);
+                    }
+                    std::printf ("%s %9d %+6.1f %4.0f %3.0f %3.0f %6.0f", side == 0 ? "" : " |       ", (int) fs.size(), median (level), median (h2), median (h3), median (h5), median (bright));
+                    if (side == 1) std::printf ("  %5.0f", median (pa));
+                }
+                std::printf ("\n");
+            }
+        }
+        return 0;
+    }
+
     if (mode == "analyse")  // analyse <file.wav> [<preset>|all] [options]: a recorded scale note by note; with a preset, the model's too
     {
         if (argc < 3)
