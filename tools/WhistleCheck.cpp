@@ -2704,6 +2704,32 @@ int main (int argc, char* argv[])
             std::printf ("  %-5s  %5.0f Pa  planned %+4.0f c   played %s\n", steps[i].name.c_str(), steps[i].pressure, steps[i].cents,
                          f > 0.0 ? (noteName (f) + " " + std::to_string ((int) std::lround (1200.0 * std::log2 (f / target))) + " c").c_str() : "-");
         }
+        {
+            // How loud the scale is (with the voicing's output level): the power average of the 50 ms blocks that
+            // sound (within 30 dB of the loudest), for matching the presets' levels.
+            const size_t block = (size_t) (0.05 * rate);
+            std::vector<double> powers;
+            for (size_t i = 0; i + block <= out.size(); i += block)
+            {
+                double sum = 0.0;
+                for (size_t k = i; k < i + block; ++k)
+                    sum += (double) out[k] * out[k];
+                powers.push_back (sum / (double) block);
+            }
+            const double loudest = powers.empty() ? 0.0 : *std::max_element (powers.begin(), powers.end());
+            double total = 0.0, decibels = 0.0;
+            int counted = 0;
+            for (const double p : powers)
+                if (p > loudest * 0.001)
+                {
+                    total += p;
+                    decibels += 10.0 * std::log10 (p);
+                    ++counted;
+                }
+            // The mean in dB weighs the soft low notes as much as the loud top ones (the power average follows the loudest).
+            std::printf ("Level: %.1f dBFS mean in dB, %.1f dBFS power average, of the sounding scale (output level %+.1f dB)\n",
+                         decibels / std::max (1, counted), 10.0 * std::log10 (total / std::max (1, counted) + 1.0e-20), scaleVoicing.outputGainDb);
+        }
 
         if (argc > 3 && ! juce::String (argv[3]).containsChar ('='))  // A WAV file name, not an option
         {

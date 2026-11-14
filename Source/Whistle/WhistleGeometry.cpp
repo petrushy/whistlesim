@@ -164,6 +164,26 @@ Voicing presetVoicing (size_t index)
         v.breathScale = 1.0f;
         v.breathCurve = 1.45f;
     }
+    // Every preset at about the same loudness: the measured Goldie's, -14.6 dBFS over its test scale (WhistleCheck
+    // scale: the mean in dB of the sounding 50 ms blocks, so soft low notes count as much as loud top ones). The
+    // presets spread over 11 dB before (a tenor recorder -6.9, the low D -18.4). First match wins.
+    if (index < presets().size())
+    {
+        struct Level { const char* nameStart; float gainDb; };
+        static constexpr Level levels[] = {
+            { "D whistle, cylindrical metal", -6.2f }, { "D whistle, conical metal", -2.5f }, { "D whistle, narrow head", -4.9f },
+            { "D whistle, wood", -2.8f }, { "D whistle, Goldie style (bright)", 0.3f }, { "D whistle, Goldie style", -2.2f },
+            { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löfgren */, { "D whistle, Goldie (measured)", 0.0f },
+            { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
+            { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
+        };
+        for (const auto& l : levels)
+            if (presets()[index].name.startsWith (l.nameStart))
+            {
+                v.outputGainDb = l.gainDb;
+                break;
+            }
+    }
     // A finger landing: the air it pushes in, and the body's resonances by material (first guesses until
     // measured: wood low and short, thin metal higher and ringing).
     if (index < presets().size())
