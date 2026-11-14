@@ -235,6 +235,9 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("flue=")) { g.windwayHeight = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("headd=")) { g.headDiameter = value * 0.001; geometryArgs = true; }  // With headl=: a head section, retuned
         if (arg.startsWith ("headl=")) { g.headLength = value * 0.001; geometryArgs = true; }
+        if (arg.startsWith ("holeshift="))  // Move every enabled hole by this many mm (negative: towards the window)
+            for (auto& h : g.holes)
+                if (h.enabled) h.position += value * 0.001;
         if (arg.startsWith ("heads=")) { g.headStraightLength = value * 0.001; geometryArgs = true; }  // The head's straight part
         if (arg.startsWith ("wall=")) { g.wallThickness = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("top=")) { g.boreDiameterTop = value * 0.001; geometryArgs = true; }

@@ -12,6 +12,10 @@
     box=S       how far the random points reach, in steps of each setting (default 3)
     sweeps=N    pattern-search sweeps after that (default 12; 0 only scores the start)
     threads=N   WhistleCheck runs at once (default 4)
+    pernote=W   share of the score taken note by note over H2-H10 instead of from the octave averages over
+                H2-H8 (0-1, default 0). Octave averages can match while single notes are far too bright or dull:
+                a voicing for the measured Goldie matched them within 2.5 dB with A and B 15-20 dB too bright
+                above H7, and played unevenly.
 
 Example:
 
@@ -68,6 +72,8 @@ BOUNDS = {
 }
 
 HARMONIC_WEIGHTS = (1, 1, 1, 1, 0.5, 0.5, 0.5)  # H2..H8
+NOTE_WEIGHTS = (1, 1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5)  # H2..H10, note by note
+PER_NOTE = 0.0  # pernote=
 OCTAVE_SPLIT = 1.94  # As WhistleCheck analyse: between the seventh and the octave
 NUMBER = r"[+-]?\d+(?:\.\d+)?"
 
@@ -151,6 +157,16 @@ def evaluate(recording, voicing):
         weight += sum(HARMONIC_WEIGHTS)
         details["octave %d, model - recording" % (octave + 1)] = [round(d, 1) for d in differences]
     score = error / max(weight, 1.0)
+    if PER_NOTE > 0.0:
+        theirs_by_note = {n["note"]: n["harmonics"] for n in recorded}
+        sizes = []
+        for n in model:
+            if n["note"] in shared and len(n["harmonics"]) >= 9 and len(theirs_by_note[n["note"]]) >= 9:
+                differences = [m - t for m, t in zip(n["harmonics"][:9], theirs_by_note[n["note"]][:9])]
+                sizes.append(sum(w * abs(d) for w, d in zip(NOTE_WEIGHTS, differences)) / sum(NOTE_WEIGHTS))
+        per_note = sum(sizes) / len(sizes) if sizes else 20.0
+        details["per note"] = round(per_note, 1)
+        score = (1.0 - PER_NOTE) * score + PER_NOTE * per_note
     if all(theirs) and all(mine):  # How much louder the second octave is, weakly
         loudness = (mine[1]["level"] - mine[0]["level"]) - (theirs[1]["level"] - theirs[0]["level"])
         details["octave loudness difference"] = round(loudness, 1)
@@ -199,6 +215,9 @@ def main():
             box = float(value)
         elif name == "threads":
             threads = int(value)
+        elif name == "pernote":
+            global PER_NOTE
+            PER_NOTE = min(1.0, max(0.0, float(value)))
         elif name in BOUNDS:
             voicing[name] = float(value)
         else:

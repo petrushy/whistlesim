@@ -100,12 +100,32 @@ struct Geometry
         return 0.001 + 1.7 * equivalentRadius;
     }
 
-    // Effective length of an open tone hole: chimney plus inner and outer end corrections (Keefe 1990).
+    // Effective length of an open tone hole: chimney plus the inner correction, the matching volume and the
+    // radiation of a hole drilled through a thick wall (Lefebvre & Scavone 2012, Eqs. 31, 8 and 11; d = b / a).
+    // Keefe's (1990) t + b (1.4 - 0.58 d^2), used before, is ~0.2 mm longer for holes as large as a whistle's.
+    // Against finger taps on a measured Goldie these and the series lengths below brought the open-hole notes'
+    // resonances from 7-16 c to within ~10 c of the real tube's (rms 8.6 -> 6.0 c).
     double holeEffectiveLength (int hole) const
     {
         const double b = 0.5 * holes[(size_t) hole].diameter;
         const double a = radiusAt (holes[(size_t) hole].position);
-        return std::max (wallThickness, 0.0003) + b * (1.4 - 0.58 * (b / a) * (b / a));
+        const double t = std::max (wallThickness, 0.0003), d = b / a;
+        const double inner = b * (0.822 - 0.095 * d - 1.566 * d * d + 2.138 * d * d * d - 1.640 * d * d * d * d + 0.502 * d * d * d * d * d);
+        const double matching = b * d * (1.0 + 0.207 * d * d * d) / 8.0;
+        const double radiation = b * (0.822 - 0.47 * std::pow (b / (a + t), 0.8));
+        return t + inner + matching + radiation;
+    }
+
+    // Series length of a tone hole, between closed (0) and open (1): negative, the bore acts a little shorter
+    // across a hole (~0.4 mm for a whistle's). Lefebvre & Scavone (2012), Eqs. 33 and 34.
+    double holeSeriesLength (int hole, double openness) const
+    {
+        const double b = 0.5 * holes[(size_t) hole].diameter;
+        const double a = radiusAt (holes[(size_t) hole].position);
+        const double t = std::max (wallThickness, 0.0003), d = b / a;
+        const double open = b * d * d * (-0.35 + 0.06 * std::tanh (2.7 * t / b));
+        const double closed = b * d * d * (-0.12 - 0.17 * std::tanh (2.4 * t / b));
+        return openness * open + (1.0 - openness) * closed;
     }
 };
 

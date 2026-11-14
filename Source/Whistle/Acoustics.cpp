@@ -96,7 +96,10 @@ Complex windowImpedance (const Geometry& g, const Openness& open, double hz)
     {
         const double position = juce::jlimit (0.0, g.boreLength, g.holes[(size_t) hole].position);
         travelTo (position);
-        z = 1.0 / (1.0 / z + holeAdmittance (g, hole, juce::jlimit (0.0, 1.0, open.holes[(size_t) hole]), omega));
+        const double openness = juce::jlimit (0.0, 1.0, open.holes[(size_t) hole]);
+        const double aHole = g.radiusAt (position);
+        const Complex halfSeries = j * omega * kAirDensity * 0.5 * g.holeSeriesLength (hole, openness) / (kPi * aHole * aHole);
+        z = halfSeries + 1.0 / (1.0 / (z + halfSeries) + holeAdmittance (g, hole, openness, omega));
     }
     travelTo (0.0);
 

@@ -298,7 +298,24 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
             const double r = g.radiusAt (x0 + (s + 0.5) / kAreaSamples * (x1 - x0));
             inverseArea += 1.0 / (kPi * r * r) / kAreaSamples;
         }
-        const double a = std::sqrt (1.0 / inverseArea / kPi);
+        double a = std::sqrt (1.0 / inverseArea / kPi);
+
+        // A tone hole's series length (negative) is shared by the sections on both sides of it. It is an inertance
+        // only: shortening a section would also take away its volume, which near the middle of the bore (a pressure
+        // maximum) raised the notes twice as much as Acoustics' series term. So the section's mass changes by the
+        // share s and its volume stays: length sqrt(L (L + s)), area wider by L over that. The share changes a little
+        // between closed and open (~0.36 and ~0.42 mm for a whistle's holes); the delays are fixed, so the halfway
+        // value (within ~0.5 c of either).
+        double series = 0.0;
+        for (const int j : { k, k + 1 })
+            if (j >= 1 && j < (int) junctions.size() - 1 && junctions[(size_t) j].second >= 0)
+                series += 0.5 * g.holeSeriesLength (junctions[(size_t) j].second, 0.5);
+        if (series != 0.0 && length + series > 0.0)
+        {
+            const double shortened = std::sqrt (length * (length + series));
+            a *= std::sqrt (length / shortened);
+            length = shortened;
+        }
 
         // Open end correction 0.61 a (as in Acoustics). The foot's reflection lowpass already delays low
         // frequencies by a / c, there and back: that is a / 2 of extra length, so the section adds the rest.
