@@ -2227,7 +2227,16 @@ int main (int argc, char* argv[])
         voicing.breathNoise = 0.0f;  // Off unless noise= is given
         jetVoicingArgs (argc, argv, 3, voicing);
         voicing.vortexLoss *= vortexArg;
-        const auto fingerings = lowRegister (g);
+        auto fingerings = lowRegister (g);
+        for (int i = 3; i < argc; ++i)  // note=E6: any chart note (its fingering), instead of a low-register index
+            if (juce::String (argv[i]).startsWith ("note="))
+                for (const auto& entry : chartFor (g.chart))
+                    if (noteName (lowestNote (g) * std::pow (2.0, entry.semitones / 12.0)) == juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).toStdString())
+                    {
+                        fingerings = { entry };
+                        which = 0;
+                        break;
+                    }
         const auto& c = fingerings[(size_t) juce::jlimit (0, (int) fingerings.size() - 1, which)];
         std::printf ("%s, %s, edge offset %.2f mm, vortex loss %.2f, Strouhal %.3f, jet gain %.2f, slow-jet growth %.2f, %d stage(s)\n"
                      "  swing: deflection minus edge over the jet half-width (min/max); sat: share of time |x| > half-width\n"
@@ -2253,6 +2262,9 @@ int main (int argc, char* argv[])
             model.testWindowLoss = windowLossArg;
             std::vector<float> flowLog, jetLog;
             auto controls = controlsFor (c.openness (g));
+            for (int i = 3; i < argc; ++i)  // thumb=0.4: the thumb hole's openness, for a pinched note
+                if (juce::String (argv[i]).startsWith ("thumb="))
+                    controls.openness[0] = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getFloatValue();
             std::vector<float> out ((size_t) (0.6 * rate), 0.0f);
             const int block = (int) (rate * 0.002);
             for (int start = 0; start < (int) out.size(); start += block)
