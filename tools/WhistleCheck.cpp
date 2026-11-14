@@ -1901,7 +1901,15 @@ int main (int argc, char* argv[])
                      g.name.toRawUTF8(), c.holePattern (g).c_str(), g.edgeOffset * 1000.0, voicing.vortexLoss, voicing.jetStrouhal, voicing.jetGain,
                      voicing.slowJetGrowth, voicing.jetStages);
         constexpr double rate = 48000.0;
-        for (double pressure : { 150.0, 250.0, 350.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1050.0, 1200.0, 1500.0 })
+        std::vector<double> pressures { 150.0, 250.0, 350.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1050.0, 1200.0, 1500.0 };
+        for (int i = 3; i < argc; ++i)  // pa=60,100,150: other pressures (Pa)
+            if (juce::String (argv[i]).startsWith ("pa="))
+            {
+                pressures.clear();
+                for (const auto& t : juce::StringArray::fromTokens (juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false), ",", ""))
+                    pressures.push_back (t.getDoubleValue());
+            }
+        for (double pressure : pressures)
         {
             WhistleModel model;
             model.setGeometry (g);

@@ -190,6 +190,12 @@ struct Voicing
     // about half as hard as a whistle, but WARBL's mouthpiece feels the same for both. Only WARBL's breath is
     // scaled (not Play scale or playing from the screen, which give the model's own pressures).
     float breathScale = 1.0f;
+    // And how it is spread: the instrument's pressure is breathScale x full x (WARBL's mapped breath / full)^breathCurve,
+    // full being the breath response's full output (Sensors tab). 1 = as WARBL's response. Above 1, gentle breath
+    // gives less pressure while full breath still gives breathScale x full: for an instrument whose low notes need
+    // far less pressure than a whistle's but whose top notes need as much (a recorder's scale spans ~21x in
+    // pressure, a whistle's ~8x).
+    float breathCurve = 1.0f;
     // A finger landing on a hole, with or without breath. fingerTap: the air it pushes into the bore, as a multiple
     // of the physical amount (the hole's area x the finger's speed); the tube rings at its current resonances.
     // bodyKnock: how strongly the impact shakes the instrument's body, whose resonances (pitch in Hz, ring as a Q

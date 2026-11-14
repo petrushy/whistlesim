@@ -269,9 +269,10 @@ void SensorsPage::timerCallback()
     breathInfo.setText ("Sensitivity " + juce::String (b.outputMax / std::max (1.0f, b.inputMax - b.inputMin), 2) + "x\n"
                             + "Now: measured " + juce::String (juce::roundToInt (measured)) + " Pa -> "
                             + juce::String (juce::roundToInt (b.map (measured))) + " Pa"
-                            + (std::abs (audio.whistleModel.breathScale.load() - 1.0f) > 0.005f
-                                   ? " x " + juce::String (audio.whistleModel.breathScale.load(), 2) + " (instrument's breath scale) = "
-                                         + juce::String (juce::roundToInt (b.map (measured) * audio.whistleModel.breathScale.load())) + " Pa to the model"
+                            + (std::abs (audio.whistleModel.breathScale.load() - 1.0f) > 0.005f || std::abs (audio.whistleModel.breathCurve.load() - 1.0f) > 0.005f
+                                   ? " -> " + juce::String (juce::roundToInt (response::instrumentBreath (b.map (measured), b.outputMax, audio.whistleModel.breathScale.load(),
+                                                                                                     audio.whistleModel.breathCurve.load())))
+                                         + " Pa to the model (the instrument's breath scale and curve)"
                                    : juce::String (" to the model")),
                         juce::dontSendNotification);
     const bool physical = audio.holeFingerHeight.load();

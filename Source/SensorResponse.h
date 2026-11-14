@@ -41,6 +41,15 @@ struct Breath
     }
 };
 
+// The pressure an instrument gets from WARBL's mapped breath: its breath scale, and its own curve (an exponent on
+// the share of the full output; 1 leaves the response as it is). See whistle::Voicing::breathCurve.
+inline float instrumentBreath (float mappedPa, float fullPa, float scale, float curve)
+{
+    if (mappedPa <= 0.0f || fullPa <= 0.0f)
+        return 0.0f;
+    return scale * (std::abs (curve - 1.0f) < 1.0e-4f ? mappedPa : fullPa * std::pow (mappedPa / fullPa, curve));
+}
+
 // S-curve through (0,0), (centre, 0.5) and (1,1): flat at both ends, steep in the middle. steepness 1 is a
 // straight line (with centre 0.5), more is a sharper S, less than 1 an inverted S.
 inline float applySCurve (float x, float steepness, float centre)

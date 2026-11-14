@@ -283,7 +283,8 @@ whistle::Controls AudioEngine::controlsFromFrame (const warbl::SensorFrame& fram
 
     const float measured = std::max (0.0f, (float) ((int) frame.pressure - ambient14.load()) * kPascalPerCount);
     measuredPressure = measured;
-    c.mouthPressure = breathResponse().map (measured) * whistleModel.breathScale.load();
+    const auto breath = breathResponse();
+    c.mouthPressure = response::instrumentBreath (breath.map (measured), breath.outputMax, whistleModel.breathScale.load(), whistleModel.breathCurve.load());
     return c;
 }
 

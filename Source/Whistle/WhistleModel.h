@@ -82,6 +82,7 @@ public:
     std::atomic<float> jetGain { 1.0f };  // See Voicing
     std::atomic<float> slowJetGrowth { 0.0f };  // See Voicing
     std::atomic<float> breathScale { 1.0f };  // See Voicing (applied by the caller to WARBL's breath)
+    std::atomic<float> breathCurve { 1.0f };  // See Voicing (the same)
     std::atomic<float> jetSpreading { 0.0f };  // See Voicing
     std::atomic<float> jetBend { 0.0f };  // See Voicing
     std::atomic<float> fingerTap { 0.0f }, fingerSoftness { 4.0f }, bodyKnock { 0.0f }, bodyPitch { 1000.0f }, bodyRing { 15.0f };  // See Voicing

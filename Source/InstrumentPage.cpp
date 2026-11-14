@@ -492,9 +492,13 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     addHeading ("Output (breath and hole response: Sensors tab)");
     addRow ("Breath scale", 0.2, 2.0, 0.01, "x", [&model] { return (double) model.breathScale.load(); },
             [&model] (double v) { model.breathScale = (float) v; }, false)
-        .setTooltip ("How hard this instrument is blown, as a share of WARBL's breath response (Sensors tab). A recorder takes "
-                     "about half a whistle's pressure (0.7 for the recorder: gentle low notes, top C near full breath), but WARBL's "
-                     "mouthpiece feels the same for both. Only WARBL's breath is scaled, not Play scale or the screen.");
+        .setTooltip ("How hard this instrument is blown, as a share of WARBL's breath response (Sensors tab) at full breath. "
+                     "Only WARBL's breath is scaled, not Play scale or the screen.");
+    addRow ("Breath curve", 0.5, 2.5, 0.01, "", [&model] { return (double) model.breathCurve.load(); },
+            [&model] (double v) { model.breathCurve = (float) v; }, false)
+        .setTooltip ("How the breath is spread over this instrument's pressures: 1 = as WARBL's response; more gives gentle breath "
+                     "less pressure while full breath gives the same. A recorder's low notes need a third of a whistle's pressure "
+                     "and its top notes as much: 1.35 puts its low C at about a whistle's low-D breath, and top C within reach.");
     addRow ("Output level", -30.0, 12.0, 0.5, "dB", [&model] { return (double) model.outputGainDb.load(); },
             [&model] (double v) { model.outputGainDb = (float) v; }, false)
         .setTooltip ("The instrument's overall volume. If the Monitor tab says it is limiting, turn this down.");

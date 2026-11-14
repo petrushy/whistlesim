@@ -192,6 +192,7 @@ void WhistleModel::setVoicing (const Voicing& v)
     slowJetGrowth = v.slowJetGrowth;
     jetStages = juce::jlimit (1, 2, v.jetStages);
     breathScale = v.breathScale;
+    breathCurve = v.breathCurve;
     jetSpreading = v.jetSpreading;
     jetBend = v.jetBend;
     fingerTap = v.fingerTap;
@@ -218,6 +219,7 @@ Voicing WhistleModel::getVoicing() const
     v.slowJetGrowth = slowJetGrowth.load();
     v.jetStages = jetStages.load();
     v.breathScale = breathScale.load();
+    v.breathCurve = breathCurve.load();
     v.jetSpreading = jetSpreading.load();
     v.jetBend = jetBend.load();
     v.fingerTap = fingerTap.load();

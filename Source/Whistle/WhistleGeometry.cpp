@@ -156,10 +156,13 @@ Voicing presetVoicing (size_t index)
         // (a purer second octave).
         v.slowJetGrowth = 0.67f;
         v.breathNoise = 0.025f;  // A recorder's narrow, smooth windway: a clean tone with little hiss
-        // Its scale is in tune at ~0.4-0.6 of a whistle's pressures (low C 170 Pa, the whistle's low D 400 Pa), up
-        // to top C at 3.7 kPa: 0.7 of WARBL's breath puts the low notes at a gentle breath and keeps top C in reach
-        // (WARBL's full breath gives ~5.5 kPa).
-        v.breathScale = 0.7f;
+        // Its scale is in tune from low C at 172 Pa (a third of the Goldie's low D, 528) up to top C at 3.7 kPa: 21x,
+        // where a whistle's spans 8x. Scaled by 0.7 alone, the low C sounded at 34 Pa of WARBL breath (~20 sensor
+        // counts, on the steepest part of the response, so every count of jitter moved it ~4 %) and jumped to the
+        // octave at 92 Pa, the breath of the whistle's low D: weak and flaky. With the curve, low C is at 80 Pa and
+        // breaks at 172 (the Goldie's low D: 89 and 190), and top C needs 1.8 kPa (was 2.8).
+        v.breathScale = 1.0f;
+        v.breathCurve = 1.45f;
     }
     // A finger landing: the air it pushes in, and the body's resonances by material (first guesses until
     // measured: wood low and short, thin metal higher and ringing).
