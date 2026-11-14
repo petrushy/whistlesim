@@ -95,6 +95,46 @@ std::complex<double> jetResponse (double omega, double windowOverH, double theta
     return std::conj (eta);
 }
 
+std::vector<double> jetImpulseResponse (double windowOverH, double thetaOverH, double step, int taps, double cutoff, double* neutral)
+{
+    // The response on a fine grid, following the wave from low frequencies up (each answer the next one's guess).
+    constexpr double dOmega = 0.002, lowEnd = 0.01, lowFull = 0.03;
+    const double top = std::acos (-1.0) / step;  // Nyquist of the taps
+    std::vector<Complex> response;
+    Complex guess (0.0, 0.0);
+    double found = std::min (top, 1.6 * cutoff);
+    const double end = std::min (top, 1.6 * cutoff);
+    for (double om = dOmega; om < end; om += dOmega)
+    {
+        const Complex alpha = jetWavenumber (om, thetaOverH, guess);
+        if (! std::isfinite (alpha.real()))
+        {
+            found = om;
+            break;
+        }
+        guess = alpha;
+        const Complex i (0.0, 1.0);
+        response.push_back (std::conj (i / om * (1.0 - std::exp (i * alpha * windowOverH))));
+    }
+    if (neutral != nullptr)
+        *neutral = found;  // (or the end of the fade, if that comes first)
+    const double pi = std::acos (-1.0);
+    std::vector<double> out ((size_t) taps, 0.0);
+    for (size_t j = 0; j < response.size(); ++j)
+    {
+        const double om = (double) (j + 1) * dOmega;
+        double w = 1.0;  // Raised-cosine tapers: in from the steady flow, out towards the neutral frequency
+        if (om < lowFull)
+            w *= om < lowEnd ? 0.0 : 0.5 - 0.5 * std::cos (pi * (om - lowEnd) / (lowFull - lowEnd));
+        const double fade = std::min (cutoff, 0.75 * found);
+        if (om > fade)
+            w *= 0.5 + 0.5 * std::cos (pi * (om - fade) / (found - fade));
+        for (int k = 0; k < taps; ++k)  // Inverse transform of a real signal's spectrum, e^(+i omega t)
+            out[(size_t) k] += w * (response[j] * std::exp (Complex (0.0, om * k * step))).real() * dOmega / pi * step;
+    }
+    return out;
+}
+
 std::complex<double> jetWavenumber (double omega, double thetaOverH, std::complex<double> guess)
 {
     const double t = std::clamp (thetaOverH, 0.002, 0.07);

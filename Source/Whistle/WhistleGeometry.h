@@ -176,6 +176,15 @@ struct Voicing
     // that, 0 = a jet of constant width (0.4 h). A wider jet at the edge switches less abruptly and carries more
     // flow: fast-blown notes (the second octave) come out louder and purer, as on real whistles.
     float jetSpreading = 0.0f;
+    // Which jet: 0 = a band-pass around the Strouhal number above, a delay at jetConvection and a growth that
+    // falls for fast jets (slowJetGrowth); 1 = the jet's linear stability theory for the windway's velocity
+    // profile (JetStability: receptivity, growth and phase speed per omega h / U, dispersion included), as an
+    // impulse response in units of h / U. With 1, jetGain scales the theory's deflection and jetStrouhal,
+    // jetConvection, jetStages and slowJetGrowth are not used.
+    int jetModel = 0;
+    // jetModel 1: the omega h / U above which the jet's waves stop growing (they saturate within the window
+    // rather than grow without limit as linear theory has them); the response fades out by 1.6 x this.
+    float jetCutoff = 0.3f;
     // A steady sideways push on the jet as it crosses the window, as the pressure difference across it that would
     // give it (Pa; positive bends the jet out of the pipe, which is the same as moving the edge further in). A thin
     // jet under a pressure difference dp is displaced by dp W^2 / (2 rho h U^2) at the edge, so the bend is large

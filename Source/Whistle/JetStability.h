@@ -10,6 +10,7 @@
 #pragma once
 
 #include <complex>
+#include <vector>
 
 namespace whistle
 {
@@ -27,6 +28,14 @@ std::complex<double> vortexSheetJetWavenumber (double omegaH);
 // grows on the way: eta = (v / (i omega)) (1 - exp(i alpha W)) (exp(-i omega t) convention). In units of
 // v h / U, as a function of Omega = omega h / U, for the e^(+i omega t) convention used for filters.
 std::complex<double> jetResponse (double omegaH, double windowOverH, double thetaOverH);
+
+// The same response as an impulse response in time measured in h / U (so one set of taps serves every jet speed:
+// tap k acts at a delay of k * step * h / U). Taps are the response per unit step: deflection = (h / U) sum_k
+// taps[k] v(t - k step h / U). Above the jet's neutral frequency (no growing wave) and below omega h / U ~ 0.02
+// (the steady flow) the response is tapered to zero. Linear theory lets short waves grow without limit (+60 dB
+// at omega h / U ~ 0.9), which a real jet's do not: they saturate within the window. So above `cutoff` (omega h / U)
+// the response fades out, by 1.6 x cutoff. Returns the neutral omega h / U in `neutral` if given.
+std::vector<double> jetImpulseResponse (double windowOverH, double thetaOverH, double step, int taps, double cutoff, double* neutral = nullptr);
 
 
 } // namespace whistle

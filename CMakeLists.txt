@@ -60,6 +60,7 @@ target_sources(WhistleSim PRIVATE
     Source/Whistle/WhistleGeometry.cpp
     Source/Whistle/Acoustics.cpp
     Source/Whistle/WhistleModel.cpp
+    Source/Whistle/JetStability.cpp
     Source/Whistle/InstrumentFile.cpp
     Source/Whistle/ScalePlan.cpp
     Source/Phone/PhoneUI.cpp)

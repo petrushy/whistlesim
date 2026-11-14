@@ -405,3 +405,18 @@ Every existing preset plays sample for sample as before, except the Generation's
 - The Löfgren's 20 dB drop in H2 between the octaves.
 - Pitch against breath (4.4). To play as sharp as the recorded Goldie the model needs 1.9 kPa on B5 and 3.7 kPa on F#6, so the real scale is itself sharp there.
 - The two bright presets, played on 2026-11-10, are good but a little too bright; kept as they are for now. The third harmonic, 6–8 dB too strong on the high D, is the first suspect.
+
+## 10. Brightness against breath, and the theory's jet (2026-11-14)
+
+**Brightness is the swing.** `WhistleCheck inside <preset> <fingering> high` now gives the jet's swing in its real half-width (spreading included) and the sound's H5–H10. On the measured Goldie, H7–H10 follow the swing almost one to one: ~2 half-widths gives ~−55 dB re H1, ~4 gives ~−38. The recording of it wants ~2.5–3 in the first octave.
+
+- Without much vortex loss the swing is ~(4/π) × the loop's small-signal gain, which depends on neither the jet's speed nor its width. Vortex loss, which grows with the flow (so with spreading and with breath), is what holds it down.
+- Tried and removed: clipping the deflection (it only squares it again), and a low-pass on the jet's response at Strouhal 0.2 (no change: the high harmonics are made by the flow split, not fed round the loop).
+
+**Each note's swing rises from where it starts to speak, peaks mid-range and falls towards its octave break**, with either jet. Its range scales as f² in pressure, so at the same breath a low note is past its peak, getting duller as it's blown harder, while A and B are just above their start and brighten steeply. That is the "strong brilliance around A and B" of the voicing fitted to the measured Goldie. Next: swells on the real whistle (soft to the break, on D5, G5, B5, D6), with the pitch as the measure of breath, to see where in its range each note is played and how its brightness moves.
+
+**The theory's jet (voicing `jetModel` 1).** `JetStability`'s response (receptivity v/iω, growth and phase speed per ωh/U, for the windway's profile) as 64 taps in units of h/U, read from the jet's delay line at a spacing that follows the jet's speed. It reproduces the theory to 0.2 dB and a few degrees over ωh/U 0.06–0.4 (`WhistleCheck jet`).
+
+- Linear theory grows short waves without limit (+60 dB at ωh/U 0.9), so the response has to fade out above a cutoff (`jetCutoff`). At 0.3 the low D jumps to the octave above 300 Pa. At 0.12–0.13 it holds to ~850 Pa, like the real whistle.
+- That cutoff is the old band-pass centre: Strouhal 0.0185 is ωh/U 0.116. Both describe a jet in which short waves stop growing near ωh/U 0.12: a jet already thickened by the edge.
+- With it, the swing against breath comes out nearly the same as with the band-pass, note for note. Not fitted yet; off by default.

@@ -205,6 +205,8 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("slow=")) v.slowJetGrowth = value;
         if (arg.startsWith ("stages=")) v.jetStages = (int) value;
         if (arg.startsWith ("spread=")) v.jetSpreading = value;
+        if (arg.startsWith ("jet=")) v.jetModel = (int) value;
+        if (arg.startsWith ("cutoff=")) v.jetCutoff = value;
         if (arg.startsWith ("bend=")) v.jetBend = value;
         if (arg.startsWith ("tap=")) v.fingerTap = value;
         if (arg.startsWith ("soft=")) v.fingerSoftness = value;
@@ -2244,6 +2246,31 @@ int main (int argc, char* argv[])
                 }
                 else
                     std::printf ("    %6.0f   %6.3f      (no growing wave)      %6.2f   %+6.1f dB\n", f, om, modelSpeed, modelGain);
+            }
+        }
+        {
+            // The theory as taps (the time-domain jet, voicing jetModel 1): taps, and the response they give back.
+            const double u = std::sqrt (2.0 * 600.0 / kAirDensity);
+            const double theta = std::min (0.067 * h, 0.664 * std::sqrt (nu * g.windwayLength / u));
+            double neutral = 0.0;
+            const double step = 1.0;
+            double cutoff = 0.3;
+            for (int i = 3; i < argc; ++i)
+                if (juce::String (argv[i]).startsWith ("cutoff=")) cutoff = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
+            const auto taps = jetImpulseResponse (w / h, theta / h, step, 64, cutoff, &neutral);
+            std::printf ("\nAs taps (600 Pa, theta/h %.3f, step %.1f h/U, neutral omega h/U %.2f):\n ", theta / h, step, neutral);
+            for (size_t k = 0; k < taps.size(); ++k)
+                std::printf ("%s%6.2f", k % 16 == 0 ? "\n   " : " ", taps[k]);
+            std::printf ("\n  omega h/U    theory            taps\n");
+            for (double om : { 0.03, 0.06, 0.1, 0.15, 0.25, 0.4, 0.6, 0.9 })
+            {
+                std::complex<double> sum = 0.0;
+                for (size_t k = 0; k < taps.size(); ++k)
+                    sum += taps[k] * std::exp (std::complex<double> (0.0, -om * (double) k * step));
+                const auto r = jetResponse (om, w / h, theta / h);
+                std::printf ("    %5.2f   %+6.1f dB %+5.0f deg   %+6.1f dB %+5.0f deg\n", om, 20.0 * std::log10 (std::abs (r)),
+                             std::arg (r) * 180.0 / juce::MathConstants<double>::pi, 20.0 * std::log10 (std::abs (sum)),
+                             std::arg (sum) * 180.0 / juce::MathConstants<double>::pi);
             }
         }
         return 0;
