@@ -160,6 +160,8 @@ void WhistleModel::resetState()
     noiseFilterCountdown = 0;
     for (auto& st : jetState)
         st.fill (0.0f);
+    jetHighState.fill (0.0f);
+    jetHighLow1 = jetHighLow2 = 0.0f;
     jetFilterCountdown = 0;
     jetBoostLow = 0.0f;
     for (auto& r : radiation)
@@ -591,6 +593,9 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         jetB0 = (float) (alpha / a0);
         jetA1 = (float) (-2.0 * std::cos (w0) / a0);
         jetA2 = (float) ((1.0 - alpha) / a0);
+        jetHighB0 = (float) ((1.0 + std::cos (w0)) / 2.0 / a0);
+        jetHighB1 = (float) (-(1.0 + std::cos (w0)) / a0);
+        jetHighLowA = testJetFlatTop > 0.0f ? (float) (1.0 - std::exp (-std::min (3.0, w0 * testJetFlatTop))) : 1.0f;
 
         // Growth exponent alpha_i W at this speed: a slower jet fits more wavelengths of the disturbance into the
         // window and amplifies it more (limited to 3x slower than the reference, below which the note hardly sounds).
@@ -607,6 +612,15 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         jetBoostA = (float) (1.0 - std::exp (-w0));  // One-pole lowpass at the band centre
     }
     float filtered = delayed;
+    if (testJetFlatAbove != 0.0f)
+    {
+        auto& st = jetHighState;
+        const float y = jetHighB0 * (delayed + st[1]) + jetHighB1 * st[0] - jetA1 * st[2] - jetA2 * st[3];
+        st[1] = st[0];
+        st[0] = delayed;
+        st[3] = st[2];
+        st[2] = y;
+    }
     for (int stage = 0; stage < jetStages.load (std::memory_order_relaxed); ++stage)
     {
         auto& st = jetState[(size_t) stage];
@@ -618,6 +632,12 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         filtered = y;
     }
 
+    if (testJetFlatAbove != 0.0f)
+    {
+        jetHighLow1 += jetHighLowA * (jetHighState[2] - jetHighLow1);
+        jetHighLow2 += jetHighLowA * (jetHighLow1 - jetHighLow2);
+        filtered += testJetFlatAbove * jetHighLow2;
+    }
     // The jet's half-width where it meets the edge: 0.4 h leaving the flue, widening across the window as it becomes
     // turbulent (plane turbulent jet: ~0.1 per unit distance).
     const float jetHalfWidth = 0.4f * h + jetSpreading.load (std::memory_order_relaxed) * turbulent * 0.1f * cfg.windowLength;
