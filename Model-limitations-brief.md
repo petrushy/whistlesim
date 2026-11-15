@@ -420,3 +420,25 @@ Every existing preset plays sample for sample as before, except the Generation's
 - Linear theory grows short waves without limit (+60 dB at ωh/U 0.9), so the response has to fade out above a cutoff (`jetCutoff`). At 0.3 the low D jumps to the octave above 300 Pa. At 0.12–0.13 it holds to ~850 Pa, like the real whistle.
 - That cutoff is the old band-pass centre: Strouhal 0.0185 is ωh/U 0.116. Both describe a jet in which short waves stop growing near ωh/U 0.12: a jet already thickened by the edge.
 - With it, the swing against breath comes out nearly the same as with the band-pass, note for note. Not fitted yet; off by default.
+
+## 11. Notes holding past their break (2026-11-15)
+
+`WhistleCheck ranges [preset] [notes=] [voicing]` sweeps each note at a player's pace (15 % a second, as the real swells; `breath` rises ~1 kPa/s near a break, which by Terrien et al. 2015 holds the low register longer) and lists where it starts, breaks and returns, with the pitch span. `WhistleCheck swell <wav> <preset> pressure=<csv> track` lists a recording's mouth pressure against pitch every 50 ms.
+
+**Against the real Golden** (measured mouth pressure; θ = U/(fW), U = √(2p/ρ), W 5.8 mm):
+
+| | real: starts | real: highest held | model: starts | model: breaks | model ratio |
+|---|---|---|---|---|---|
+| D5 | ~150 Pa (θ 4.7) | ≥310 (θ 6.7) | 142 (θ 4.5) | 596 (θ 9.3) | 4.2 |
+| G5 | ~230 (θ 4.3) | ≥720 (θ 7.5) | 227 (θ 4.3) | 1135 (θ 9.6) | 5.0 |
+| B5 | ~285 (θ 3.7) | ≥880 (θ 6.5) | 328 (θ 4.0) | 1923 (θ 9.7) | 5.9 |
+
+- Starts are right; the low register lasts to θ ≈ 9.5 against ≤ 6.5–7.5. Pitch rises ~30 c per doubling of pressure in both, so the model's pitch spans (63–81 c) are wide only because its ranges are.
+- The recorded swells stop where the player felt the break coming, and no recording yet goes through a break, so the real breaks are only bounded from below. A recording through the breaks is needed before fitting.
+- The real whistle also sounds the octave at 85–130 Pa before low D speaks, as the model does at 80–110 Pa: the aeolian regime of Terrien et al. 2013, not a model fault.
+
+**No voicing setting narrows the ratio** (D5 3.8–4.5, B5 4.8–6.8 over convection 0.4–0.75, vortex ×0.5–4, gain 0.6–1, Strouhal 0.025–0.04, slow growth 0–0.8, spreading, bend, two stages). The loop has so much gain that both ends of a note's range are set by phase; the gain hardly moves them.
+
+- At jet gain ~0.3 the ranges come out as recorded (St 0.05: D5 127–271 Pa, ratio 2.1; B5 300–879, 2.9), but the notes fade to nothing at the top instead of breaking: the octave can't sound there.
+- The theory's jet (`jetModel` 1) breaks at θ 6.6–7.4, as the real whistle may, but starts at θ 2.7–3.4 (too soft) and its ratios are as wide (3.7–10). This is the standard model's known weakness (Auvray et al. 2012: regime changes right, onset not).
+- So in the model every register needs about the same θ to sound (~4.4, the octave's lowest coming down included), while the real whistle's octave must sound at θ ≈ 3.3–3.5 just after a break. Something lets the upper register work with more jet wavelengths across the window than the lower one; jet theory alone (a function of ωh/U, the same for both at the same θ) can't, so the candidates are acoustic (the drive grows with frequency, the second resonance's admittance) or in how the jet saturates.

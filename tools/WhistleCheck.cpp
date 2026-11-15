@@ -743,7 +743,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "swell")  // swell <file.wav|model:<note>> <preset> [pressure=<WhistleSim .csv>] [min=<s>] [voicing options]: brightness against breath, recorded swells and the model's
+    if (mode == "swell")  // swell <file.wav|model:<note>> <preset> [pressure=<WhistleSim .csv>] [min=<s>] [track] [voicing options]: brightness against breath, recorded swells and the model's
     {
         // A swell: one note blown from as soft as it speaks to just before it breaks. The recording has no pressure,
         // so both are compared by level below the swell's loudest point; the model's pressure is shown alongside, and
@@ -1062,6 +1062,26 @@ int main (int argc, char* argv[])
         };
         for (auto& s : swells)
             for (auto& f : s.frames) f.pressure = pressureAtSeconds (f.t);
+
+        // track: the whole recording every 50 ms, mouth pressure against pitch and level, to find where the real
+        // instrument breaks (a pitch jump of about an octave or more while the pressure rises).
+        for (int k = 4; k < argc; ++k)
+            if (juce::String (argv[k]) == "track")
+            {
+                std::printf ("    time     Pa    pitch (Hz, clarity)   level dB\n");
+                const auto hop = (size_t) (0.05 * recordingRate);
+                for (size_t end = (size_t) (0.12 * recordingRate); end < recorded.size(); end += hop)
+                {
+                    const std::vector<float> chunk (recorded.begin() + (long) (end - (size_t) (0.12 * recordingRate)), recorded.begin() + (long) end);
+                    double clarity = 0.0;
+                    const double f = measurePitch (chunk, recordingRate, clarity);
+                    const double level = levelDb (recorded, end - hop, end);
+                    if (level < -50.0) continue;
+                    std::printf ("  %7.2f  %5.0f   %7.1f %-6s (%.2f)   %6.1f\n", (double) end / recordingRate, pressureAtSeconds ((double) end / recordingRate - 0.025),
+                                 clarity > 0.8 ? f : 0.0, clarity > 0.8 ? noteName (f).c_str() : "-", clarity, level);
+                }
+                return 0;
+            }
 
         std::printf ("%s: %d swell(s); against %s.\n"
                      "Rows: level below the swell's loudest point. Pitch in cents re the swell's median; bright = mean of H7-H10 (dB re H1).\n",
@@ -2942,6 +2962,143 @@ int main (int argc, char* argv[])
                     std::printf ("  %s %.0f-%.0f", sgm.reg == 0 ? "-" : std::to_string (sgm.reg).c_str(), sgm.from, sgm.to);
                 std::printf ("\n");
             }
+        }
+        return 0;
+    }
+
+    if (mode == "ranges")  // ranges [preset] [notes=D5,-oxxxxx-,...] [rate=<%/s>] [trace] [voicing options]: each note's start, break and pitch span at a player's swell
+    {
+        // A player's swell, not breath's fast sweep: the pressure rises 15 % a second (the real swells:
+        // Real-examples/Golden-pressure-1-swells-*, D5 150 -> 300 Pa in ~5 s), as rising ramps faster than a few
+        // hundred Pa/s hold the low register longer (Terrien et al. 2015). Then back down at the same rate.
+        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
+        auto g = presets()[index];
+        windwayArgs (argc, argv, 3, g);
+        auto voicing = presetVoicing (index);
+        voicing.windwayMass = windwayMass;
+        voicing.windwayFriction = windwayFriction;
+        jetVoicingArgs (argc, argv, 3, voicing);
+        voicing.vortexLoss *= vortexArg;
+        double perSecond = 0.15;
+        juce::StringArray wanted;
+        for (int k = 3; k < argc; ++k)
+        {
+            const juce::String arg (argv[k]);
+            if (arg.startsWith ("rate=")) perSecond = arg.fromFirstOccurrenceOf ("=", false, false).getDoubleValue() / 100.0;
+            if (arg.startsWith ("notes=")) wanted = juce::StringArray::fromTokens (arg.fromFirstOccurrenceOf ("=", false, false), ",", "");
+        }
+        constexpr double rate = 48000.0, lo = 80.0, hi = 4000.0;
+        const double sweep = std::log (hi / lo) / std::log (1.0 + perSecond);
+        std::printf ("%s: breath from %.0f to %.0f Pa and back, %.0f %% a second (%.0f s each way). Pressures where the low\n"
+                     "register starts (held 50 ms), where it breaks upwards, where it returns coming down, and its pitch at\n"
+                     "start and break. f: fades out instead of breaking. Squeaks: other registers (resonance@Pa) below the start.\n\n  note   fingering   starts   breaks   ratio   returns    pitch at start  at break   span  squeaks\n",
+                     g.name.toRawUTF8(), lo, hi, 100.0 * perSecond, sweep);
+        for (const auto& c : chartFor (g.chart))
+        {
+            const auto open = c.openness (g);
+            const auto res = resonances (g, open, lowestNote (g) * 0.6, 8000.0);
+            if (res.empty())
+                continue;
+            const auto name = noteName (res[0] * std::pow (2.0, (c.reg - 1)));
+            if (wanted.isEmpty() ? c.reg != 1 : ! (wanted.contains (juce::String (name)) || wanted.contains (juce::String (c.holePattern (g)))))
+                continue;
+            const size_t base = (size_t) (c.reg - 1);  // The resonance this chart note plays (vented second-octave notes: 2)
+            auto pressureAt = [=] (double t)
+            {
+                if (t < sweep) return lo * std::pow (hi / lo, t / sweep);
+                return hi * std::pow (lo / hi, std::min (1.0, (t - sweep) / sweep));
+            };
+            const auto out = playGesture (g, voicing, open, pressureAt, 2.0 * sweep, rate);
+            // The register every 10 ms (0 = none clear), and the pitch against the played resonance.
+            struct Frame { double p; int reg; double cents; bool rising; };
+            std::vector<Frame> frames;
+            const auto window = (size_t) (0.04 * rate);
+            for (double t = 0.12; t < 2.0 * sweep - 0.01; t += 0.01)
+            {
+                const auto end = (size_t) (t * rate);
+                int reg = 0;
+                double f = 0.0;
+                if (levelDb (out, end - window, end) > -45.0)
+                {
+                    const auto length = (size_t) (0.1 * rate + rate / 120.0) + 4;  // What measurePitch needs
+                    const std::vector<float> chunk (out.begin() + (long) (end - length), out.begin() + (long) end);
+                    double clarity = 0.0;
+                    f = measurePitch (chunk, rate, clarity);
+                    for (size_t r = 0; f > 0.0 && clarity > 0.8 && r < res.size(); ++r)
+                        if (std::abs (1200.0 * std::log2 (f / res[r])) < 80.0)
+                            reg = (int) r + 1;
+                }
+                frames.push_back ({ pressureAt (t - 0.03), reg, f > 0.0 ? 1200.0 * std::log2 (f / res[base]) : 0.0, t < sweep });
+            }
+            for (int k = 3; k < argc; ++k)
+                if (juce::String (argv[k]) == "trace")
+                    for (size_t i = 0; i < frames.size(); i += 25)
+                        std::printf ("    %s %6.0f Pa  register %d  %+5.0f c\n", frames[i].rising ? "up  " : "down", frames[i].p, frames[i].reg, frames[i].cents);
+            // The note's main stretch each way: the longest run on its resonance, bridging gaps under 30 ms.
+            auto longestRun = [&] (bool rising)
+            {
+                size_t bestFrom = 0, bestTo = 0, from = 0, gap = 0;
+                bool inRun = false;
+                for (size_t i = 0; i < frames.size(); ++i)
+                {
+                    if (frames[i].rising != rising) continue;
+                    const bool on = frames[i].reg == (int) base + 1;
+                    if (on && ! inRun) { inRun = true; from = i; }
+                    if (on) gap = 0;
+                    else if (inRun && ++gap > 3) inRun = false;
+                    if (inRun && on && i - from > bestTo - bestFrom) { bestFrom = from; bestTo = i; }
+                }
+                return std::make_pair (bestFrom, bestTo);
+            };
+            const auto [upFrom, upTo] = longestRun (true);
+            const auto [downFrom, downTo] = longestRun (false);
+            if (upTo <= upFrom)
+            {
+                std::printf ("  %-5s  %s  doesn't play\n", name.c_str(), c.holePattern (g).c_str());
+                continue;
+            }
+            // Broken upwards if the next frames play a higher resonance.
+            int after = 0;
+            for (size_t i = upTo + 1; i < frames.size() && i < upTo + 8 && frames[i].rising; ++i)
+                after = std::max (after, frames[i].reg);
+            const bool broke = after > (int) base + 1;
+            // Pitch a little above the start (a note that has just begun is sharp until it builds up) and a little below
+            // the break, as the swells' measured ones (WhistleCheck swell): their ends are transients.
+            auto pitchBetween = [&] (double fromPa, double toPa)
+            {
+                std::vector<double> cents;
+                for (size_t i = upFrom; i <= upTo; ++i)
+                    if (frames[i].p >= fromPa && frames[i].p <= toPa && frames[i].reg == (int) base + 1) cents.push_back (frames[i].cents);
+                std::sort (cents.begin(), cents.end());
+                return cents.empty() ? 0.0 : cents[cents.size() / 2];
+            };
+            const double startPitch = pitchBetween (1.1 * frames[upFrom].p, 1.2 * frames[upFrom].p);
+            const double breakPitch = pitchBetween (0.85 * frames[upTo].p, 0.95 * frames[upTo].p);
+            // Where the low register ends going up: a break (a higher register follows), or it fades (f) to no clear note.
+            char breaks[16] = "-", ratio[16] = "-", returns[16] = "-";
+            if (frames[upTo].rising && upTo + 1 < frames.size() && frames[upTo + 1].rising)
+            {
+                std::snprintf (breaks, sizeof (breaks), broke ? "%.0f" : "%.0f f", frames[upTo].p);
+                std::snprintf (ratio, sizeof (ratio), "%.2f", frames[upTo].p / frames[upFrom].p);
+            }
+            if (downTo > downFrom)
+                std::snprintf (returns, sizeof (returns), "%.0f", frames[downFrom].p);
+            // Squeaks: another register held 50 ms or more below the start, going up or coming down.
+            juce::String squeaks;
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                int run2 = 0, reg2 = 0;
+                for (size_t i = 0; i < frames.size(); ++i)
+                {
+                    const bool below = pass == 0 ? frames[i].rising && i < upFrom : ! frames[i].rising && i > downTo;
+                    const int r = below && frames[i].reg > 0 && frames[i].reg != (int) base + 1 ? frames[i].reg : 0;
+                    run2 = r != 0 && r == reg2 ? run2 + 1 : (r != 0 ? 1 : 0);
+                    reg2 = r;
+                    if (run2 == 5) squeaks << " " << r << "@" << juce::String (frames[i].p, 0);
+                }
+            }
+            std::printf ("  %-5s  %s  %6.0f   %6s   %5s   %6s       %+5.0f c       %+5.0f c    %4.0f c  %s\n", name.c_str(), c.holePattern (g).c_str(),
+                         frames[upFrom].p, breaks, ratio, returns, startPitch, breakPitch, breakPitch - startPitch, squeaks.toRawUTF8());
         }
         return 0;
     }
