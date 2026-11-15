@@ -197,6 +197,15 @@ struct Voicing
     // Re_low being this. It lifts the low notes' start most (they speak at the lowest jet speeds), and lets a high
     // note speak with more of a jet wavelength across the window than a low one, as recorded. 0 = off.
     float jetLowReynolds = 0.0f;
+    // The jet's band-pass flattened above its centre: plus this x a high-pass at the centre (1 = as much gain above
+    // the centre as at it), rolled off from jetFlatTop x the centre up (2 poles; 0 = not rolled off). A real jet
+    // amplifies the pipe's higher resonances at least as much as the one near its band (jet theory: growth rises
+    // with frequency up to its cutoff), which is what lets an upper register hold on down to ~0.6 x the pressure
+    // where it took over (Real-examples/Golden-pressure-3-breaks-*: D6 back to D5 at ~335 Pa after breaking up at
+    // ~560). The plain band-pass dropped back at ~1.6 x that. The roll-off keeps the second octave's own harmonics
+    // (2 x the centre and up) from brightening it. 0 = the plain band-pass.
+    float jetFlatAbove = 0.0f;
+    float jetFlatTop = 0.0f;
     // A steady sideways push on the jet as it crosses the window, as the pressure difference across it that would
     // give it (Pa; positive bends the jet out of the pipe, which is the same as moving the edge further in). A thin
     // jet under a pressure difference dp is displaced by dp W^2 / (2 rho h U^2) at the edge, so the bend is large

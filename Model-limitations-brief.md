@@ -440,7 +440,7 @@ Every existing preset plays sample for sample as before, except the Generation's
 **No single voicing setting narrows the ratio** (D5 3.8–4.5, B5 4.8–6.8 over convection 0.4–0.75, vortex ×0.5–4, gain 0.6–1, Strouhal 0.025–0.04, slow growth 0–0.8, spreading, bend, edge offset, window and wall loss). The loop has so much gain that both ends of a note's range are set by phase; the gain hardly moves them. Several together do (below), but only by changing the note's character.
 
 - At jet gain ~0.3 the ranges come out as recorded (St 0.05: D5 127–271 Pa, ratio 2.1; B5 300–879, 2.9), but the notes fade to nothing at the top instead of breaking: the octave can't sound there.
-- The theory's jet (`jetModel` 1) breaks at θ 6.6–7.4, as the real whistle may, but starts at θ 2.7–3.4 (too soft) and its ratios are as wide (3.7–10). This is the standard model's known weakness (Auvray et al. 2012: regime changes right, onset not).
+- The theory's jet (`jetModel` 1, cutoff 0.25, gain 0.1: D5 81–301 Pa, G5 121–595, B5 185–1066) breaks at θ 6.6–7.2 but starts at θ 3.0–3.4 (too soft), and its ratios are as wide (3.7–5.8). This is the standard model's known weakness (Auvray et al. 2012: regime changes right, onset not).
 - So in the model every register needs about the same θ to sound (~4.4, the octave's lowest coming down included), while the real whistle's octave must sound at θ ≈ 3.3–3.5 just after a break. Something lets the upper register work with more jet wavelengths across the window than the lower one; jet theory alone (a function of ωh/U, the same for both at the same θ) can't, so the candidates are acoustic (the drive grows with frequency, the second resonance's admittance) or in how the jet saturates.
 
 **What narrows the ranges, and what it costs** (`ranges`, then `swell ... pressure=` scored as in the fits):
@@ -457,3 +457,20 @@ Both get the ranges about right, but the low note then peaks in the middle of it
 - **Tried and removed:** a hybrid jet with the band-pass's gain but a convected wave's phase (the theory's dispersion, no band-pass phase). It widened the ranges (D5 118–704, B5 253–2615): the band-pass's phase narrows a range rather than widening it.
 - **Kept, off by default:** `jetLowReynolds` (`lowre=`), the jet's amplification × 1 / (1 + (Re_low/Re)^4). Real notes all start at Re 1000–1700. On the theory's jet at 1000 it lifts D5's start (81 → 141 Pa) but hardly G5's or B5's, whose soft starts come from the tilt's large gain.
 - **Next:** a jet with the theory's rise from fundamental to octave, limited at soft breath (a cutoff that rises with the jet's speed, or the low-Reynolds factor), with the overall gain low enough that a note is only just above threshold where it starts. Fit it once a recording goes through the breaks.
+
+### 11.1 Through the breaks (2026-11-15, later)
+
+A recording through the breaks (`Golden-pressure-3-breaks-*`: low D, G and B blown up into the octave, on D into the third register, and back down, with the breath measured) overturns the premise above: the swells had stopped well short of the breaks (D5 at ~310 Pa; it breaks at 505–657). With the model blown with the same breath (`swell ... follow=`):
+
+| | real | band-pass jet | flattened jet ("real pressure and breaks") |
+|---|---|---|---|
+| D5 → D6 | 505–657 Pa | 636–693 | ~0.98 × real |
+| D6 → D5 | 325–337 | 439–534 | ~1.25 × real over all returns |
+| G5 → G6 / back | 816, 994 / 634, 715 | 1133, 1191 / 877, 905 | |
+| B5 → B6 / back | ~2020 / 997, 1122 | ~2020 / 1635, 1663 | |
+| D6 → A6 | ~1560 | not reached | ~1.01 × real |
+
+- **The real fault was the way down:** the real upper registers hold on to θ = U/(fW) ≈ 3.3–3.5, the band-pass jet's only to ~4.0–4.4, about where any of its registers starts. A higher register needs more of the jet's gain than the band-pass gives it, as jet theory has (its growth rises with frequency).
+- **Flattening the band-pass above its centre** (`jetFlatAbove` 1) gives that: on the measured breath the returns and the third register come out within ~5 %, the breaks a little early. This was tried on 2026-11-10 and left out for "octave breaks ~30 % lower" and soft-breath squeaks; against the measured breaks, lower was right, and the real whistle squeaks the octave at soft breath too (D6 at 85–130 Pa before D5 speaks).
+- Flat to the top it brightens the second octave (vented D6 H3 −16 dB, H5 −23, recorded −30 and −50), so it is rolled off from `jetFlatTop` × the centre; it also starts notes at a sigh, which `jetLowReynolds` (~1050) undoes. A search over these and the jet's other settings against three targets at once (tone in the swells, register changes on the measured breath, the note and pitch in a tune played with measured breath, `Golden-pressure-4-tune-Walley-Range-*`) gave the preset "real pressure and breaks": total 11.1 against the band-pass jet's 13.4; tone 6.9 (6.1), registers 1.5 (4.1), the tune's notes in the right register 91 % (85 %), 7 c sharp (1 c).
+- Still open: returns ~25 % high; tone a little worse than the band-pass voicing's; the tune's remaining misses are brief dropouts on A6/B6 and C natural (cross-fingered) playing C#.
