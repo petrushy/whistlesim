@@ -192,7 +192,7 @@ Voicing presetVoicing (size_t index)
             { "D whistle, wood", -2.8f }, { "D whistle, Goldie style (bright)", 0.3f }, { "D whistle, Goldie style", -2.2f },
             { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löfgren */, { "D whistle, Goldie (measured)", 0.0f },
             { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
-            { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
+            { "Soprano recorder in C (baroque fingering), real pressure", -0.4f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
         };
         for (const auto& l : levels)
             if (presets()[index].name.startsWith (l.nameStart))
@@ -200,6 +200,22 @@ Voicing presetVoicing (size_t index)
                 v.outputGainDb = l.gainDb;
                 break;
             }
+    }
+    if (index < presets().size() && presets()[index].name.startsWith ("Soprano recorder in C (baroque fingering), real pressure"))
+    {
+        // Played at the mouth pressures measured on a Moeck soprano (Real-examples/Moeck-pressure-2-swells-*, WARBL's
+        // mouthpiece in the mouth beside it): the scale spans only ~2.5 x in pressure, low C ~60-190 Pa, the pinched
+        // E6-A6 ~200-430, where the voicing above needs ~8 x (E6 at 690 Pa, so it spoke only at the edge of its range).
+        // Searched against the swells, pressure by pressure (as the measured Goldie's real-pressure voicing; the
+        // Moeck's own ~20 c below A440 left out): the jet's band twice as high, less vortex loss and slow-jet growth.
+        // Score 9.5 against 12.9. The first octave and D6 are in tune at ~1-1.5 x the measured pressures; the pinched
+        // notes still need ~1.7 x (flat below that: the bore and holes are typical, not the Moeck's).
+        v.jetStrouhal = 0.06f;
+        v.vortexLoss = 0.35f;
+        v.slowJetGrowth = 0.37f;
+        // WARBL's breath straight through, as for the measured Goldie's real-pressure voicing.
+        v.breathScale = 0.505f;
+        v.breathCurve = 1.543f;
     }
     // A finger landing: the air it pushes in, and the body's resonances by material (first guesses until
     // measured: wood low and short, thin metal higher and ringing).
@@ -467,6 +483,14 @@ const std::vector<Geometry>& presets()
                               { true, 0.33764, 0.00784 }, { true, 0.40365, 0.01300 }, { true, 0.43356, 0.01113 }, { true, 0.48637, 0.00900 } } };
             }
             instruments.push_back (g);
+        }
+        // The soprano again, voiced for the mouth pressures measured on a Moeck soprano (presetVoicing), the edge
+        // further into the pipe (searched with it).
+        {
+            auto real = soprano;
+            real.name = "Soprano recorder in C (baroque fingering), real pressure";
+            real.edgeOffset = 0.0003;
+            instruments.push_back (real);
         }
 
         // Edge offsets found with the voicings in presetVoicing() (m, into the pipe).
