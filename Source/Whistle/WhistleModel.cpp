@@ -1,4 +1,5 @@
 #include "WhistleModel.h"
+#include "JetStability.h"
 
 #include <algorithm>
 #include <cmath>
@@ -195,6 +196,11 @@ void WhistleModel::setVoicing (const Voicing& v)
     breathCurve = v.breathCurve;
     jetSpreading = v.jetSpreading;
     jetBend = v.jetBend;
+    const bool newTaps = v.jetModel == 1 && (jetModel.load() != 1 || std::abs (jetCutoff.load() - v.jetCutoff) > 1.0e-6f);
+    jetModel = v.jetModel;
+    jetCutoff = v.jetCutoff;
+    if (newTaps)
+        setGeometry (getGeometry());  // Remake the jet's taps for the new cutoff
     fingerTap = v.fingerTap;
     fingerSoftness = v.fingerSoftness;
     bodyKnock = v.bodyKnock;
@@ -222,6 +228,8 @@ Voicing WhistleModel::getVoicing() const
     v.breathCurve = breathCurve.load();
     v.jetSpreading = jetSpreading.load();
     v.jetBend = jetBend.load();
+    v.jetModel = jetModel.load();
+    v.jetCutoff = jetCutoff.load();
     v.fingerTap = fingerTap.load();
     v.fingerSoftness = fingerSoftness.load();
     v.bodyKnock = bodyKnock.load();
@@ -390,6 +398,24 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
     out.jetGrowth = std::exp (out.jetGrowthExponent);
     out.referenceJetSpeed = (float) (presetLowestNote (g) * g.windwayHeight / 0.02);
     out.dipoleLength = (float) (4.0 / kPi * std::sqrt (2.0 * g.windwayHeight * g.windowLength));
+
+    // The theory's jet (jetModel 1), with the boundary layers of a jet at the lowest note's reference speed:
+    // Blasius along the windway, at most fully developed flow.
+    if (jetModel.load() == 1)
+    {
+        const double u = std::max (5.0, (double) out.referenceJetSpeed);
+        const double theta = std::min (0.067 * g.windwayHeight, 0.664 * std::sqrt (kKinematicViscosity * g.windwayLength / u));
+        const auto taps = jetImpulseResponse (g.windowLength / g.windwayHeight, theta / g.windwayHeight, out.jetTapStep, Config::kJetTaps,
+                                              (double) jetCutoff.load());
+        for (int k = 0; k < Config::kJetTaps; ++k)
+        {
+            // A half-Hann fade over the last quarter: the taps are cut where the response is near its end, and a hard
+            // cut would leave a step in the spectrum.
+            const double fade = k < Config::kJetTaps * 3 / 4 ? 1.0 : 0.5 + 0.5 * std::cos (kPi * (k - Config::kJetTaps * 3 / 4) / (Config::kJetTaps / 4.0));
+            out.jetTaps[(size_t) k] = (float) (taps[(size_t) k] * fade);
+        }
+        out.jetTapsCutoff = jetCutoff.load();
+    }
 }
 
 void WhistleModel::fingerLands (int hole, float speed)
@@ -589,7 +615,23 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float jetHalfWidth = 0.4f * h + jetSpreading.load (std::memory_order_relaxed) * turbulent * 0.1f * cfg.windowLength;
     // The slow jet's extra growth is for long waves (at and below the band centre), not for high resonances.
     jetBoostLow += jetBoostA * (filtered - jetBoostLow);
-    const float deflection = jetAmplification * h * (filtered + jetSlowBoost * jetBoostLow) / speed + turbulence * jetHalfWidth * std::min (1.0f, jetSpeed / 20.0f);
+    float grown = jetAmplification * (filtered + jetSlowBoost * jetBoostLow);
+    if (jetModel.load (std::memory_order_relaxed) == 1)
+    {
+        // The theory's jet: the window's sound over the last ~64 h / U, weighted by the jet's impulse response.
+        const float spacing = std::min (cfg.jetTapStep * h / speed * (float) rate, ((float) kJetLineSize - 8.0f) / (float) Config::kJetTaps);
+        float sum = 0.0f;
+        for (int k = 0; k < Config::kJetTaps; ++k)
+        {
+            const float at = 1.0f + (float) k * spacing;
+            const int tapWhole = (int) at;
+            const float tapFrac = at - (float) tapWhole;
+            sum += cfg.jetTaps[(size_t) k] * ((1.0f - tapFrac) * jetLine[(size_t) ((jetWrite - tapWhole) & (kJetLineSize - 1))]
+                                              + tapFrac * jetLine[(size_t) ((jetWrite - tapWhole - 1) & (kJetLineSize - 1))]);
+        }
+        grown = jetGain.load (std::memory_order_relaxed) * sum;
+    }
+    const float deflection = h * grown / speed + turbulence * jetHalfWidth * std::min (1.0f, jetSpeed / 20.0f);
     // A steady pressure difference across the jet bends it on its way: by dp W^2 / (2 rho h U^2) at the edge (a jet
     // of thickness h accelerated sideways by dp / (rho h) for W / U), so a slow jet meets the edge further off its
     // centre line than a fast one. Below the speed the lowest note is played at, the bend stays what it is there, and

@@ -84,6 +84,8 @@ public:
     std::atomic<float> breathScale { 1.0f };  // See Voicing (applied by the caller to WARBL's breath)
     std::atomic<float> breathCurve { 1.0f };  // See Voicing (the same)
     std::atomic<float> jetSpreading { 0.0f };  // See Voicing
+    std::atomic<int> jetModel { 0 };  // See Voicing
+    std::atomic<float> jetCutoff { 0.3f };  // See Voicing
     std::atomic<float> jetBend { 0.0f };  // See Voicing
     std::atomic<float> fingerTap { 0.0f }, fingerSoftness { 4.0f }, bodyKnock { 0.0f }, bodyPitch { 1000.0f }, bodyRing { 15.0f };  // See Voicing
 
@@ -193,6 +195,11 @@ private:
         float jetGrowthExponent = 0.0f;  // ln of jetGrowth: alpha_i W
         float referenceJetSpeed = 30.0f;  // m/s: the jet speed whose band centre (Strouhal 0.02) is the lowest note
         float dipoleLength = 0.0f;  // delta_d in the jet-drive pressure.
+        // jetModel 1: the theory's jet as taps, tap k at a delay of k jetTapStep h / U (see jetImpulseResponse).
+        static constexpr int kJetTaps = 64;
+        std::array<float, kJetTaps> jetTaps {};
+        float jetTapStep = 1.0f;
+        float jetTapsCutoff = 0.0f;  // The cutoff they were made with
     };
 
     void buildConfig (const Geometry&, Config&) const;
