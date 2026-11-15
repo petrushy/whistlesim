@@ -123,7 +123,7 @@ Voicing presetVoicing (size_t index)
         // The jet flattened above its band (Voicing::jetFlatAbove) gives the upper registers their gain; less of it
         // at low Reynolds numbers keeps the low notes from starting at a sigh. Searched against the swells (tone),
         // the breaks recording (where registers change, on the measured breath) and a tune played with measured
-        // breath (Golden-pressure-4-tune-Walley-Range-*: the note played, and its pitch): breaks up 0.99 x the real
+        // breath (Golden-pressure-4-tune-Whalley-Range-*: the note played, and its pitch): breaks up 0.99 x the real
         // pressure, third register 1.01 x, falling back 1.26 x (was 1.44 x); the tune's notes in the right register
         // 91 % of the time (was 85 %), 7 c sharp.
         v.jetFlatAbove = 1.0f;
