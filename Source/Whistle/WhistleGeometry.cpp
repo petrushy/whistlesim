@@ -95,6 +95,23 @@ Voicing presetVoicing (size_t index)
         v.slowJetGrowth = 0.52f;
         v.jetBend = 8.7f;
     }
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie (measured), real pressure"))
+    {
+        // The same whistle played at the mouth pressures measured on it (Real-examples/Goldie-pressure-1-swells-*,
+        // WARBL's mouthpiece in the mouth beside the whistle's): D5 sounds from ~150 to ~310 Pa, G5 ~190-700, B5
+        // ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that and holds each note 3-4 x past the real
+        // break. Searched against those swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's
+        // band higher (its notes speak and break at lower pressure), a little less jet gain and bend. Its first
+        // octave is in tune within ~1.5 x of the measured scale's pressures; it still holds notes past the real break.
+        v.jetStrouhal = 0.03f;
+        v.jetGain = 0.76f;
+        v.jetBend = 5.7f;
+        v.slowJetGrowth = 0.42f;
+        // WARBL's breath straight through: the breath response's ~2 x (outputMax 4930 Pa at 2500 Pa in, curve 34,
+        // exponent 0.648) undone, so the model gets the mouth pressure WARBL measures (less its 10 Pa threshold).
+        v.breathScale = 0.505f;
+        v.breathCurve = 1.543f;
+    }
     // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
     // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Goldie style's).
@@ -386,6 +403,17 @@ const std::vector<Geometry>& presets()
                 bright.name = "D whistle, Goldie style (bright)";
                 bright.edgeOffset = 0.00005;
                 instruments.insert (instruments.begin() + (long) i + 1, { bright, generation, lofgren });
+                break;
+            }
+        // The measured Goldie again, voiced for the mouth pressures measured on it (presetVoicing), with the edge
+        // on the jet's centre line (searched with it).
+        for (size_t i = 0; i < instruments.size(); ++i)
+            if (instruments[i].name == "D whistle, Goldie (measured)")
+            {
+                auto real = instruments[i];
+                real.name = "D whistle, Goldie (measured), real pressure";
+                real.edgeOffset = 0.0;
+                instruments.insert (instruments.begin() + (long) i + 1, real);
                 break;
             }
         // The low D voiced after its RODE recording: the edge further into the pipe for the strong second harmonic
