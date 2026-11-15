@@ -1048,6 +1048,32 @@ int main (int argc, char* argv[])
                 }
                 std::printf ("\n");
             }
+            // In one line each: over the run of tone, the pitch span (5th percentile to the top, cents), the level span
+            // (5th percentile to the loudest, dB), and the brightness (H7-H10 re H1) in the softest fifth of the run's
+            // pitch range and within 10 c of its top.
+            auto summary = [&] (const char* who, const std::vector<Frame>& frames)
+            {
+                std::vector<const Frame*> run;
+                for (const auto& band : bands (frames)) for (const auto* f : band) run.push_back (f);
+                if (run.size() < 5) { std::printf ("  %-9s (no run of tone)\n", who); return; }
+                std::vector<double> hz, level;
+                for (const auto* f : run) { hz.push_back (f->hz); level.push_back (f->level); }
+                std::sort (hz.begin(), hz.end());
+                std::sort (level.begin(), level.end());
+                const double top = hz[(size_t) (0.98 * (double) (hz.size() - 1))], low = hz[(size_t) (0.05 * (double) (hz.size() - 1))];
+                const double span = 1200.0 * std::log2 (top / low);
+                std::vector<double> soft, high;
+                for (const auto* f : run)
+                {
+                    const double below = 1200.0 * std::log2 (top / f->hz), bright = (f->h[7] + f->h[8] + f->h[9] + f->h[10]) / 4.0;
+                    if (below <= 10.0) high.push_back (bright);
+                    if (below >= 0.8 * span) soft.push_back (bright);
+                }
+                std::printf ("  %-9s pitch span %4.0f c, level span %5.1f dB, bright soft %5.0f top %5.0f dB\n", who, span,
+                             level.back() - level[(size_t) (0.05 * (double) (level.size() - 1))], median (soft), median (high));
+            };
+            summary ("recording", s.frames);
+            summary ("model", model);
             const auto [recP, recTop] = pitchBands (s.frames);
             const auto [modP, modTop] = pitchBands (model);
             std::printf ("   pitch  | recording: frames  level   H2  H3  H5 bright | model: frames  level   H2  H3  H5 bright     Pa\n");
