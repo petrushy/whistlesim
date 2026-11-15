@@ -193,7 +193,7 @@ Voicing presetVoicing (size_t index)
             { "D whistle, wood", -2.8f }, { "D whistle, Goldie style (bright)", 0.3f }, { "D whistle, Goldie style", -2.2f },
             { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löfgren */, { "D whistle, Goldie (measured)", 0.0f },
             { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
-            { "Soprano recorder in C (baroque fingering), real pressure", 1.2f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
+            { "Soprano recorder in C (baroque fingering), real pressure", -1.0f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
         };
         for (const auto& l : levels)
             if (presets()[index].name.startsWith (l.nameStart))
@@ -209,13 +209,13 @@ Voicing presetVoicing (size_t index)
         // E6-A6 ~200-430, where the voicing above needs ~8 x (E6 at 690 Pa, so it spoke only at the edge of its range).
         // Searched against the swells, pressure by pressure (as the measured Goldie's real-pressure voicing; the
         // Moeck's own ~20 c below A440 left out): the jet's band twice as high, less vortex loss and slow-jet growth.
-        // A band that high on a jet of fixed thickness cut the low notes short (low C broke to the octave at ~150 Pa,
-        // the real one holds past 198; played at ~110): hard to play clean. The jet thins as it speeds up (jetThinning
-        // 1), so the low notes keep their range (low C ~90-200 Pa) while the pinched notes speak from ~280-400 Pa.
-        // Score 10.8 against 12.9 (9.1 with thinning 0.5, whose low C breaks at ~170 Pa: less playable). The pinched
-        // notes are flat at the real pressures: the bore and holes are typical, not the Moeck's.
-        v.jetStrouhal = 0.075f;
-        v.jetThinning = 1.0f;
+        // The search put the band at Strouhal 0.06-0.075 (with jet thinning) so that the pinched notes speak at the
+        // real pressures; played, that overblew far too easily (G5 to the octave at ~300 Pa, played clean at 359 on
+        // the Moeck; low C to its twelfth at ~400, a normal second-octave breath). The pinched notes' trouble is in
+        // the bore and holes (typical, not the Moeck's), which the jet can't make up for. At 0.04 the first octave
+        // keeps the Moeck's ranges (low C ~70-240 Pa, G5 ~120 to beyond 500); the pinched notes need ~400 Pa
+        // (the Moeck's from ~210).
+        v.jetStrouhal = 0.04f;
         v.vortexLoss = 0.27f;
         v.jetGain = 1.15f;
         v.slowJetGrowth = 0.47f;
