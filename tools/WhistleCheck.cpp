@@ -742,7 +742,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "swell")  // swell <file.wav|model:<note>> <preset> [voicing options]: brightness against breath, recorded swells and the model's
+    if (mode == "swell")  // swell <file.wav|model:<note>> <preset> [pressure=<WhistleSim .csv>] [min=<s>] [voicing options]: brightness against breath, recorded swells and the model's
     {
         // A swell: one note blown from as soft as it speaks to just before it breaks. The recording has no pressure,
         // so both are compared by level below the swell's loudest point; the model's pressure is shown alongside, and
@@ -868,6 +868,9 @@ int main (int argc, char* argv[])
 
         // Swells in the recording: runs of >= 1 s with one pitch (within 150 c), within 45 dB of the loudest.
         struct Swell { double from = 0.0, to = 0.0, hz = 0.0; std::vector<Frame> frames; };
+        double minSeconds = 1.0;  // min=<s>: the shortest run that counts as a note (shorter notes in a tune)
+        for (int k = 4; k < argc; ++k)
+            if (juce::String (argv[k]).startsWith ("min=")) minSeconds = juce::String (argv[k]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         std::vector<Swell> swells;
         double recordingRate = 48000.0;
         std::vector<float> recorded;
@@ -941,7 +944,7 @@ int main (int argc, char* argv[])
                 if (pitch[i] <= 0.0) { ++i; continue; }
                 size_t j = i + 1;
                 while (j < pitch.size() && pitch[j] > 0.0 && std::abs (1200.0 * std::log2 (pitch[j] / pitch[i])) < 150.0) ++j;
-                if (j - i >= 50)
+                if ((double) (j - i) * 0.02 >= minSeconds)
                 {
                     std::vector<double> run (pitch.begin() + (long) i, pitch.begin() + (long) j);
                     std::sort (run.begin(), run.end());
@@ -957,6 +960,107 @@ int main (int argc, char* argv[])
                 i = j;
             }
         }
+
+        // pressure=<WhistleSim recording .csv>: the mouth pressure WARBL measured while the recording was made (WARBL's
+        // mouthpiece in the mouth beside the whistle's, its vent taped). It is lined up with the sound by its envelope.
+        std::vector<double> pressureMs, pressurePa;  // WARBL's clock (ms) and mouth pressure (Pa)
+        double mapA = 0.0, mapB = 1.0;              // WARBL ms = mapA + mapB * (recording s * 1000)
+        for (int k = 4; k < argc; ++k)
+            if (juce::String (argv[k]).startsWith ("pressure="))
+            {
+                const juce::File csvFile = juce::File::getCurrentWorkingDirectory().getChildFile (juce::String (argv[k]).fromFirstOccurrenceOf ("=", false, false));
+                juce::StringArray lines;
+                csvFile.readLines (lines);
+                double pascalPerCount = 0.415148;
+                std::vector<int> counts;
+                int timeColumn = -1, pressureColumn = -1;
+                for (const auto& line : lines)
+                {
+                    if (line.startsWith ("#"))
+                    {
+                        if (line.contains ("pascal_per_count")) pascalPerCount = line.fromFirstOccurrenceOf ("pascal_per_count", false, false).trim().getDoubleValue();
+                        continue;
+                    }
+                    const auto cells = juce::StringArray::fromTokens (line, ",", "");
+                    if (timeColumn < 0) { timeColumn = cells.indexOf ("device_ms"); pressureColumn = cells.indexOf ("pressure14"); continue; }
+                    if (cells.size() <= pressureColumn) continue;
+                    pressureMs.push_back (cells[timeColumn].getDoubleValue());
+                    counts.push_back (cells[pressureColumn].getIntValue());
+                }
+                if (counts.empty()) { std::printf ("No pressure frames in %s\n", csvFile.getFullPathName().toRawUTF8()); return 1; }
+                // Zero: the reading WARBL rests at most often (not blown), which can drift a few counts from its calibration.
+                std::map<int, int> histogram;
+                for (int c : counts) ++histogram[c];
+                const int rest = std::max_element (histogram.begin(), histogram.end(), [] (auto& a, auto& b) { return a.second < b.second; })->first;
+                for (int c : counts) pressurePa.push_back ((c - rest) * pascalPerCount);
+
+                // Envelope of the sound and the pressure on a 10 ms grid; the lag that best matches them, found
+                // separately at the start and at the end (WARBL's clock and the recorder's drift apart a little).
+                const size_t hop = (size_t) (0.01 * recordingRate);
+                std::vector<double> envelope;
+                for (size_t i = 0; i + hop <= recorded.size(); i += hop)
+                {
+                    double sum = 0.0;
+                    for (size_t k2 = i; k2 < i + hop; ++k2) sum += (double) recorded[k2] * recorded[k2];
+                    envelope.push_back (std::sqrt (sum / (double) hop));
+                }
+                const double p0 = pressureMs.front();
+                std::vector<double> grid ((size_t) ((pressureMs.back() - p0) / 10.0) + 1, 0.0);
+                std::vector<int> gridCount (grid.size(), 0);
+                for (size_t i = 0; i < pressureMs.size(); ++i)
+                {
+                    const auto cell = (size_t) ((pressureMs[i] - p0) / 10.0);
+                    grid[cell] += std::max (0.0, pressurePa[i]);
+                    ++gridCount[cell];
+                }
+                for (size_t i = 0; i < grid.size(); ++i) grid[i] = gridCount[i] > 0 ? grid[i] / gridCount[i] : 0.0;
+                auto bestLag = [&] (size_t from, size_t to)  // Audio cells [from, to): pressure cell = audio cell + lag
+                {
+                    long best = 0;
+                    double bestScore = -1.0e30;
+                    for (long lag = -(long) envelope.size(); lag < (long) grid.size(); ++lag)
+                    {
+                        double sxy = 0.0, sxx = 0.0, syy = 0.0;
+                        size_t overlap = 0;
+                        for (size_t i = from; i < to; ++i)
+                        {
+                            const long j = (long) i + lag;
+                            if (j < 0 || j >= (long) grid.size()) continue;
+                            ++overlap;
+                            sxy += envelope[i] * grid[(size_t) j];
+                            sxx += envelope[i] * envelope[i];
+                            syy += grid[(size_t) j] * grid[(size_t) j];
+                        }
+                        if (overlap < (to - from) * 9 / 10) continue;  // The whole window must lie within the pressure log
+                        const double score = sxx > 0.0 && syy > 0.0 ? sxy / std::sqrt (sxx * syy) : -1.0;
+                        if (score > bestScore) { bestScore = score; best = lag; }
+                    }
+                    return std::make_pair (best, bestScore);
+                };
+                const size_t window = std::min (envelope.size(), (size_t) 2000);  // 20 s
+                const auto [lagStart, scoreStart] = bestLag (0, window);
+                const auto [lagEnd, scoreEnd] = bestLag (envelope.size() - window, envelope.size());
+                // WARBL ms at audio cell i: p0 + 10 (i + lag), the lag moving linearly from the start's to the end's.
+                const double iStart = window / 2.0, iEnd = (double) envelope.size() - window / 2.0;
+                mapB = 1.0 + (double) (lagEnd - lagStart) / std::max (1.0, iEnd - iStart);
+                mapA = p0 + 10.0 * ((double) lagStart - (mapB - 1.0) * iStart);
+                std::printf ("Pressure from %s: %d frames, zero at %d counts, lined up with the sound (match %.2f at the start, %.2f at the end;"
+                             " clocks differ by %+.0f ppm)\n", csvFile.getFileName().toRawUTF8(), (int) counts.size(), rest, scoreStart, scoreEnd,
+                             (mapB - 1.0) * 1.0e6);
+            }
+        // Mouth pressure at a time in the recording (s): the mean over the 20 ms around it.
+        auto pressureAtSeconds = [&] (double seconds)
+        {
+            if (pressureMs.empty()) return 0.0;
+            const double ms = mapA + mapB * seconds * 1000.0;
+            auto lo = std::lower_bound (pressureMs.begin(), pressureMs.end(), ms - 10.0), hi = std::upper_bound (pressureMs.begin(), pressureMs.end(), ms + 10.0);
+            if (lo >= hi) return std::nan ("");
+            double sum = 0.0;
+            for (auto it = lo; it != hi; ++it) sum += pressurePa[(size_t) (it - pressureMs.begin())];
+            return sum / (double) (hi - lo);
+        };
+        for (auto& s : swells)
+            for (auto& f : s.frames) f.pressure = pressureAtSeconds (f.t);
 
         std::printf ("%s: %d swell(s); against %s.\n"
                      "Rows: level below the swell's loudest point. Pitch in cents re the swell's median; bright = mean of H7-H10 (dB re H1).\n",
@@ -1074,6 +1178,99 @@ int main (int argc, char* argv[])
             };
             summary ("recording", s.frames);
             summary ("model", model);
+            if (! pressureMs.empty())
+            {
+                // By the measured mouth pressure: the recording's tone in bands 19 % apart (a quarter of a doubling),
+                // and the model held steady at each band's pressure (0.5 s, the last 0.25 s measured). Pitch in cents from
+                // the chart note; level re the loudest band; bright = mean of H7-H10.
+                std::vector<const Frame*> run;
+                for (const auto& band : bands (s.frames)) for (const auto* f : band) if (std::isfinite (f->pressure)) run.push_back (f);
+                if (run.size() < 5) continue;
+                std::vector<double> ps;
+                for (const auto* f : run) ps.push_back (f->pressure);
+                std::sort (ps.begin(), ps.end());
+                std::printf ("  measured mouth pressure while the tone sounds: %.0f Pa (5th percentile) to %.0f Pa (95th), median %.0f\n",
+                             ps[(size_t) (0.05 * (double) (ps.size() - 1))], ps[(size_t) (0.95 * (double) (ps.size() - 1))], ps[ps.size() / 2]);
+                std::map<int, std::vector<const Frame*>> byPressure;
+                for (const auto* f : run)
+                    if (f->pressure > 10.0) byPressure[(int) std::floor (4.0 * std::log2 (f->pressure / 10.0))].push_back (f);
+                struct Row { double pa, level, cents, h2, h3, h5, bright; bool ok; };
+                std::vector<std::pair<Row, Row>> rows;
+                double recTop = -200.0, modTop = -200.0;
+                for (const auto& [band, fs] : byPressure)
+                {
+                    if (fs.size() < 3) continue;
+                    std::vector<double> pa, level, cents, h2, h3, h5, bright;
+                    for (const auto* f : fs)
+                    {
+                        pa.push_back (f->pressure); level.push_back (f->level); cents.push_back (1200.0 * std::log2 (f->hz / nominal));
+                        h2.push_back (f->h[2]); h3.push_back (f->h[3]); h5.push_back (f->h[5]);
+                        bright.push_back ((f->h[7] + f->h[8] + f->h[9] + f->h[10]) / 4.0);
+                    }
+                    Row r { median (pa), median (level), median (cents), median (h2), median (h3), median (h5), median (bright), true };
+                    recTop = std::max (recTop, r.level);
+                    // The model held at that pressure
+                    constexpr double rate = 48000.0;
+                    WhistleModel m;
+                    m.setGeometry (g);
+                    m.prepare (rate);
+                    m.setVoicing (voicing);
+                    m.vortexLoss = voicing.vortexLoss;
+                    auto controls = controlsFor (c->openness (g));
+                    std::vector<float> out ((size_t) (0.5 * rate), 0.0f);
+                    const int block = (int) (rate * 0.002);
+                    for (int start = 0; start < (int) out.size(); start += block)
+                    {
+                        controls.mouthPressure = (float) (r.pa * std::min (1.0, start / (rate * 0.04)));
+                        m.setControls (controls);
+                        m.render (out.data() + start, std::min (block, (int) out.size() - start));
+                    }
+                    const auto mf = analyseFrames (std::vector<float> (out.end() - (long) (0.25 * rate), out.end()), rate, nominal, nullptr);
+                    std::vector<double> ml, mc, m2, m3, m5, mb;
+                    for (const auto& f : mf)
+                        if (f.hz > 0.0)
+                        {
+                            ml.push_back (f.level); mc.push_back (1200.0 * std::log2 (f.hz / nominal));
+                            m2.push_back (f.h[2]); m3.push_back (f.h[3]); m5.push_back (f.h[5]); mb.push_back ((f.h[7] + f.h[8] + f.h[9] + f.h[10]) / 4.0);
+                        }
+                    Row mr { r.pa, median (ml), median (mc), median (m2), median (m3), median (m5), median (mb), ! ml.empty() };
+                    if (mr.ok) modTop = std::max (modTop, mr.level);
+                    rows.emplace_back (r, mr);
+                }
+                std::printf ("     Pa  | recording: level cents   H2  H3  H5 bright | model: level cents   H2  H3  H5 bright\n");
+                for (const auto& [r, mr] : rows)
+                {
+                    std::printf ("  %5.0f  |          %+6.1f %+5.0f %4.0f %3.0f %3.0f %6.0f |", r.pa, r.level - recTop, r.cents, r.h2, r.h3, r.h5, r.bright);
+                    if (mr.ok) std::printf ("        %+6.1f %+5.0f %4.0f %3.0f %3.0f %6.0f\n", mr.level - modTop, mr.cents, mr.h2, mr.h3, mr.h5, mr.bright);
+                    else std::printf ("        (not this note)\n");
+                }
+                // The player stopped just before the break: the model shouldn't still hold the note well beyond that.
+                {
+                    const double beyond = 1.6 * ps[(size_t) (0.95 * (double) (ps.size() - 1))];
+                    constexpr double rate = 48000.0;
+                    WhistleModel m;
+                    m.setGeometry (g);
+                    m.prepare (rate);
+                    m.setVoicing (voicing);
+                    m.vortexLoss = voicing.vortexLoss;
+                    auto controls = controlsFor (c->openness (g));
+                    std::vector<float> out ((size_t) (0.5 * rate), 0.0f);
+                    const int block = (int) (rate * 0.002);
+                    for (int start = 0; start < (int) out.size(); start += block)
+                    {
+                        controls.mouthPressure = (float) (beyond * std::min (1.0, start / (rate * 0.04)));
+                        m.setControls (controls);
+                        m.render (out.data() + start, std::min (block, (int) out.size() - start));
+                    }
+                    int sounding = 0, total = 0;
+                    for (const auto& f : analyseFrames (std::vector<float> (out.end() - (long) (0.25 * rate), out.end()), rate, nominal, nullptr))
+                    {
+                        ++total;
+                        sounding += f.hz > 0.0 ? 1 : 0;
+                    }
+                    std::printf ("  beyond: at %.0f Pa (1.6 x the top) the model %s\n", beyond, sounding * 2 > total ? "still plays this note" : "has left it");
+                }
+            }
             const auto [recP, recTop] = pitchBands (s.frames);
             const auto [modP, modTop] = pitchBands (model);
             std::printf ("   pitch  | recording: frames  level   H2  H3  H5 bright | model: frames  level   H2  H3  H5 bright     Pa\n");
