@@ -437,8 +437,23 @@ Every existing preset plays sample for sample as before, except the Generation's
 - The recorded swells stop where the player felt the break coming, and no recording yet goes through a break, so the real breaks are only bounded from below. A recording through the breaks is needed before fitting.
 - The real whistle also sounds the octave at 85–130 Pa before low D speaks, as the model does at 80–110 Pa: the aeolian regime of Terrien et al. 2013, not a model fault.
 
-**No voicing setting narrows the ratio** (D5 3.8–4.5, B5 4.8–6.8 over convection 0.4–0.75, vortex ×0.5–4, gain 0.6–1, Strouhal 0.025–0.04, slow growth 0–0.8, spreading, bend, two stages). The loop has so much gain that both ends of a note's range are set by phase; the gain hardly moves them.
+**No single voicing setting narrows the ratio** (D5 3.8–4.5, B5 4.8–6.8 over convection 0.4–0.75, vortex ×0.5–4, gain 0.6–1, Strouhal 0.025–0.04, slow growth 0–0.8, spreading, bend, edge offset, window and wall loss). The loop has so much gain that both ends of a note's range are set by phase; the gain hardly moves them. Several together do (below), but only by changing the note's character.
 
 - At jet gain ~0.3 the ranges come out as recorded (St 0.05: D5 127–271 Pa, ratio 2.1; B5 300–879, 2.9), but the notes fade to nothing at the top instead of breaking: the octave can't sound there.
 - The theory's jet (`jetModel` 1) breaks at θ 6.6–7.4, as the real whistle may, but starts at θ 2.7–3.4 (too soft) and its ratios are as wide (3.7–10). This is the standard model's known weakness (Auvray et al. 2012: regime changes right, onset not).
 - So in the model every register needs about the same θ to sound (~4.4, the octave's lowest coming down included), while the real whistle's octave must sound at θ ≈ 3.3–3.5 just after a break. Something lets the upper register work with more jet wavelengths across the window than the lower one; jet theory alone (a function of ωh/U, the same for both at the same θ) can't, so the candidates are acoustic (the drive grows with frequency, the second resonance's admittance) or in how the jet saturates.
+
+**What narrows the ranges, and what it costs** (`ranges`, then `swell ... pressure=` scored as in the fits):
+
+| Voicing | D5 | G5 | B5 | Swell score (preset 6.8) |
+|---|---|---|---|---|
+| preset | 142–596 | 227–1135 | 328–1923 | 6.8 |
+| St 0.05, gain 0.5, slow 0 | 110–313 | 170–726 | 267–1226 | 11.6 |
+| two stages, St 0.04, gain 1.2 | 133–356 | 233–680 (fades) | 351–1113 (fades) | 11.7 |
+
+Both get the ranges about right, but the low note then peaks in the middle of its range and grows 5–6 dB quieter and duller towards the top, with its pitch climbing 50+ c (real D5: 22 c, louder and brighter all the way). The recordings say a real whistle's octave takes over a low note that is still healthy; these voicings only make the low note die sooner.
+
+- **Why:** the octave must have much more loop gain than the low note at the same breath. Jet theory gives the octave ~11 dB more growth than its fundamental (300 Pa: 18 against 29 dB over the window), less 6 dB for the receptivity, plus 6 dB for the drive; the band-pass gives it ~4 dB less, so ~2 dB in all. The theory's jet has that tilt, which is why its breaks come out right; its tilt also keeps rising at soft breath, which is why it starts notes too softly.
+- **Tried and removed:** a hybrid jet with the band-pass's gain but a convected wave's phase (the theory's dispersion, no band-pass phase). It widened the ranges (D5 118–704, B5 253–2615): the band-pass's phase narrows a range rather than widening it.
+- **Kept, off by default:** `jetLowReynolds` (`lowre=`), the jet's amplification × 1 / (1 + (Re_low/Re)^4). Real notes all start at Re 1000–1700. On the theory's jet at 1000 it lifts D5's start (81 → 141 Pa) but hardly G5's or B5's, whose soft starts come from the tilt's large gain.
+- **Next:** a jet with the theory's rise from fundamental to octave, limited at soft breath (a cutoff that rises with the jet's speed, or the low-Reynolds factor), with the overall gain low enough that a note is only just above threshold where it starts. Fit it once a recording goes through the breaks.
