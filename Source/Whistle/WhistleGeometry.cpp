@@ -98,11 +98,13 @@ Voicing presetVoicing (size_t index)
     if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden (measured), real pressure"))
     {
         // The same whistle played at the mouth pressures measured on it (Real-examples/Golden-pressure-1-swells-*,
-        // WARBL's mouthpiece in the mouth beside the whistle's): D5 sounds from ~150 to ~310 Pa, G5 ~190-700, B5
-        // ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that and holds each note 3-4 x past the real
-        // break. Searched against those swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's
-        // band higher (its notes speak and break at lower pressure), a little less jet gain and bend. Its first
-        // octave is in tune within ~1.5 x of the measured scale's pressures; it still holds notes past the real break.
+        // WARBL's mouthpiece in the mouth beside the whistle's): the swells went from ~150 to ~310 Pa on D5, G5
+        // ~190-700, B5 ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that. Searched against those
+        // swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's band higher (its notes speak and
+        // break at lower pressure), a little less jet gain and bend. Its first octave is in tune within ~1.5 x of the
+        // measured scale's pressures. The swells stopped short of the breaks: blown through them (Golden-pressure-3-
+        // breaks-*), its breaks upward are close to the real ones, but its upper registers fall back at ~1.4 x the
+        // real pressure (see "real pressure and breaks" below).
         v.jetStrouhal = 0.03f;
         v.jetGain = 0.76f;
         v.jetBend = 5.7f;
@@ -112,6 +114,25 @@ Voicing presetVoicing (size_t index)
         // exponent 0.648) undone, so the model gets the mouth pressure WARBL measures (less its 10 Pa threshold).
         v.breathScale = 0.505f;
         v.breathCurve = 1.543f;
+    }
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden (measured), real pressure and breaks"))
+    {
+        // The voicing above holds each upper register only down to ~1.6 x the pressure where the real whistle's
+        // drops back (Real-examples/Golden-pressure-3-breaks-*: blown with the measured breath, D6 falls back to D5
+        // at 440-530 Pa, the real one at ~335; D6 never reaches the third register, the real one does at ~1560 Pa).
+        // The jet flattened above its band (Voicing::jetFlatAbove) gives the upper registers their gain; less of it
+        // at low Reynolds numbers keeps the low notes from starting at a sigh. Searched against the swells (tone),
+        // the breaks recording (where registers change, on the measured breath) and a tune played with measured
+        // breath (Golden-pressure-4-tune-Whalley-Range-*: the note played, and its pitch): breaks up 0.99 x the real
+        // pressure, third register 1.01 x, falling back 1.26 x (was 1.44 x); the tune's notes in the right register
+        // 91 % of the time (was 85 %), 7 c sharp.
+        v.jetFlatAbove = 1.0f;
+        v.jetFlatTop = 2.75f;
+        v.jetLowReynolds = 1050.0f;
+        v.jetGain = 0.56f;
+        v.vortexLoss = 0.132f;
+        v.jetConvection = 0.575f;
+        v.slowJetGrowth = 0.77f;
     }
     // Two more high D's on the Golden fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
@@ -438,7 +459,10 @@ const std::vector<Geometry>& presets()
                 auto real = instruments[i];
                 real.name = "D whistle, Golden (measured), real pressure";
                 real.edgeOffset = 0.0;
-                instruments.insert (instruments.begin() + (long) i + 1, real);
+                // And once more with a jet that also matches where the registers change (presetVoicing).
+                auto breaks = real;
+                breaks.name = "D whistle, Golden (measured), real pressure and breaks";
+                instruments.insert (instruments.begin() + (long) i + 1, { real, breaks });
                 break;
             }
         // The low D voiced after its RODE recording: the edge further into the pipe for the strong second harmonic
