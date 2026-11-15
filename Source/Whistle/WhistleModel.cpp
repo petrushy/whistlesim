@@ -199,6 +199,7 @@ void WhistleModel::setVoicing (const Voicing& v)
     const bool newTaps = v.jetModel == 1 && (jetModel.load() != 1 || std::abs (jetCutoff.load() - v.jetCutoff) > 1.0e-6f);
     jetModel = v.jetModel;
     jetThinning = v.jetThinning;
+    jetLowReynolds = v.jetLowReynolds;
     jetCutoff = v.jetCutoff;
     if (newTaps)
         setGeometry (getGeometry());  // Remake the jet's taps for the new cutoff
@@ -231,6 +232,7 @@ Voicing WhistleModel::getVoicing() const
     v.jetBend = jetBend.load();
     v.jetModel = jetModel.load();
     v.jetThinning = jetThinning.load();
+    v.jetLowReynolds = jetLowReynolds.load();
     v.jetCutoff = jetCutoff.load();
     v.fingerTap = fingerTap.load();
     v.fingerSoftness = fingerSoftness.load();
@@ -617,6 +619,9 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         // lie above its band, where it doesn't amplify: boosting them too makes soft breath squeak).
         jetAmplification = jetGain.load (std::memory_order_relaxed) * std::exp (std::min (exponent, cfg.jetGrowthExponent));
         jetSlowBoost = std::exp (std::max (0.0f, exponent - cfg.jetGrowthExponent)) - 1.0f;
+        const float lowReynolds = jetLowReynolds.load (std::memory_order_relaxed);
+        const float reynoldsRatio = lowReynolds * kKinematicViscosity / (speed * h);  // Re_low / Re
+        jetReynoldsShare = lowReynolds > 0.0f ? 1.0f / (1.0f + reynoldsRatio * reynoldsRatio * reynoldsRatio * reynoldsRatio) : 1.0f;
         jetBoostA = (float) (1.0 - std::exp (-w0));  // One-pole lowpass at the band centre
     }
     float filtered = delayed;
@@ -637,7 +642,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float jetHalfWidth = 0.4f * h + spreading * turbulent * 0.1f * cfg.windowLength;
     // The slow jet's extra growth is for long waves (at and below the band centre), not for high resonances.
     jetBoostLow += jetBoostA * (filtered - jetBoostLow);
-    float grown = jetAmplification * (filtered + jetSlowBoost * jetBoostLow);
+    float grown = jetReynoldsShare * jetAmplification * (filtered + jetSlowBoost * jetBoostLow);
     if (jetModel.load (std::memory_order_relaxed) == 1)
     {
         // The theory's jet: the window's sound over the last ~64 h / U, weighted by the jet's impulse response.
@@ -651,7 +656,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
             sum += cfg.jetTaps[(size_t) k] * ((1.0f - tapFrac) * jetLine[(size_t) ((jetWrite - tapWhole) & (kJetLineSize - 1))]
                                               + tapFrac * jetLine[(size_t) ((jetWrite - tapWhole - 1) & (kJetLineSize - 1))]);
         }
-        grown = jetGain.load (std::memory_order_relaxed) * sum;
+        grown = jetReynoldsShare * jetGain.load (std::memory_order_relaxed) * sum;
     }
     const float deflection = h * grown / speed + turbulence * jetHalfWidth * std::min (1.0f, jetSpeed / 20.0f);
     // A steady pressure difference across the jet bends it on its way: by dp W^2 / (2 rho h U^2) at the edge (a jet

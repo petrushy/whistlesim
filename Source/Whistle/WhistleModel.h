@@ -89,6 +89,7 @@ public:
     std::atomic<int> jetModel { 0 };  // See Voicing
     std::atomic<float> jetThinning { 0.0f };  // See Voicing
     std::atomic<float> jetCutoff { 0.3f };  // See Voicing
+    std::atomic<float> jetLowReynolds { 0.0f };  // See Voicing
     std::atomic<float> jetBend { 0.0f };  // See Voicing
     std::atomic<float> fingerTap { 0.0f }, fingerSoftness { 4.0f }, bodyKnock { 0.0f }, bodyPitch { 1000.0f }, bodyRing { 15.0f };  // See Voicing
 
@@ -251,6 +252,7 @@ private:
     int jetFilterCountdown = 0;
     float jetAmplification = 1.0f;  // Growth across the window at the reference speed (updated with the jet filter)
     float jetSlowBoost = 0.0f;      // Extra growth of a slow jet, for its long waves (see Voicing::slowJetGrowth)
+    float jetReynoldsShare = 1.0f;  // What a slow jet keeps of its amplification (see Voicing::jetLowReynolds)
     float jetBoostA = 0.0f, jetBoostLow = 0.0f;  // Lowpass that picks out those long waves
     float noiseLow0 = 0.0f, noiseLow = 0.0f, noiseHigh = 0.0f, noiseLowA = 0.0f, noiseHighA = 0.0f, noiseNorm = 1.0f;
     int noiseFilterCountdown = 0;

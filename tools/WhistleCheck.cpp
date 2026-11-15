@@ -100,6 +100,7 @@ static std::vector<float> playGesture (const Geometry& g, const Voicing& v, cons
     model.prepare (rate);
     model.setVoicing (v);
     model.vortexLoss = v.vortexLoss * vortexArg;  // vortex= scales the preset's, as in the other checks
+    model.testWindowLoss = windowLossArg;
     auto controls = controlsFor (open);
     std::vector<float> out ((size_t) (seconds * rate), 0.0f);
     const int block = (int) (rate * 0.002);
@@ -208,6 +209,7 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("jet=")) v.jetModel = (int) value;
         if (arg.startsWith ("thin=")) v.jetThinning = value;
         if (arg.startsWith ("cutoff=")) v.jetCutoff = value;
+        if (arg.startsWith ("lowre=")) v.jetLowReynolds = value;
         if (arg.startsWith ("bend=")) v.jetBend = value;
         if (arg.startsWith ("tap=")) v.fingerTap = value;
         if (arg.startsWith ("soft=")) v.fingerSoftness = value;
@@ -246,6 +248,7 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("wall=")) { g.wallThickness = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("top=")) { g.boreDiameterTop = value * 0.001; geometryArgs = true; }
         if (arg.startsWith ("foot=")) { g.boreDiameterFoot = value * 0.001; geometryArgs = true; }
+        if (arg.startsWith ("wallloss=")) g.wallLoss = value;  // The bore's wall loss (1 = smooth, visco-thermal)
     }
 }
 
@@ -3124,7 +3127,7 @@ int main (int argc, char* argv[])
         const double sweep = std::log (hi / lo) / std::log (1.0 + perSecond);
         std::printf ("%s: breath from %.0f to %.0f Pa and back, %.0f %% a second (%.0f s each way). Pressures where the low\n"
                      "register starts (held 50 ms), where it breaks upwards, where it returns coming down, and its pitch at\n"
-                     "start and break. f: fades out instead of breaking. Squeaks: other registers (resonance@Pa) below the start.\n\n  note   fingering   starts   breaks   ratio   returns    pitch at start  at break   span  squeaks\n",
+                     "start and break. f: fades out instead of breaking. Down to: the softest it holds coming down. Squeaks: other\nregisters (resonance@Pa) below the start.\n\n  note   fingering   starts   breaks   ratio   returns  down to   pitch at start  at break   span  squeaks\n",
                      g.name.toRawUTF8(), lo, hi, 100.0 * perSecond, sweep);
         for (const auto& c : chartFor (g.chart))
         {
@@ -3214,8 +3217,12 @@ int main (int argc, char* argv[])
                 std::snprintf (breaks, sizeof (breaks), broke ? "%.0f" : "%.0f f", frames[upTo].p);
                 std::snprintf (ratio, sizeof (ratio), "%.2f", frames[upTo].p / frames[upFrom].p);
             }
+            char lowest[16] = "-";  // The softest it holds coming down
             if (downTo > downFrom)
+            {
                 std::snprintf (returns, sizeof (returns), "%.0f", frames[downFrom].p);
+                std::snprintf (lowest, sizeof (lowest), "%.0f", frames[downTo].p);
+            }
             // Squeaks: another register held 50 ms or more below the start, going up or coming down.
             juce::String squeaks;
             for (int pass = 0; pass < 2; ++pass)
@@ -3230,8 +3237,8 @@ int main (int argc, char* argv[])
                     if (run2 == 5) squeaks << " " << r << "@" << juce::String (frames[i].p, 0);
                 }
             }
-            std::printf ("  %-5s  %s  %6.0f   %6s   %5s   %6s       %+5.0f c       %+5.0f c    %4.0f c  %s\n", name.c_str(), c.holePattern (g).c_str(),
-                         frames[upFrom].p, breaks, ratio, returns, startPitch, breakPitch, breakPitch - startPitch, squeaks.toRawUTF8());
+            std::printf ("  %-5s  %s  %6.0f   %6s   %5s   %6s  %6s     %+5.0f c       %+5.0f c    %4.0f c  %s\n", name.c_str(), c.holePattern (g).c_str(),
+                         frames[upFrom].p, breaks, ratio, returns, lowest, startPitch, breakPitch, breakPitch - startPitch, squeaks.toRawUTF8());
         }
         return 0;
     }

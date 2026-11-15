@@ -190,6 +190,13 @@ struct Voicing
     // jetModel 1: the omega h / U above which the jet's waves stop growing (they saturate within the window
     // rather than grow without limit as linear theory has them); the response fades out by 1.6 x this.
     float jetCutoff = 0.3f;
+    // A slow jet drives the pipe less than jet theory says: real whistles start each note at a Reynolds number
+    // U h / nu of ~1000-1700 (Real-examples/Golden-pressure-1-swells-*: D5 ~1000, B5 ~1400), where the standard
+    // model, and the theory's jet, sound the low notes at half that breath (Auvray et al. 2012 find the same: its
+    // onsets are off, its register changes right). The jet's amplification is scaled by 1 / (1 + (Re_low / Re)^4),
+    // Re_low being this. It lifts the low notes' start most (they speak at the lowest jet speeds), and lets a high
+    // note speak with more of a jet wavelength across the window than a low one, as recorded. 0 = off.
+    float jetLowReynolds = 0.0f;
     // A steady sideways push on the jet as it crosses the window, as the pressure difference across it that would
     // give it (Pa; positive bends the jet out of the pipe, which is the same as moving the edge further in). A thin
     // jet under a pressure difference dp is displaced by dp W^2 / (2 rho h U^2) at the edge, so the bend is large
