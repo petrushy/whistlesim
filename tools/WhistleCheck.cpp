@@ -90,17 +90,29 @@ Controls controlsFor (const Openness& open)
 static float vortexArg = 1.0f;
 static bool geometryArgs = false;
 static bool rawCrossings = false;  // raw=1: transition and glide time the unfiltered sound's zero crossings (as before 2026-11-10)
+static float strouhal = 0.02f, jetQ = 0.7f, convection = 0.6f;
+static float flatAboveArg = 0.0f;  // flat=: the jet's band-pass flattened above its centre (test)
+static float flatTopArg = 0.0f;    // flattop=: ... rolled off from this multiple of the centre
 static bool windowLossArg = true;  // windowloss=0: the window as a lossless air mass (as before 2026-11-06)
+
+// Test switches given on the command line (flat=, q=, windowloss=), for every model a check makes.
+static void applyTestArgs (WhistleModel& model)
+{
+    model.testJetFlatAbove = flatAboveArg;
+    model.testJetFlatTop = flatTopArg;
+    model.testWindowLoss = windowLossArg;
+    model.jetQ = jetQ;
+}
 
 static std::vector<float> playGesture (const Geometry& g, const Voicing& v, const Openness& open,
                                        const std::function<double (double)>& pressureAt, double seconds, double rate)
 {
     WhistleModel model;
+    applyTestArgs (model);
     model.setGeometry (g);
     model.prepare (rate);
     model.setVoicing (v);
     model.vortexLoss = v.vortexLoss * vortexArg;  // vortex= scales the preset's, as in the other checks
-    model.testWindowLoss = windowLossArg;
     auto controls = controlsFor (open);
     std::vector<float> out ((size_t) (seconds * rate), 0.0f);
     const int block = (int) (rate * 0.002);
@@ -179,7 +191,6 @@ static int presetArg (const char* arg)
 }
 
 using Complex = std::complex<double>;
-static float strouhal = 0.02f, jetQ = 0.7f, convection = 0.6f;
 static int stages = 2;
 static float windwayMass = 1.0f, windwayFriction = 1.0f;
 
@@ -234,6 +245,9 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("edge=")) g.edgeOffset = value * 0.001;
         if (arg.startsWith ("vortex=")) vortexArg = (float) value;
         if (arg.startsWith ("windowloss=")) windowLossArg = value > 0.5;
+        if (arg.startsWith ("flat=")) flatAboveArg = (float) value;
+        if (arg.startsWith ("flattop=")) flatTopArg = (float) value;
+        if (arg.startsWith ("q=")) jetQ = (float) value;
         if (arg.startsWith ("raw=")) rawCrossings = value > 0.5;
         // The fipple's size (mm); the instrument is retuned afterwards where it matters (analyse).
         if (arg.startsWith ("window=")) { g.windowLength = value * 0.001; geometryArgs = true; }
@@ -270,6 +284,7 @@ static void play (const Geometry& g)
         for (double pressure : pressures)
         {
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (rate);
             model.jetStrouhal = strouhal;
@@ -317,6 +332,7 @@ static void slide (const Geometry& g, int hole, double pressure)
     for (int step = 0; step <= 10; ++step)
     {
         WhistleModel model;
+        applyTestArgs (model);
         model.setGeometry (g);
         model.prepare (rate);
         Controls controls;
@@ -343,6 +359,7 @@ static double playOnce (const Geometry& g, const Openness& open, double pressure
 {
     constexpr double rate = 48000.0;
     WhistleModel model;
+    applyTestArgs (model);
     model.setGeometry (g);
     model.prepare (rate);
     model.jetStrouhal = strouhal;
@@ -508,6 +525,7 @@ int main (int argc, char* argv[])
                 auto pressureAt = [=] (double) { return pressure; };
                 // Fingering changes at 0.4 s.
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -635,6 +653,7 @@ int main (int argc, char* argv[])
             for (double rate : { 44100.0, 48000.0, 96000.0 })
             {
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -851,6 +870,7 @@ int main (int argc, char* argv[])
         {
             constexpr double rate = 48000.0, seconds = 10.0, lo = 40.0, hi = 6000.0;
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (rate);
             model.setVoicing (voicing);
@@ -1067,6 +1087,85 @@ int main (int argc, char* argv[])
         for (auto& s : swells)
             for (auto& f : s.frames) f.pressure = pressureAtSeconds (f.t);
 
+        // follow=<note>@<from>-<to>,...: the model fingered as that chart note and blown with the measured mouth
+        // pressure over that stretch of the recording (s), and the register changes of both, with the pressure at
+        // each: the real breaks and returns against the model's on the same breath.
+        for (int k = 4; k < argc; ++k)
+            if (juce::String (argv[k]).startsWith ("follow="))
+            {
+                if (pressureMs.empty()) { std::printf ("follow= needs pressure=\n"); return 1; }
+                const auto spans = juce::StringArray::fromTokens (juce::String (argv[k]).fromFirstOccurrenceOf ("=", false, false), ",", "");
+                for (const auto& span : spans)
+                {
+                    const auto noteText = span.upToFirstOccurrenceOf ("@", false, false);
+                    const double from = span.fromFirstOccurrenceOf ("@", false, false).upToFirstOccurrenceOf ("-", false, false).getDoubleValue();
+                    const double to = span.fromLastOccurrenceOf ("-", false, false).getDoubleValue();
+                    const ChartFingering* chartNote = nullptr;
+                    for (const auto& c : chartFor (g.chart))
+                    {
+                        const auto open = c.openness (g);
+                        const auto res = resonances (g, open, lowest * 0.6, 8000.0);
+                        if (c.reg == 1 && ! res.empty() && juce::String (noteName (res[0])) == noteText) { chartNote = &c; break; }
+                    }
+                    if (chartNote == nullptr) { std::printf ("follow: no low-register chart note %s\n", noteText.toRawUTF8()); continue; }
+                    const auto open = chartNote->openness (g);
+                    const auto res = resonances (g, open, lowest * 0.6, 8000.0);
+                    constexpr double rate = 48000.0;
+                    auto pressureAt = [&] (double t)
+                    {
+                        const double p = pressureAtSeconds (from + t);
+                        return std::isfinite (p) ? std::max (0.0, p) : 0.0;
+                    };
+                    const auto modelOut = playGesture (g, voicing, open, pressureAt, to - from, rate);
+                    // Register (1 = the note's own resonance) every 50 ms, a change counted once it holds 100 ms.
+                    auto registers = [&] (const std::vector<float>& x, double xRate, double offset)
+                    {
+                        std::vector<std::pair<double, int>> out;  // (time in the recording, register)
+                        const auto length = (size_t) (0.1 * xRate + xRate / 120.0) + 4;
+                        for (double t = 0.12; t < to - from; t += 0.05)
+                        {
+                            const auto end = (size_t) ((offset + t) * xRate);
+                            if (end > x.size() || end < length) break;
+                            int reg = 0;
+                            if (levelDb (x, end - (size_t) (0.04 * xRate), end) > -50.0)
+                            {
+                                const std::vector<float> chunk (x.begin() + (long) (end - length), x.begin() + (long) end);
+                                double clarity = 0.0;
+                                const double f = measurePitch (chunk, xRate, clarity);
+                                for (size_t r = 0; f > 0.0 && clarity > 0.8 && r < res.size(); ++r)
+                                    if (std::abs (1200.0 * std::log2 (f / res[r])) < 110.0) reg = (int) r + 1;
+                            }
+                            out.push_back ({ from + t, reg });
+                        }
+                        return out;
+                    };
+                    auto changes = [&] (const std::vector<std::pair<double, int>>& regs)
+                    {
+                        juce::String text;
+                        int held = 0, run = 0, candidate = 0;
+                        double candidateAt = 0.0;
+                        for (const auto& [t, reg] : regs)
+                        {
+                            if (reg == 0) continue;
+                            if (reg == candidate) ++run; else { candidate = reg; run = 1; candidateAt = t; }
+                            if (run == 2 && candidate != held)
+                            {
+                                if (held != 0)
+                                    text << "  " << held << ">" << candidate << " @" << juce::String (pressureAtSeconds (candidateAt - 0.05), 0);
+                                else
+                                    text << "  " << candidate << " from " << juce::String (pressureAtSeconds (candidateAt - 0.05), 0);
+                                held = candidate;
+                            }
+                        }
+                        return text;
+                    };
+                    std::printf ("%s %.1f-%.1f s, fingering %s (Pa where each register change happens)\n  recording:%s\n  model:    %s\n",
+                                 noteText.toRawUTF8(), from, to, chartNote->holePattern (g).c_str(), changes (registers (recorded, recordingRate, from)).toRawUTF8(),
+                                 changes (registers (modelOut, rate, 0.0)).toRawUTF8());
+                }
+                return 0;
+            }
+
         // track: the whole recording every 50 ms, mouth pressure against pitch and level, to find where the real
         // instrument breaks (a pitch jump of about an octave or more while the pressure rises).
         for (int k = 4; k < argc; ++k)
@@ -1237,6 +1336,7 @@ int main (int argc, char* argv[])
                     // The model held at that pressure
                     constexpr double rate = 48000.0;
                     WhistleModel m;
+                    applyTestArgs (m);
                     m.setGeometry (g);
                     m.prepare (rate);
                     m.setVoicing (voicing);
@@ -1274,6 +1374,7 @@ int main (int argc, char* argv[])
                     const double beyond = 1.6 * ps[(size_t) (0.95 * (double) (ps.size() - 1))];
                     constexpr double rate = 48000.0;
                     WhistleModel m;
+                    applyTestArgs (m);
                     m.setGeometry (g);
                     m.prepare (rate);
                     m.setVoicing (voicing);
@@ -1776,6 +1877,7 @@ int main (int argc, char* argv[])
             if (juce::String (argv[i]).startsWith ("rate="))
                 rate = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         WhistleModel model;
+        applyTestArgs (model);
         model.setGeometry (g);
         model.prepare (rate);
         model.setVoicing (instrument.voicing);
@@ -1933,6 +2035,7 @@ int main (int argc, char* argv[])
                 for (bool gapResistance : { false, true })
                 {
                     WhistleModel model;
+                    applyTestArgs (model);
                     model.setGeometry (g);
                     model.prepare (rate);
                     model.setVoicing (v);
@@ -2008,6 +2111,7 @@ int main (int argc, char* argv[])
                 const auto& to = low[k + 1 - (size_t) direction];
                 const auto a = from.openness (g), b = to.openness (g);
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (v);
@@ -2070,6 +2174,7 @@ int main (int argc, char* argv[])
                 const auto& to = low[k + 1 - (size_t) direction];
                 const auto a = from.openness (g), b = to.openness (g);
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -2234,6 +2339,7 @@ int main (int argc, char* argv[])
         for (double sigma : { 0.0, 1.0, 3.0, 6.0, 12.0 })
         {
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (rate);
             model.setVoicing (voicing);
@@ -2315,6 +2421,7 @@ int main (int argc, char* argv[])
         const double target = lowestNote (g) * std::pow (2.0, c.semitones / 12.0);
         constexpr double rate = 48000.0;
         WhistleModel model;
+        applyTestArgs (model);
         model.setGeometry (g);
         model.prepare (rate);
         model.setVoicing (voicing);
@@ -2391,6 +2498,7 @@ int main (int argc, char* argv[])
                 seconds = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         constexpr double rate = 48000.0;
         WhistleModel model;
+        applyTestArgs (model);
         model.setGeometry (g);
         model.prepare (rate);
         model.setVoicing (voicing);
@@ -2458,6 +2566,7 @@ int main (int argc, char* argv[])
             if (hole < 0)
                 continue;
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (rate);
             model.setVoicing (voicing);
@@ -2638,6 +2747,7 @@ int main (int argc, char* argv[])
         for (double pressure : pressures)
         {
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (rate);
             model.setVoicing (voicing);
@@ -2755,6 +2865,7 @@ int main (int argc, char* argv[])
             for (double pressure : { 1200.0, 1600.0, 2000.0, 2500.0, 3000.0, 3600.0 })
             {
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -2860,6 +2971,7 @@ int main (int argc, char* argv[])
             auto render = [&] (float window, float body)
             {
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -3334,6 +3446,7 @@ int main (int argc, char* argv[])
         {
             const auto open = c.openness (g);
             WhistleModel model;
+            applyTestArgs (model);
             model.setGeometry (g);
             model.prepare (hostRate);
             model.setControls (controlsFor (open));  // No breath: the jet does nothing
@@ -3412,6 +3525,7 @@ int main (int argc, char* argv[])
             for (double pressure : { 300.0, 1500.0 })
             {
                 WhistleModel model;
+                applyTestArgs (model);
                 model.setGeometry (g);
                 model.prepare (rate);
                 model.setVoicing (voicing);
@@ -3468,6 +3582,7 @@ int main (int argc, char* argv[])
         auto makeModel = [&]
         {
             auto model = std::make_unique<WhistleModel>();
+            applyTestArgs (*model);
             model->setGeometry (g);
             model->prepare (rate);
             model->jetStrouhal = voicing.jetStrouhal;

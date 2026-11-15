@@ -104,6 +104,8 @@ public:
     std::vector<float>* jetLog = nullptr;  // Per sample: deflection minus edge (in the jet's half-widths), jet flow (m^3/s), jet drive, vortex drop (Pa)
     float testWindowRadiation = 1.0f, testBodyRadiation = 1.0f;
     float testEdgeNoise = 1.0f, testJetWobble = 1.0f;  // Scale the breath noise's two paths (WhistleCheck rough)
+    float testJetFlatAbove = 0.0f;  // Adds this x a high-pass at the band's centre to the jet's band-pass (1: flat above it)
+    float testJetFlatTop = 0.0f;    // ... rolled off (2 poles) from this multiple of the centre up (0: not rolled off)
     bool testWindowLoss = true;  // The window's radiation loss (off: a lossless air mass, as before 2026-11-06)  // Scale what the window / the holes and foot radiate
 
     // For display.
@@ -252,6 +254,9 @@ private:
     int jetFilterCountdown = 0;
     float jetAmplification = 1.0f;  // Growth across the window at the reference speed (updated with the jet filter)
     float jetSlowBoost = 0.0f;      // Extra growth of a slow jet, for its long waves (see Voicing::slowJetGrowth)
+    float jetHighB0 = 0.0f, jetHighB1 = 0.0f;  // The test high-pass (testJetFlatAbove); shares the band-pass's poles
+    std::array<float, 4> jetHighState {};
+    float jetHighLowA = 1.0f, jetHighLow1 = 0.0f, jetHighLow2 = 0.0f;
     float jetReynoldsShare = 1.0f;  // What a slow jet keeps of its amplification (see Voicing::jetLowReynolds)
     float jetBoostA = 0.0f, jetBoostLow = 0.0f;  // Lowpass that picks out those long waves
     float noiseLow0 = 0.0f, noiseLow = 0.0f, noiseHigh = 0.0f, noiseLowA = 0.0f, noiseHighA = 0.0f, noiseNorm = 1.0f;
