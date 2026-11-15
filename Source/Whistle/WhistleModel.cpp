@@ -255,7 +255,7 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
     out = {};
 
     // A section can't be shorter than the delay lines' 2 samples (7.2 mm at 96 kHz): a shorter one would play
-    // as that long, which a 4 mm head blend once did, a measured Goldie playing ~60 c flat. Head junctions and
+    // as that long, which a 4 mm head blend once did, a measured Golden playing ~60 c flat. Head junctions and
     // splits that would make one are left out; the merged section gets the head's averaged area (below).
     const double shortestSection = 2.0 * kSpeedOfSound / rate;
 
@@ -569,7 +569,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
 
     // Edge noise as the dynamic pressure, rho U^2 (kept at its earlier level for a low note at ~400 Pa, where it was
     // rho U^2 x sqrt(U / 20 m/s)). That U^2.5 law made the second octave 4-5 dB noisier, relative to its tone, than the
-    // first; recorded Goldie and Lofgren whistles have the same noise floor in both octaves (-66 and -69 dB between the
+    // first; recorded Golden and Lof whistles have the same noise floor in both octaves (-66 and -69 dB between the
     // harmonics at 2.5-6 kHz).
     constexpr float kEdgeNoiseAt400Pa = 1.14f;  // sqrt(25.8 / 20)
     const float steadyEdgeNoise = testEdgeNoise * chiff * amount * kEdgeNoise * rho * jetSpeed * jetSpeed * kEdgeNoiseAt400Pa * band;  // Pa

@@ -29,7 +29,7 @@ Windway friction is modelled as Blasius boundary layers, with displacement thick
 
 - **Input:** the acoustic velocity through the window, `v = Q_window / A_window`.
 - **Travel time:** v is delayed by the jet's travel time over the window length W, `τ = W / (c_conv · U)`, with `c_conv = jetConvection = 0.6`.
-- **Band-pass:** v then passes through 1–2 identical biquad band-pass stages (`jetStages`), with unity gain and zero phase at the centre. The centre is at `f_c = St · U / h` (`jetStrouhal`, about 0.02, or 0.017 for the Goldie and 0.0095 for the low D) and Q = 0.7. The filter is retuned every 8 samples.
+- **Band-pass:** v then passes through 1–2 identical biquad band-pass stages (`jetStages`), with unity gain and zero phase at the centre. The centre is at `f_c = St · U / h` (`jetStrouhal`, about 0.02, or 0.017 for the Golden and 0.0095 for the low D) and Q = 0.7. The filter is retuned every 8 samples.
 - **Deflection at the edge:**
 
       η = G · h · (v_filtered + slowBoost · lowpass(v_filtered)) / U  +  turbulence-wobble · b
@@ -106,18 +106,18 @@ There are five recordings of rising scales, from the lowest note to the third oc
 
 | File | Instrument | Preset fitted to it |
 |---|---|---|
-| `Goldie-High-D-RODE.wav` | Goldie high D (aluminium, narrow head) | "D whistle, Goldie style" (voicing kept from an earlier fit; the user finds it the most playable) |
-| `Generation-High-D-RODE.wav` | Generation high D (cheap brass/nickel, plastic fipple) | "D whistle, Generation style" (new; Goldie tube and fipple, own voicing) |
-| `Löfgren-High-D-RODE.wav` | Löfgren high D (also filed earlier as "Löfberg"; probably the same whistle) | "D whistle, Löfgren style" (new; Goldie tube and fipple, own voicing) |
-| `Goldie-Low-D-RODE.wav` | Goldie low D | "Low D whistle" (voicing left unchanged) |
+| `Golden-High-D-RODE.wav` | Golden high D (aluminium, narrow head) | "D whistle, Golden style" (voicing kept from an earlier fit; the user finds it the most playable) |
+| `Generation-High-D-RODE.wav` | Generation high D (cheap brass/nickel, plastic fipple) | "D whistle, Generation style" (new; Golden tube and fipple, own voicing) |
+| `Löf-High-D-RODE.wav` | Löf high D (also filed earlier as "Löf"; probably the same whistle) | "D whistle, Löf style" (new; Golden tube and fipple, own voicing) |
+| `Golden-Low-D-RODE.wav` | Golden low D | "Low D whistle" (voicing left unchanged) |
 | `Moeck-Soprano-RODE.wav` | Moeck soprano recorder, baroque fingering | "Soprano recorder in C" (refitted 2026-11-10; alto and tenor share it) |
 
-Older laptop- and phone-microphone recordings (`High-D-Goldie*.wav`, `High-D-Löfberg.wav`, `Low-D-Goldie.wav`) differ from the RODE ones by up to 8–10 dB in noise and low-octave H2. The RODE set is the better reference.
+Older laptop- and phone-microphone recordings (`High-D-Golden*.wav`, `High-D-Löf.wav`, `Low-D-Golden.wav`) differ from the RODE ones by up to 8–10 dB in noise and low-octave H2. The RODE set is the better reference.
 
 **None of the instruments' geometries were measured.** The presets use forum or typical values:
 
-- Goldie style: a 12 mm bore, an 11.5 mm head over the top 30 mm, a 0.87 mm windway, a 4.2 × 8 mm window, and an edge 0.15 mm into the pipe.
-- Generation and Löfgren: the Goldie's tube and fipple, differing only in voicing and edge offset.
+- Golden style: a 12 mm bore, an 11.5 mm head over the top 30 mm, a 0.87 mm windway, a 4.2 × 8 mm window, and an edge 0.15 mm into the pipe.
+- Generation and Löf: the Golden's tube and fipple, differing only in voicing and edge offset.
 
 So a mismatch can come from wrong dimensions as well as from missing physics.
 
@@ -130,25 +130,25 @@ So a mismatch can come from wrong dimensions as well as from missing physics.
 
 The fit score used was the mean absolute difference of the octave-average H2–H5, plus penalties for notes that don't speak.
 
-**Scatter:** in the recordings, harmonic levels vary by ±6–8 dB from note to note (for example Goldie F#5 H2 −9 dB, G5 −22 dB). That comes from room modes, microphone position and the player. Only differences that are systematic across notes and instruments should be read as physics.
+**Scatter:** in the recordings, harmonic levels vary by ±6–8 dB from note to note (for example Golden F#5 H2 −9 dB, G5 −22 dB). That comes from room modes, microphone position and the player. Only differences that are systematic across notes and instruments should be read as physics.
 
 ---
 
 ## 3. Recorded against model: octave averages
 
-These numbers are fresh, measured with the current code (after the ρU² noise law and breath noise 0.04 on the Goldie-fipple presets). They differ by a few dB from the fit numbers quoted in the README, which were measured before the noise change. Values are in dB relative to the fundamental.
+These numbers are fresh, measured with the current code (after the ρU² noise law and breath noise 0.04 on the Golden-fipple presets). They differ by a few dB from the fit numbers quoted in the README, which were measured before the noise change. Values are in dB relative to the fundamental.
 
 ### First octave
 
 | Instrument | | H2 | H3 | H4 | H5 | centroid ×f0 | noise 2–4 kHz |
 |---|---|---|---|---|---|---|---|
-| Goldie high D | recorded | −18.1 | −17.2 | −22.7 | −27.0 | 1.18 | −66.2 |
+| Golden high D | recorded | −18.1 | −17.2 | −22.7 | −27.0 | 1.18 | −66.2 |
 | | model | −22.2 | −18.6 | **−35.7** | **−39.5** | 1.10 | −68.7 |
 | Generation high D | recorded | −13.3 | −21.7 | −30.2 | −31.6 | 1.13 | −75.0 |
 | | model | −16.3 | −19.0 | −30.1 | **−43.8** | 1.12 | **−63.8** |
-| Löfgren high D | recorded | −10.9 | −13.1 | −28.6 | −30.2 | 1.27 | −67.4 |
+| Löf high D | recorded | −10.9 | −13.1 | −28.6 | −30.2 | 1.27 | −67.4 |
 | | model | **−17.7** | −15.7 | −28.3 | **−37.9** | 1.18 | −70.0 |
-| Goldie low D | recorded | −7.4 | −7.6 | −21.8 | −23.6 | 1.64 | −60.7 |
+| Golden low D | recorded | −7.4 | −7.6 | −21.8 | −23.6 | 1.64 | −60.7 |
 | | model | **−16.8** | **−22.3** | **−33.3** | **−35.8** | 1.07 | −61.3 |
 | Moeck soprano | recorded | −14.9 | −19.1 | −26.7 | −31.8 | 1.18 | −73.0 |
 | | model | −20.0 | −20.1 | −27.8 | −29.8 | 1.12 | −75.8 |
@@ -157,13 +157,13 @@ These numbers are fresh, measured with the current code (after the ρU² noise l
 
 | Instrument | | H2 | H3 | H4 | H5 | centroid ×f0 | noise 2–4 kHz |
 |---|---|---|---|---|---|---|---|
-| Goldie high D | recorded | −29.3 | −24.5 | −35.2 | −30.3 | 1.07 | −65.6 |
+| Golden high D | recorded | −29.3 | −24.5 | −35.2 | −30.3 | 1.07 | −65.6 |
 | | model | −29.3 | −29.5 | **−53.6** | **−41.5** | 1.01 | −66.0 |
 | Generation high D | recorded | −21.6 | −29.2 | −39.6 | −42.2 | 1.02 | −67.9 |
 | | model | −21.4 | −30.0 | −43.7 | −42.7 | 1.02 | **−61.0** |
-| Löfgren high D | recorded | −32.3 | −26.2 | −40.3 | −38.7 | 1.02 | −64.9 |
+| Löf high D | recorded | −32.3 | −26.2 | −40.3 | −38.7 | 1.02 | −64.9 |
 | | model | **−23.5** | −25.8 | −42.6 | −36.2 | 1.02 | −68.8 |
-| Goldie low D | recorded | −21.4 | −28.4 | −31.6 | −38.6 | 1.05 | −61.4 |
+| Golden low D | recorded | −21.4 | −28.4 | −31.6 | −38.6 | 1.05 | −61.4 |
 | | model | −26.1 | −29.5 | −38.2 | −36.9 | 1.02 | −63.3 |
 | Moeck soprano | recorded | −25.2 | −22.9 | −34.0 | −33.7 | 1.04 | −70.2 |
 | | model | −27.0 | −26.0 | −36.8 | **−41.5** | 1.05 | −75.8 |
@@ -177,27 +177,27 @@ Other differences:
 
 ### What the tables say
 
-1. **The upper harmonics (H4 and above) are systematically too weak**, on every instrument and in both octaves: typically 8–18 dB short on the Goldie and the low D, less on the recorder.
+1. **The upper harmonics (H4 and above) are systematically too weak**, on every instrument and in both octaves: typically 8–18 dB short on the Golden and the low D, less on the recorder.
    - This is the single most consistent gap.
-   - The full per-note tables also show H6–H10 in the model falling much faster than in the recordings. For example, Goldie first octave H8–H10 is −32 to −55 dB recorded and −49 to −72 dB in the model.
+   - The full per-note tables also show H6–H10 in the model falling much faster than in the recordings. For example, Golden first octave H8–H10 is −32 to −55 dB recorded and −49 to −72 dB in the model.
 2. **The drop in H2 between octaves is too small in the model:**
 
    | Instrument | Recorded | Model |
    |---|---|---|
-   | Goldie | 11 dB | 7 dB |
+   | Golden | 11 dB | 7 dB |
    | Generation | 8 dB | 5 dB |
-   | Löfgren | 21 dB | 6 dB |
+   | Löf | 21 dB | 6 dB |
    | low D | 14 dB | 9 dB |
    | Moeck | 10 dB | 7 dB |
 
    A voicing that fits the first octave's H2 leaves the second octave too rich, and the reverse.
 3. **The low D's first octave is far richer in reality** (H2/H3 −7/−8 dB, centroid 1.64 f0) than the model can play steadily (−17/−22, centroid 1.07). Section 5 explains why "steadily" matters.
-4. **Breath noise is roughly right for the Goldie fipple, the Löfgren and the low D** (within about 3 dB). It is too high on the Generation preset (7–11 dB) and a little low on the recorder.
-   - The Generation preset shares the Goldie fipple's noise setting (0.04); its recorded noise floor is the quietest of the whistles.
+4. **Breath noise is roughly right for the Golden fipple, the Löf and the low D** (within about 3 dB). It is too high on the Generation preset (7–11 dB) and a little low on the recorder.
+   - The Generation preset shares the Golden fipple's noise setting (0.04); its recorded noise floor is the quietest of the whistles.
    - Noise "between harmonics" is a weak measure, because it includes sidebands of the tone.
-5. **Tuning:** all three recorded high D's play the second octave 11–22 cents sharp of the first (the Goldie most consistently, at +20 to +22), and B5 and C#6 at +12 to +22.
+5. **Tuning:** all three recorded high D's play the second octave 11–22 cents sharp of the first (the Golden most consistently, at +20 to +22), and B5 and C#6 at +12 to +22.
    - The model's presets are tuned by a least-squares tuner that splits the octave stretch between the octaves, so they play in tune by construction.
-   - Played gently, the model's second octave is flat, and it needs more breath to reach pitch. The real Goldie played it pure and sharp.
+   - Played gently, the model's second octave is flat, and it needs more breath to reach pitch. The real Golden played it pure and sharp.
    - This is partly a fitting choice and partly a sign that the model's octave stretch, or its pitch rise with breath, differs from the real instrument's.
 
 ---
@@ -243,7 +243,7 @@ Candidates:
 
 ### 4.2 Too little difference in timbre between the octaves
 
-In the model, H2 comes mainly from the edge offset relative to the jet's half-width: tanh with an offset. The offset is a fixed geometric number, and the only speed-dependent term is the half-width growing with turbulence (`jetSpreading`). That separates the octaves by about 10 dB at most, and it can't produce the Löfgren's 21 dB.
+In the model, H2 comes mainly from the edge offset relative to the jet's half-width: tanh with an offset. The offset is a fixed geometric number, and the only speed-dependent term is the half-width growing with turbulence (`jetSpreading`). That separates the octaves by about 10 dB at most, and it can't produce the Löf's 21 dB.
 
 Candidates:
 
@@ -272,7 +272,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 ### 4.4 Tuning and pitch against breath
 
 - The presets are tuned to play in tune, while the real whistles stretch the octave by 11–22 cents. The tuner could be told to target the recorded stretch instead, but that would hide whether the model's own octave stretch is right.
-- Played gently, the model's second octave is flat, and the pitch rises with breath. The real Goldie's is already sharp when blown softly.
+- Played gently, the model's second octave is flat, and the pitch rises with breath. The real Golden's is already sharp when blown softly.
 - The lowest note of every preset starts sharp at its threshold (soprano low C: +58 cents).
 - Pitch against pressure has not been measured on the real instruments: the recordings are single-dynamic scales. Measuring it needs recordings of crescendos on held notes.
 
@@ -296,7 +296,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 
 ## 5. Constraints on any improvement
 
-1. **Playability comes first.** The user plays the model live, from a WARBL controller, and has repeatedly found that offline measures don't predict playability. Of all the presets, the user chose the Goldie style voicing as the most playable, and it must keep playing as it does.
+1. **Playability comes first.** The user plays the model live, from a WARBL controller, and has repeatedly found that offline measures don't predict playability. Of all the presets, the user chose the Golden style voicing as the most playable, and it must keep playing as it does.
    - Any change should pass, without regressions:
      - `WhistleCheck transition [preset] p=<Pa>`: one hole switched at once. Count register jumps and settling time; currently 0–1 of 14 jumps, settling within 5–20 ms.
      - `WhistleCheck glide [preset] p=<Pa>`: gradual changes. Count odd periods and level dips.
@@ -315,11 +315,11 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 | Experiment | Result | Why it was left out |
 |---|---|---|
 | Flatten the jet band-pass above 2× its centre | 2nd-octave H4 about +10 dB | Notes squeaked into upper registers at the softest breath (from 107 Pa); octave breaks about 30 % lower |
-| The same above 5–8× the centre | +1–3 dB on H4 | Too little; the Generation, Löfgren and low D fits preferred it off |
+| The same above 5–8× the centre | +1–3 dB on H4 | Too little; the Generation, Löf and low D fits preferred it off |
 | The theory's band from Rayleigh, St 0.16, convection 0.49 (2026-11-06) | Most notes stopped speaking (the jet favoured high resonances) | As above |
 | The jet's own dipole radiation, ρ δ_d/(4π r c) d²Q_j/dt² | +1–2 dB on H4–H6; H3 moved up to 4 dB depending on listener angle | Small and depends on the listener angle |
 | A richer low D (edge 0.15–0.25 mm, less vortex loss) | H2/H3 −7/−18 | 4–6 of 14 transitions jumped register; 6–20× more glide chirps |
-| A narrower head (10.5 mm) on the Goldie style | 2nd octave 20–30 cents sharp | Kept 11.5 mm |
+| A narrower head (10.5 mm) on the Golden style | 2nd octave 20–30 cents sharp | Kept 11.5 mm |
 | Two band-pass stages on the high whistles | — | Silent gaps between registers; more register jumps (6–7 of 14 at 400 Pa, against 1) |
 | Physical finger-gap damping (1.0) | Realistic leakage | Felt sluggish to play; off by default |
 | U^2.5 edge noise | 2nd octave 4–5 dB noisier than recorded | Replaced by ρU² |
@@ -335,7 +335,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 3. **Frequency-dependent convection (dispersion)** (4.1b), from the phase-speed curve that `JetStability` already computes.
 4. **An asymmetric vortex loss** (4.2b).
 5. **A discrete-vortex or sharper split at large amplitude** (4.1c), if 1–4 don't close the H4–H10 gap.
-6. **Measure, don't guess, the geometry** of at least one real instrument (the Goldie high D): windway height, window length and width, edge offset, and bore and head diameters. This separates "wrong physics" from "wrong dimensions".
+6. **Measure, don't guess, the geometry** of at least one real instrument (the Golden high D): windway height, window length and width, edge offset, and bore and head diameters. This separates "wrong physics" from "wrong dimensions".
 7. **Recordings that would help:**
    - crescendos on held notes, for pitch and timbre against breath (ideally with WARBL's pressure sensor in the loop);
    - a close and a distant microphone at once, to separate radiation from room;
@@ -345,10 +345,10 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 
     cd whistlesim
     W=build/WhistleCheck_artefacts/Release/WhistleCheck
-    nice -n 19 $W analyse tools/Real-examples/Goldie-High-D-RODE.wav "Goldie style"
+    nice -n 19 $W analyse tools/Real-examples/Golden-High-D-RODE.wav "Golden style"
     nice -n 19 $W analyse tools/Real-examples/Generation-High-D-RODE.wav "Generation"
-    nice -n 19 $W analyse "tools/Real-examples/Löfgren-High-D-RODE.wav" "fgren"     # name matching chokes on "ö"
-    nice -n 19 $W analyse tools/Real-examples/Goldie-Low-D-RODE.wav "low D"
+    nice -n 19 $W analyse "tools/Real-examples/Löf-High-D-RODE.wav" "fgren"     # name matching chokes on "ö"
+    nice -n 19 $W analyse tools/Real-examples/Golden-Low-D-RODE.wav "low D"
     nice -n 19 $W analyse tools/Real-examples/Moeck-Soprano-RODE.wav "soprano"
 
 `analyse` also takes voicing overrides (`edge=<mm> vortex= st= noise= gain= slow= spread=`), so a candidate voicing can be scored without editing presets. Other useful commands:
@@ -369,7 +369,7 @@ The details and numbers are in `README.md`, "Comparing with real whistles", seco
 
 - Both checks timed the raw sound's zero crossings. A note whose third harmonic is within about 6 dB of its fundamental crosses zero several times per period, which read as another register.
 - They now time the fundamental only (the sound below 1.5 × the lower note; `raw=1` gives the old reading). The notes that really don't speak at soft breath are still caught.
-- With that, a rich voicing on the Goldie fipple at 400 Pa goes from 2 "jumps" and 143 "odd periods" to none of either. The rich low D of section 4.3 is as steady as the current one at 200–500 Pa.
+- With that, a rich voicing on the Golden fipple at 400 Pa goes from 2 "jumps" and 143 "odd periods" to none of either. The rich low D of section 4.3 is as steady as the current one at 200–500 Pa.
 
 **What changed in the code:**
 
@@ -378,7 +378,7 @@ The details and numbers are in `README.md`, "Comparing with real whistles", seco
 | `transition` and `glide` time the fundamental | `tools/WhistleCheck.cpp` |
 | `analyse` prints model minus recording for H2–H8 over the notes both play; the octave split moved from 1.9 × to 1.94 × the lowest note; `blow=recorded`; preset names with ö match | `tools/WhistleCheck.cpp`, `Source/Whistle/ScalePlan.*` |
 | Jet bend (direction 2), a new Voicing parameter, 0 by default | `WhistleModel.cpp`, `WhistleGeometry.h`, instrument files, Instrument tab |
-| Two new presets, "D whistle, Goldie style (bright)" and "Low D whistle (bright)"; the Generation's breath noise 0.016 | `WhistleGeometry.cpp` |
+| Two new presets, "D whistle, Golden style (bright)" and "Low D whistle (bright)"; the Generation's breath noise 0.016 | `WhistleGeometry.cpp` |
 
 Every existing preset plays sample for sample as before, except the Generation's noise level.
 
@@ -386,14 +386,14 @@ Every existing preset plays sample for sample as before, except the Generation's
 
 | Instrument | Before | Now |
 |---|---|---|
-| Goldie high D | 10.7 dB (Goldie style) | 3.5 dB (bright) |
-| Goldie low D | 8.4 dB (Low D whistle) | 3.6 dB (bright) |
-| Löfgren, Generation, Moeck | 3.9, 5.1 and 3.7 dB | unchanged: new searches gained 0.3–0.5 dB |
+| Golden high D | 10.7 dB (Golden style) | 3.5 dB (bright) |
+| Golden low D | 8.4 dB (Low D whistle) | 3.6 dB (bright) |
+| Löf, Generation, Moeck | 3.9, 5.1 and 3.7 dB | unchanged: new searches gained 0.3–0.5 dB |
 
 **The directions of section 7:**
 
 1. *Separate register selection from harmonic content:* not needed for H4 and above, given the finding above. A broadband path opened only while the jet swings was tried twice and gave little (the harmonics above the tone holes' cutoff hardly reach the window, so there is little for the jet to amplify).
-2. *Speed-dependent mean deflection:* implemented as the jet bend. It separates the octaves' H2 by up to ~14 dB (a fixed edge: ~7). But the recorded Löfgren's H2 goes with the register, not with the breath inside the first octave, so a bend by speed is a partial answer.
+2. *Speed-dependent mean deflection:* implemented as the jet bend. It separates the octaves' H2 by up to ~14 dB (a fixed edge: ~7). But the recorded Löf's H2 goes with the register, not with the breath inside the first octave, so a bend by speed is a partial answer.
 3. *Dispersion:* not tried.
 4. *Asymmetric vortex loss:* tried at ±50 %: H2 moves 2 dB. Left out.
 5. *Sharper split:* not needed; the split's shape (tanh, parabolic, top-hat) changes the harmonics little at a given swing.
@@ -402,18 +402,18 @@ Every existing preset plays sample for sample as before, except the Generation's
 **Still open:**
 
 - The high D's H3 is 6–8 dB too strong with the bright voicing, and the low D's 10 dB too weak. On the high D the tube's third resonance sits on the third harmonic; the real whistles' wider octaves suggest theirs doesn't. Measured bore and head dimensions would settle it.
-- The Löfgren's 20 dB drop in H2 between the octaves.
-- Pitch against breath (4.4). To play as sharp as the recorded Goldie the model needs 1.9 kPa on B5 and 3.7 kPa on F#6, so the real scale is itself sharp there.
+- The Löf's 20 dB drop in H2 between the octaves.
+- Pitch against breath (4.4). To play as sharp as the recorded Golden the model needs 1.9 kPa on B5 and 3.7 kPa on F#6, so the real scale is itself sharp there.
 - The two bright presets, played on 2026-11-10, are good but a little too bright; kept as they are for now. The third harmonic, 6–8 dB too strong on the high D, is the first suspect.
 
 ## 10. Brightness against breath, and the theory's jet (2026-11-14)
 
-**Brightness is the swing.** `WhistleCheck inside <preset> <fingering> high` now gives the jet's swing in its real half-width (spreading included) and the sound's H5–H10. On the measured Goldie, H7–H10 follow the swing almost one to one: ~2 half-widths gives ~−55 dB re H1, ~4 gives ~−38. The recording of it wants ~2.5–3 in the first octave.
+**Brightness is the swing.** `WhistleCheck inside <preset> <fingering> high` now gives the jet's swing in its real half-width (spreading included) and the sound's H5–H10. On the measured Golden, H7–H10 follow the swing almost one to one: ~2 half-widths gives ~−55 dB re H1, ~4 gives ~−38. The recording of it wants ~2.5–3 in the first octave.
 
 - Without much vortex loss the swing is ~(4/π) × the loop's small-signal gain, which depends on neither the jet's speed nor its width. Vortex loss, which grows with the flow (so with spreading and with breath), is what holds it down.
 - Tried and removed: clipping the deflection (it only squares it again), and a low-pass on the jet's response at Strouhal 0.2 (no change: the high harmonics are made by the flow split, not fed round the loop).
 
-**Each note's swing rises from where it starts to speak, peaks mid-range and falls towards its octave break**, with either jet. Its range scales as f² in pressure, so at the same breath a low note is past its peak, getting duller as it's blown harder, while A and B are just above their start and brighten steeply. That is the "strong brilliance around A and B" of the voicing fitted to the measured Goldie. Next: swells on the real whistle (soft to the break, on D5, G5, B5, D6), with the pitch as the measure of breath, to see where in its range each note is played and how its brightness moves.
+**Each note's swing rises from where it starts to speak, peaks mid-range and falls towards its octave break**, with either jet. Its range scales as f² in pressure, so at the same breath a low note is past its peak, getting duller as it's blown harder, while A and B are just above their start and brighten steeply. That is the "strong brilliance around A and B" of the voicing fitted to the measured Golden. Next: swells on the real whistle (soft to the break, on D5, G5, B5, D6), with the pitch as the measure of breath, to see where in its range each note is played and how its brightness moves.
 
 **The theory's jet (voicing `jetModel` 1).** `JetStability`'s response (receptivity v/iω, growth and phase speed per ωh/U, for the windway's profile) as 64 taps in units of h/U, read from the jet's delay line at a spacing that follows the jet's speed. It reproduces the theory to 0.2 dB and a few degrees over ωh/U 0.06–0.4 (`WhistleCheck jet`).
 

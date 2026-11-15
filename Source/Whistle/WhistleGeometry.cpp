@@ -42,12 +42,12 @@ Voicing presetVoicing (size_t index)
                 v.jetStages = 1;
             }
 
-    const juce::String generation ("D whistle, Generation style"), lofgren (juce::String::fromUTF8 ("D whistle, Löfgren style"));
+    const juce::String generation ("D whistle, Generation style"), lof (juce::String::fromUTF8 ("D whistle, Löf style"));
     if (index < presets().size()
-        && (presets()[index].name.startsWith ("D whistle, Goldie") || presets()[index].name.contains ("whistle, wood")
-            || presets()[index].name.startsWith (generation) || presets()[index].name.startsWith (lofgren)))
+        && (presets()[index].name.startsWith ("D whistle, Golden") || presets()[index].name.contains ("whistle, wood")
+            || presets()[index].name.startsWith (generation) || presets()[index].name.startsWith (lof)))
     {
-        // Fitted to Real-examples/High-D-Goldie.wav (WhistleCheck analyse): the thin windway wants a lower jet band,
+        // Fitted to Real-examples/High-D-Golden.wav (WhistleCheck analyse): the thin windway wants a lower jet band,
         // one band-pass stage (no silent pressures between registers), and the jet settings that make a softly blown
         // low note swing far across the edge (rich, as the recording's bottom D) while the hard-blown second octave
         // stays nearly pure.
@@ -60,18 +60,18 @@ Voicing presetVoicing (size_t index)
         // the softer first octave back its odd harmonics.
         v.jetSpreading = 3.0f;
         v.vortexLoss = 0.6f;
-        // Breath noise as the RODE recordings of the Goldie and Lofgren: -66 to -69 dB between the harmonics in both
+        // Breath noise as the RODE recordings of the Golden and Lof: -66 to -69 dB between the harmonics in both
         // octaves (0.05 gave -64 in the second octave as played).
         v.breathNoise = 0.04f;
     }
-    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie style (bright)"))
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden style (bright)"))
     {
-        // The Goldie style voiced for the upper harmonics of the recorded Goldie (Real-examples/Goldie-High-D-RODE.wav,
+        // The Golden style voiced for the upper harmonics of the recorded Golden (Real-examples/Golden-High-D-RODE.wav,
         // WhistleCheck analyse): a jet of constant width (no spreading) and little vortex loss switches harder at the
         // edge, which is where the harmonics from the fourth up come from (H4-H8 within ~5 dB of the recording in
-        // both octaves; the Goldie style is 9-23 dB short of them). The jet bend, with the edge nearly centred, makes
+        // both octaves; the Golden style is 9-23 dB short of them). The jet bend, with the edge nearly centred, makes
         // the second octave purer instead of the spreading (H2 -27 dB there, -18 in the first). The jet band is a
-        // little higher, which keeps the octave breaks where the Goldie style has them. Still too strong: H3, by ~7 dB.
+        // little higher, which keeps the octave breaks where the Golden style has them. Still too strong: H3, by ~7 dB.
         // Played on 2026-11-10: good, if a little too bright.
         v.jetStrouhal = 0.018f;
         v.jetSpreading = 0.0f;
@@ -80,12 +80,12 @@ Voicing presetVoicing (size_t index)
         v.jetBend = 4.5f;
         v.breathNoise = 0.055f;  // The recording's -66 dB between the harmonics (2-4 kHz) in both octaves
     }
-    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie (measured)"))
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden (measured)"))
     {
-        // Searched against a recording of this whistle (Real-examples/Goldie-High-D-RODE-measured.wav, fit_voicing.py
+        // Searched against a recording of this whistle (Real-examples/Golden-High-D-RODE-measured.wav, fit_voicing.py
         // measured pernote=0.5). How bright a note is above H6 follows how far the jet swings across the edge, in its
         // half-widths (WhistleCheck inside high): ~2 gives H7-H10 near -55 dB, ~4 near -38; the recording wants
-        // ~2.5-3. The Goldie style's spreading swings 1.5-2 and less the harder it is blown (no response to breath);
+        // ~2.5-3. The Golden style's spreading swings 1.5-2 and less the harder it is blown (no response to breath);
         // vortex loss 0.10 let it swing 3.5-4 on every note (A and B 15-20 dB too bright above H7). 0.24 swings ~3
         // in the first octave and ~2 in the second. Little spreading keeps the second octave from going dull.
         v.jetStrouhal = 0.0185f;
@@ -95,9 +95,9 @@ Voicing presetVoicing (size_t index)
         v.slowJetGrowth = 0.52f;
         v.jetBend = 8.7f;
     }
-    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Goldie (measured), real pressure"))
+    if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden (measured), real pressure"))
     {
-        // The same whistle played at the mouth pressures measured on it (Real-examples/Goldie-pressure-1-swells-*,
+        // The same whistle played at the mouth pressures measured on it (Real-examples/Golden-pressure-1-swells-*,
         // WARBL's mouthpiece in the mouth beside the whistle's): D5 sounds from ~150 to ~310 Pa, G5 ~190-700, B5
         // ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that and holds each note 3-4 x past the real
         // break. Searched against those swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's
@@ -113,9 +113,9 @@ Voicing presetVoicing (size_t index)
         v.breathScale = 0.505f;
         v.breathCurve = 1.543f;
     }
-    // Two more high D's on the Goldie fipple, voiced by a search against RODE recordings of real whistles
+    // Two more high D's on the Golden fipple, voiced by a search against RODE recordings of real whistles
     // (Real-examples/*-RODE.wav, WhistleCheck analyse, octave averages of H2-H5 note by note), then checked with
-    // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Goldie style's).
+    // transition, glide and breath (no register jumps at 600 Pa; glides as clean as the Golden style's).
     if (index < presets().size() && presets()[index].name.startsWith (generation))
     {
         // The recorded Generation: strong even, weak odd harmonics in the first octave (H2/H3 -13/-22 dB). Less
@@ -124,12 +124,12 @@ Voicing presetVoicing (size_t index)
         v.vortexLoss = 0.84f;
         v.jetGain = 1.0f;
         // The quietest of the recorded whistles between its harmonics (-75 and -68 dB in the two octaves): with the
-        // Goldie fipple's 0.04 the model was 7-11 dB noisier.
+        // Golden fipple's 0.04 the model was 7-11 dB noisier.
         v.breathNoise = 0.016f;
     }
-    if (index < presets().size() && presets()[index].name.startsWith (lofgren))
+    if (index < presets().size() && presets()[index].name.startsWith (lof))
     {
-        // The recorded Löfgren: a rich first octave (H2/H3 -11/-13 dB) and a pure second (-31/-27): less vortex
+        // The recorded Löf: a rich first octave (H2/H3 -11/-13 dB) and a pure second (-31/-27): less vortex
         // loss for the first, spreading for the second.
         v.jetSpreading = 2.0f;
         v.vortexLoss = 0.42f;
@@ -140,7 +140,7 @@ Voicing presetVoicing (size_t index)
         // The low whistle (see its geometry): a jet band low enough for its registers to sit where a low D is
         // blown (low D ~120-670 Pa, the octave from ~670 Pa), one band-pass stage (the pitch follows the breath
         // half as much as with two), and a lower vortex loss, which lets the low notes swing further across the edge:
-        // the reedy odd harmonics of a real low D (WhistleCheck analyse with Real-examples/Low-D-Goldie.wav).
+        // the reedy odd harmonics of a real low D (WhistleCheck analyse with Real-examples/Low-D-Golden.wav).
         v.jetStrouhal = 0.0095f;
         v.jetStages = 1;
         v.vortexLoss = 0.4f;
@@ -148,7 +148,7 @@ Voicing presetVoicing (size_t index)
     }
     if (index < presets().size() && presets()[index].name.startsWith ("Low D whistle (bright)"))
     {
-        // Voiced after the recorded low D (Real-examples/Goldie-Low-D-RODE.wav), whose low register is far richer than
+        // Voiced after the recorded low D (Real-examples/Golden-Low-D-RODE.wav), whose low register is far richer than
         // the Low D whistle preset's: with the edge 0.25 mm into the pipe, less vortex loss and the jet's full gain
         // the first octave's H2 is -7 dB (recorded -7) and H4, H6 and H8 within 1 dB of the recording (H5 and H7 6-7 dB
         // short). Its H3 stays ~10 dB short (-17 against -8). Quick fingering changes are as steady as the Low D
@@ -174,15 +174,15 @@ Voicing presetVoicing (size_t index)
         // (a purer second octave).
         v.slowJetGrowth = 0.67f;
         v.breathNoise = 0.025f;  // A recorder's narrow, smooth windway: a clean tone with little hiss
-        // Its scale is in tune from low C at 172 Pa (a third of the Goldie's low D, 528) up to top C at 3.7 kPa: 21x,
+        // Its scale is in tune from low C at 172 Pa (a third of the Golden's low D, 528) up to top C at 3.7 kPa: 21x,
         // where a whistle's spans 8x. Scaled by 0.7 alone, the low C sounded at 34 Pa of WARBL breath (~20 sensor
         // counts, on the steepest part of the response, so every count of jitter moved it ~4 %) and jumped to the
         // octave at 92 Pa, the breath of the whistle's low D: weak and flaky. With the curve, low C is at 80 Pa and
-        // breaks at 172 (the Goldie's low D: 89 and 190), and top C needs 1.8 kPa (was 2.8).
+        // breaks at 172 (the Golden's low D: 89 and 190), and top C needs 1.8 kPa (was 2.8).
         v.breathScale = 1.0f;
         v.breathCurve = 1.45f;
     }
-    // Every preset at about the same loudness: the measured Goldie's, -14.6 dBFS over its test scale (WhistleCheck
+    // Every preset at about the same loudness: the measured Golden's, -14.6 dBFS over its test scale (WhistleCheck
     // scale: the mean in dB of the sounding 50 ms blocks, so soft low notes count as much as loud top ones). The
     // presets spread over 11 dB before (a tenor recorder -6.9, the low D -18.4). First match wins.
     if (index < presets().size())
@@ -190,8 +190,8 @@ Voicing presetVoicing (size_t index)
         struct Level { const char* nameStart; float gainDb; };
         static constexpr Level levels[] = {
             { "D whistle, cylindrical metal", -6.2f }, { "D whistle, conical metal", -2.5f }, { "D whistle, narrow head", -4.9f },
-            { "D whistle, wood", -2.8f }, { "D whistle, Goldie style (bright)", 0.3f }, { "D whistle, Goldie style", -2.2f },
-            { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löfgren */, { "D whistle, Goldie (measured)", 0.0f },
+            { "D whistle, wood", -2.8f }, { "D whistle, Golden style (bright)", 0.3f }, { "D whistle, Golden style", -2.2f },
+            { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löf */, { "D whistle, Golden (measured)", 0.0f },
             { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
             { "Soprano recorder in C (baroque fingering), real pressure", -1.0f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
         };
@@ -207,7 +207,7 @@ Voicing presetVoicing (size_t index)
         // Played at the mouth pressures measured on a Moeck soprano (Real-examples/Moeck-pressure-2-swells-*, WARBL's
         // mouthpiece in the mouth beside it): the scale spans only ~2.5 x in pressure, low C ~60-190 Pa, the pinched
         // E6-A6 ~200-430, where the voicing above needs ~8 x (E6 at 690 Pa, so it spoke only at the edge of its range).
-        // Searched against the swells, pressure by pressure (as the measured Goldie's real-pressure voicing; the
+        // Searched against the swells, pressure by pressure (as the measured Golden's real-pressure voicing; the
         // Moeck's own ~20 c below A440 left out): the jet's band twice as high, less vortex loss and slow-jet growth.
         // The search put the band at Strouhal 0.06-0.075 (with jet thinning) so that the pinched notes speak at the
         // real pressures; played, that overblew far too easily (G5 to the octave at ~300 Pa, played clean at 359 on
@@ -222,7 +222,7 @@ Voicing presetVoicing (size_t index)
         // Breath noise grows with the jet's speed: at the real pressures 0.025 left it 8-10 dB under the Moeck's
         // (-71..-73 dB between the harmonics at 2-4 kHz).
         v.breathNoise = 0.07f;
-        // WARBL's breath straight through, as for the measured Goldie's real-pressure voicing.
+        // WARBL's breath straight through, as for the measured Golden's real-pressure voicing.
         v.breathScale = 0.505f;
         v.breathCurve = 1.543f;
     }
@@ -323,31 +323,31 @@ const std::vector<Geometry>& presets()
             make ("D whistle, wood", 0.25926, 0.0125, 0.0125,
                   { { { false, 0.0, 0.0 }, { true, 0.11680, 0.00688 }, { true, 0.13866, 0.00850 }, { true, 0.15716, 0.00800 },
                       { true, 0.18030, 0.00700 }, { true, 0.19404, 0.00920 }, { true, 0.21526, 0.00720 }, { false, 0.0, 0.0 } } },
-                  0.0040, 1.3, 0.00087, 0.0042, 0.0080),  // The Goldie style's fipple: the easiest to play
+                  0.0040, 1.3, 0.00087, 0.0042, 0.0080),  // The Golden style's fipple: the easiest to play
             [&]
             {
-                // In the style of a Goldie high D (not measured): a thin aluminium tube, a narrow head (as the
-                // narrow-head preset), a low windway ceiling (Goldie's "medium" is ~0.87 mm) and a short window.
-                auto g = make ("D whistle, Goldie style", 0.26530, 0.0120, 0.0120,
+                // In the style of a Golden high D (not measured): a thin aluminium tube, a narrow head (as the
+                // narrow-head preset), a low windway ceiling (Golden's "medium" is ~0.87 mm) and a short window.
+                auto g = make ("D whistle, Golden style", 0.26530, 0.0120, 0.0120,
                                { { { false, 0.0, 0.0 }, { true, 0.11820, 0.00476 }, { true, 0.14308, 0.00700 }, { true, 0.16245, 0.00650 },
                                    { true, 0.18904, 0.00720 }, { true, 0.19865, 0.00680 }, { true, 0.22325, 0.00580 }, { false, 0.0, 0.0 } } },
                                0.0010, 1.0, 0.00087, 0.0042, 0.0080);
                 g.headLength = 0.030;
                 g.headDiameter = 0.0115;  // Narrow, but less than the narrow-head preset's 10.5 mm: its octave played 20-30 c sharp
-                g.edgeOffset = 0.00015;   // Into the pipe: the second harmonic of the recorded Goldie's low notes
+                g.edgeOffset = 0.00015;   // Into the pipe: the second harmonic of the recorded Golden's low notes
                 return g;
             }(),
             [&]
             {
-                // A Goldie high D as measured (docs/Goldie.md): a 12.5 mm bore in a 1.8 mm wall, a 0.97 x 7.7 mm windway
+                // A Golden high D as measured (docs/Golden.md): a 12.5 mm bore in a 1.8 mm wall, a 0.97 x 7.7 mm windway
                 // 24 mm long and a 5.8 mm window. The head is the tube pressed flat at the sides to 9 mm wide (top and
                 // bottom still round): 101.8 mm2, as a round bore of 11.4 mm. It runs 14 mm from the flue exit, i.e.
                 // 8.2 mm past the edge, then widens to the bore over 4 mm.
                 // The model has one width for the jet and the window: the windway's 7.7 mm, which sets the jet's flow
                 // (the window is 9 mm; its end correction is a little short for it). The bore (265 mm, edge to foot) and
                 // the holes are the real whistle's, not the tuner's: measured from the block bottom, 7.0 mm above the
-                // edge (labium to H6's centre measured 223 mm). The recording of it (Goldie-High-D-RODE.wav) plays its bottom D 12 c flat.
-                auto g = make ("D whistle, Goldie (measured)", 0.2650, 0.0125, 0.0125,
+                // edge (labium to H6's centre measured 223 mm). The recording of it (Golden-High-D-RODE.wav) plays its bottom D 12 c flat.
+                auto g = make ("D whistle, Golden (measured)", 0.2650, 0.0125, 0.0125,
                                { { { false, 0.0, 0.0 }, { true, 0.1153, 0.0058 }, { true, 0.1352, 0.0065 }, { true, 0.1530, 0.0059 },
                                    { true, 0.1800, 0.0055 }, { true, 0.1970, 0.0080 }, { true, 0.2230, 0.0076 }, { false, 0.0, 0.0 } } },
                                0.0018, 1.0, 0.00097, 0.0058, 0.0077);
@@ -361,7 +361,7 @@ const std::vector<Geometry>& presets()
             }(),
             [&]
             {
-                // Low D whistle: a 22 mm cylindrical bore (a Goldie low D measures ~21.8), a 1.0 mm windway (Goldie
+                // Low D whistle: a 22 mm cylindrical bore (a Golden low D measures ~21.8), a 1.0 mm windway (Golden
                 // medium blowers 0.9-1.0 mm) and a 13 mm wide window, as forum measurements of low whistles give. The
                 // window is short (5.2 mm, Overton style): a longer one let the jet grow so much that quick fingering
                 // changes flipped into the octave on the way (WhistleCheck transition).
@@ -412,31 +412,31 @@ const std::vector<Geometry>& presets()
             }(),
         };
 
-        // The Generation and Löfgren styles: the Goldie style's tube and fipple (the most playable), voiced and edged
+        // The Generation and Löf styles: the Golden style's tube and fipple (the most playable), voiced and edged
         // after RODE recordings of those whistles (presetVoicing). Their tubes and windways are not measured.
         for (size_t i = 0; i < instruments.size(); ++i)
-            if (instruments[i].name == "D whistle, Goldie style")
+            if (instruments[i].name == "D whistle, Golden style")
             {
-                auto generation = instruments[i], lofgren = instruments[i];
+                auto generation = instruments[i], lof = instruments[i];
                 generation.name = "D whistle, Generation style";
                 generation.edgeOffset = 0.00015;
-                lofgren.name = juce::String::fromUTF8 ("D whistle, Löfgren style");
-                lofgren.edgeOffset = 0.0002;  // Its first octave's strong second harmonic (H2 -11 dB)
-                // The same whistle voiced after the RODE recording of the Goldie (presetVoicing): the edge nearer the
+                lof.name = juce::String::fromUTF8 ("D whistle, Löf style");
+                lof.edgeOffset = 0.0002;  // Its first octave's strong second harmonic (H2 -11 dB)
+                // The same whistle voiced after the RODE recording of the Golden (presetVoicing): the edge nearer the
                 // jet's centre line, since its jet is bent off it at a soft breath (Voicing::jetBend).
                 auto bright = instruments[i];
-                bright.name = "D whistle, Goldie style (bright)";
+                bright.name = "D whistle, Golden style (bright)";
                 bright.edgeOffset = 0.00005;
-                instruments.insert (instruments.begin() + (long) i + 1, { bright, generation, lofgren });
+                instruments.insert (instruments.begin() + (long) i + 1, { bright, generation, lof });
                 break;
             }
-        // The measured Goldie again, voiced for the mouth pressures measured on it (presetVoicing), with the edge
+        // The measured Golden again, voiced for the mouth pressures measured on it (presetVoicing), with the edge
         // on the jet's centre line (searched with it).
         for (size_t i = 0; i < instruments.size(); ++i)
-            if (instruments[i].name == "D whistle, Goldie (measured)")
+            if (instruments[i].name == "D whistle, Golden (measured)")
             {
                 auto real = instruments[i];
-                real.name = "D whistle, Goldie (measured), real pressure";
+                real.name = "D whistle, Golden (measured), real pressure";
                 real.edgeOffset = 0.0;
                 instruments.insert (instruments.begin() + (long) i + 1, real);
                 break;
@@ -510,7 +510,7 @@ const std::vector<Geometry>& presets()
             else if (g.name.contains ("conical metal") || g.name.contains ("narrow head"))
                 g.edgeOffset = 0.00025;
             else if (g.name.contains ("whistle, wood"))
-                g.edgeOffset = 0.00015;  // As the Goldie style, whose fipple it shares
+                g.edgeOffset = 0.00015;  // As the Golden style, whose fipple it shares
         }
 
         // Each whistle comes twice: on WARBL's L1-R3 sensors and on L2-R4 (the same instrument, played with

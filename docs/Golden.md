@@ -1,4 +1,4 @@
-Goldie High-D:
+Golden High-D:
     Inner diameter tube: 12.5 mm
     Outer diameter tube: 16.1 mm
     Thickness tube: 1.8 mm
@@ -19,5 +19,5 @@ Goldie High-D:
         H6: 230 mm diam: 7.5 mm
 
 
-Goldie Low-D 0.87 mm windwday:
+Golden Low-D 0.87 mm windwday:
  

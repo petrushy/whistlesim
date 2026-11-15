@@ -48,10 +48,10 @@ struct Geometry
     double boreDiameterTop = 0.012;
     double boreDiameterFoot = 0.012;
 
-    // Optional head section (e.g. a narrower bore around the fipple, as in Goldie whistles): from the window
+    // Optional head section (e.g. a narrower bore around the fipple, as in Golden whistles): from the window
     // down to headLength the diameter goes linearly from headDiameter to the bore's own diameter there.
     // headLength = 0 means no head section. headStraightLength: the head keeps headDiameter this far from the
-    // window and only then blends into the bore (a measured Goldie: 14 mm straight, then a 4 mm change);
+    // window and only then blends into the bore (a measured Golden: 14 mm straight, then a 4 mm change);
     // 0 = it blends all the way from the window.
     double headLength = 0.0;
     double headDiameter = 0.012;
@@ -103,7 +103,7 @@ struct Geometry
     // Effective length of an open tone hole: chimney plus the inner correction, the matching volume and the
     // radiation of a hole drilled through a thick wall (Lefebvre & Scavone 2012, Eqs. 31, 8 and 11; d = b / a).
     // Keefe's (1990) t + b (1.4 - 0.58 d^2), used before, is ~0.2 mm longer for holes as large as a whistle's.
-    // Against finger taps on a measured Goldie these and the series lengths below brought the open-hole notes'
+    // Against finger taps on a measured Golden these and the series lengths below brought the open-hole notes'
     // resonances from 7-16 c to within ~10 c of the real tube's (rms 8.6 -> 6.0 c).
     double holeEffectiveLength (int hole) const
     {

@@ -3,7 +3,7 @@
 
     tools/fit_voicing.py <recording> [name=value ...] [options]
 
-    recording   goldie, measured, generation, lofgren, lowd or moeck (see RECORDINGS below)
+    recording   golden, measured, generation, lof, lowd or moeck (see RECORDINGS below)
     name=value  where the search starts, for each voicing setting to search: any of
                 edge (mm), bend (Pa), vortex (x the preset's vortex loss), gain, spread, slow, st, noise.
                 They are passed to WhistleCheck as they are. Settings not named keep the preset's value.
@@ -14,12 +14,12 @@
     threads=N   WhistleCheck runs at once (default 4)
     pernote=W   share of the score taken note by note over H2-H10 instead of from the octave averages over
                 H2-H8 (0-1, default 0). Octave averages can match while single notes are far too bright or dull:
-                a voicing for the measured Goldie matched them within 2.5 dB with A and B 15-20 dB too bright
+                a voicing for the measured Golden matched them within 2.5 dB with A and B 15-20 dB too bright
                 above H7, and played unevenly.
 
 Example:
 
-    tools/fit_voicing.py goldie random=48 box=4 edge=0.05 bend=6 vortex=0.3 gain=1.1 spread=0 slow=0.45
+    tools/fit_voicing.py golden random=48 box=4 edge=0.05 bend=6 vortex=0.3 gain=1.1 spread=0 slow=0.45
 
 The score is the mean size (dB) of the differences between the model's and the recording's octave averages of
 H2-H8 (H6-H8 at half weight), over the notes both play, plus a little for the octaves' loudness difference. A
@@ -50,12 +50,12 @@ WHISTLECHECK = os.environ.get("WHISTLECHECK", os.path.join(REPO, "build/WhistleC
 
 # Recording, the preset voiced after it, and the pressures (Pa) at which quick fingering changes are checked.
 RECORDINGS = {
-    "goldie": ("tools/Real-examples/Goldie-High-D-RODE.wav", "Goldie style", (400, 600, 800)),
-    # The same Goldie, recorded again (2026-11-14) after its bore and holes were measured: the preset built from them.
-    "measured": ("tools/Real-examples/Goldie-High-D-RODE-measured.wav", "Goldie (measured)", (400, 600, 800)),
+    "golden": ("tools/Real-examples/Golden-High-D-RODE.wav", "Golden style", (400, 600, 800)),
+    # The same Golden, recorded again (2026-11-14) after its bore and holes were measured: the preset built from them.
+    "measured": ("tools/Real-examples/Golden-High-D-RODE-measured.wav", "Golden (measured)", (400, 600, 800)),
     "generation": ("tools/Real-examples/Generation-High-D-RODE.wav", "Generation style", (400, 600, 800)),
-    "lofgren": ("tools/Real-examples/Löfgren-High-D-RODE.wav", "Löfgren style", (400, 600, 800)),
-    "lowd": ("tools/Real-examples/Goldie-Low-D-RODE.wav", "Low D whistle", (200, 300, 400)),
+    "lof": ("tools/Real-examples/Löf-High-D-RODE.wav", "Löf style", (400, 600, 800)),
+    "lowd": ("tools/Real-examples/Golden-Low-D-RODE.wav", "Low D whistle", (200, 300, 400)),
     "moeck": ("tools/Real-examples/Moeck-Soprano-RODE.wav", "Soprano recorder", (250, 300, 350)),
 }
 

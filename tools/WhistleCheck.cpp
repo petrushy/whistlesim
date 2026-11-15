@@ -167,7 +167,7 @@ static void saveWavArg (int argc, char* argv[], const juce::String& name, const 
 // A preset by number or by part of its name (e.g. "recorder", "narrow head").
 static int presetArg (const char* arg)
 {
-    const auto text = juce::String::fromUTF8 (arg);  // Names like Löfgren, as the shell passes them
+    const auto text = juce::String::fromUTF8 (arg);  // Names like Löf, as the shell passes them
     if (text.containsOnly ("0123456789"))
         return juce::jlimit (0, (int) presets().size() - 1, text.getIntValue());
     for (size_t i = 0; i < presets().size(); ++i)
