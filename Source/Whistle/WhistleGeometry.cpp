@@ -107,6 +107,7 @@ Voicing presetVoicing (size_t index)
         v.jetGain = 0.76f;
         v.jetBend = 5.7f;
         v.slowJetGrowth = 0.42f;
+        v.breathNoise = 0.055f;  // At these pressures 0.04 was 2-3 dB under the recording's breath noise
         // WARBL's breath straight through: the breath response's ~2 x (outputMax 4930 Pa at 2500 Pa in, curve 34,
         // exponent 0.648) undone, so the model gets the mouth pressure WARBL measures (less its 10 Pa threshold).
         v.breathScale = 0.505f;
@@ -192,7 +193,7 @@ Voicing presetVoicing (size_t index)
             { "D whistle, wood", -2.8f }, { "D whistle, Goldie style (bright)", 0.3f }, { "D whistle, Goldie style", -2.2f },
             { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löfgren */, { "D whistle, Goldie (measured)", 0.0f },
             { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
-            { "Soprano recorder in C (baroque fingering), real pressure", -0.4f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
+            { "Soprano recorder in C (baroque fingering), real pressure", 1.2f }, { "Soprano recorder", 0.8f }, { "Alto recorder", -4.4f }, { "Tenor recorder", -7.7f },
         };
         for (const auto& l : levels)
             if (presets()[index].name.startsWith (l.nameStart))
@@ -208,11 +209,19 @@ Voicing presetVoicing (size_t index)
         // E6-A6 ~200-430, where the voicing above needs ~8 x (E6 at 690 Pa, so it spoke only at the edge of its range).
         // Searched against the swells, pressure by pressure (as the measured Goldie's real-pressure voicing; the
         // Moeck's own ~20 c below A440 left out): the jet's band twice as high, less vortex loss and slow-jet growth.
-        // Score 9.5 against 12.9. The first octave and D6 are in tune at ~1-1.5 x the measured pressures; the pinched
-        // notes still need ~1.7 x (flat below that: the bore and holes are typical, not the Moeck's).
-        v.jetStrouhal = 0.06f;
-        v.vortexLoss = 0.35f;
-        v.slowJetGrowth = 0.37f;
+        // A band that high on a jet of fixed thickness cut the low notes short (low C broke to the octave at ~150 Pa,
+        // the real one holds past 198; played at ~110): hard to play clean. The jet thins as it speeds up (jetThinning
+        // 1), so the low notes keep their range (low C ~90-200 Pa) while the pinched notes speak from ~280-400 Pa.
+        // Score 10.8 against 12.9 (9.1 with thinning 0.5, whose low C breaks at ~170 Pa: less playable). The pinched
+        // notes are flat at the real pressures: the bore and holes are typical, not the Moeck's.
+        v.jetStrouhal = 0.075f;
+        v.jetThinning = 1.0f;
+        v.vortexLoss = 0.27f;
+        v.jetGain = 1.15f;
+        v.slowJetGrowth = 0.47f;
+        // Breath noise grows with the jet's speed: at the real pressures 0.025 left it 8-10 dB under the Moeck's
+        // (-71..-73 dB between the harmonics at 2-4 kHz).
+        v.breathNoise = 0.07f;
         // WARBL's breath straight through, as for the measured Goldie's real-pressure voicing.
         v.breathScale = 0.505f;
         v.breathCurve = 1.543f;

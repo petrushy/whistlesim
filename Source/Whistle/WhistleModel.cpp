@@ -198,6 +198,7 @@ void WhistleModel::setVoicing (const Voicing& v)
     jetBend = v.jetBend;
     const bool newTaps = v.jetModel == 1 && (jetModel.load() != 1 || std::abs (jetCutoff.load() - v.jetCutoff) > 1.0e-6f);
     jetModel = v.jetModel;
+    jetThinning = v.jetThinning;
     jetCutoff = v.jetCutoff;
     if (newTaps)
         setGeometry (getGeometry());  // Remake the jet's taps for the new cutoff
@@ -229,6 +230,7 @@ Voicing WhistleModel::getVoicing() const
     v.jetSpreading = jetSpreading.load();
     v.jetBend = jetBend.load();
     v.jetModel = jetModel.load();
+    v.jetThinning = jetThinning.load();
     v.jetCutoff = jetCutoff.load();
     v.fingerTap = fingerTap.load();
     v.fingerSoftness = fingerSoftness.load();
@@ -579,7 +581,8 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     if ((jetFilterCountdown--) <= 0)
     {
         jetFilterCountdown = 8;
-        const double centre = juce::jlimit (50.0, 0.4 * rate, (double) jetStrouhal.load (std::memory_order_relaxed) * speed / h);
+        const double thinning = std::pow (std::max (0.2, (double) speed / cfg.referenceJetSpeed), (double) jetThinning.load (std::memory_order_relaxed));
+        const double centre = juce::jlimit (50.0, 0.4 * rate, (double) jetStrouhal.load (std::memory_order_relaxed) * speed / h * thinning);
         const double w0 = 2.0 * kPi * centre / rate;
         const double alpha = std::sin (w0) / (2.0 * jetQ.load (std::memory_order_relaxed));
         const double a0 = 1.0 + alpha;

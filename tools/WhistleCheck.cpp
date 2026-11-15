@@ -206,6 +206,7 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("stages=")) v.jetStages = (int) value;
         if (arg.startsWith ("spread=")) v.jetSpreading = value;
         if (arg.startsWith ("jet=")) v.jetModel = (int) value;
+        if (arg.startsWith ("thin=")) v.jetThinning = value;
         if (arg.startsWith ("cutoff=")) v.jetCutoff = value;
         if (arg.startsWith ("bend=")) v.jetBend = value;
         if (arg.startsWith ("tap=")) v.fingerTap = value;

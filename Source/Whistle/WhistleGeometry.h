@@ -182,6 +182,11 @@ struct Voicing
     // impulse response in units of h / U. With 1, jetGain scales the theory's deflection and jetStrouhal,
     // jetConvection, jetStages and slowJetGrowth are not used.
     int jetModel = 0;
+    // The jet thins as it speeds up (the windway's boundary layers, ~ U^-1/2), so the band it amplifies moves up
+    // faster than its speed: the band's centre goes as U (U / U_ref)^jetThinning, U_ref the speed whose band is the
+    // lowest note. 0 = a jet of fixed thickness (centre in proportion to U). Real recorders play their second
+    // octave at ~2 x the first octave's pressure, not the ~4 x a fixed thickness gives.
+    float jetThinning = 0.0f;
     // jetModel 1: the omega h / U above which the jet's waves stop growing (they saturate within the window
     // rather than grow without limit as linear theory has them); the response fades out by 1.6 x this.
     float jetCutoff = 0.3f;

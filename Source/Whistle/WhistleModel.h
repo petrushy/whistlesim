@@ -85,6 +85,7 @@ public:
     std::atomic<float> breathCurve { 1.0f };  // See Voicing (the same)
     std::atomic<float> jetSpreading { 0.0f };  // See Voicing
     std::atomic<int> jetModel { 0 };  // See Voicing
+    std::atomic<float> jetThinning { 0.0f };  // See Voicing
     std::atomic<float> jetCutoff { 0.3f };  // See Voicing
     std::atomic<float> jetBend { 0.0f };  // See Voicing
     std::atomic<float> fingerTap { 0.0f }, fingerSoftness { 4.0f }, bodyKnock { 0.0f }, bodyPitch { 1000.0f }, bodyRing { 15.0f };  // See Voicing
