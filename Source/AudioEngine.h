@@ -67,13 +67,15 @@ public:
             return thumbResponse().closedness (coverage);
         return holeResponse().closedness (coverage, fingerHole (hole));
     }
-    // Tilt aims the jet (see response::Tilt); set on the message thread.
+    // Tilt changes the voicing (see response::Tilt); set on the message thread.
     std::atomic<bool> tiltEnabled { response::Tilt().enabled }, tiltInvert { response::Tilt().invert };
     std::atomic<float> tiltZero { response::Tilt().zero }, tiltDeadZone { response::Tilt().deadZone },
-        tiltRange { response::Tilt().range }, tiltMaxShift { response::Tilt().maxShift };
+        tiltRange { response::Tilt().range }, tiltMaxShift { response::Tilt().maxShift },
+        tiltMaxSpreading { response::Tilt().maxSpreading }, tiltMaxNoiseDb { response::Tilt().maxNoiseDb };
     response::Tilt tiltResponse() const
     {
-        return { tiltEnabled.load(), tiltZero.load(), tiltDeadZone.load(), tiltRange.load(), tiltMaxShift.load(), tiltInvert.load() };
+        return { tiltEnabled.load(), tiltZero.load(), tiltDeadZone.load(), tiltRange.load(), tiltMaxShift.load(), tiltInvert.load(),
+                 tiltMaxSpreading.load(), tiltMaxNoiseDb.load() };
     }
     std::atomic<float> measuredTilt { 0.0f };  // WARBL's elevation in degrees, smoothed over ~100 ms (for display and zero)
     // Each hole's size, for the physical (finger height) response; set with the instrument.

@@ -30,6 +30,8 @@ struct Controls
     float footOpenness = 1.0f;                  // Bell sensor; used only if the geometry lets it close the foot
     float mouthPressure = 0.0f;                 // Pa above ambient
     float edgeShift = 0.0f;                     // m, added to the geometry's edge offset (e.g. from WARBL's tilt)
+    float spreadingShift = 0.0f;                // Added to the voicing's jet spreading (kept >= 0; e.g. from tilt)
+    float noiseGain = 1.0f;                     // Times the voicing's breath noise (e.g. from tilt)
 };
 
 class WhistleModel
@@ -270,7 +272,7 @@ private:
     // Controls, ramped per internal sample
     Controls current, target;
     std::array<float, kNumHoles> opennessStep {};
-    float footStep = 0.0f, pressureStep = 0.0f, edgeStep = 0.0f;
+    float footStep = 0.0f, pressureStep = 0.0f, edgeStep = 0.0f, spreadingStep = 0.0f, noiseGainStep = 0.0f;
     int rampRemaining = 0;
 };
 

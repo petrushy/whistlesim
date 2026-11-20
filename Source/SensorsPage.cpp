@@ -209,10 +209,10 @@ SensorsPage::SensorsPage (AudioEngine& a) : audio (a)
         .setTooltip ("Above 64 the hole stays more open as the thumb covers it (a pinch reads as more open), below 64 it closes sooner.");
 
     // Tilt
-    tiltTitle.setTooltip ("WARBL's elevation shifts where the jet meets the edge, as if the whistle's voicing were slightly "
-                          "flexible: mostly the balance of even and odd harmonics (fuller or hollower), a little pitch and "
-                          "register. A real whistle is rigid; this is an extra control. Hold WARBL as you play and press "
-                          "\"Set zero now\", so your normal angle leaves the voicing as it is.");
+    tiltTitle.setTooltip ("WARBL's elevation changes the voicing, as if the whistle's were flexible: where the jet meets the "
+                          "edge (subtle), how much the jet widens (clear in the second octave) and the breath noise. Set an "
+                          "amount for each you want; 0 leaves it alone. A real whistle is rigid; this is an extra control. "
+                          "Hold WARBL as you play and press \"Set zero now\", so your normal angle leaves the voicing as it is.");
     for (auto* t : { &tiltToggle, &tiltInvertToggle })
     {
         t->setColour (juce::ToggleButton::textColourId, text);
@@ -228,11 +228,17 @@ SensorsPage::SensorsPage (AudioEngine& a) : audio (a)
     addAndMakeVisible (tiltZeroButton);
     addRow (tiltRows, "Dead zone", 0.0, 15.0, 0.5, juce::String::fromUTF8 ("°"), audio.tiltDeadZone)
         .setTooltip ("Degrees either side of the zero angle that do nothing, so small movements don't change the tone.");
-    addRow (tiltRows, "Range (full shift at)", 5.0, 60.0, 1.0, juce::String::fromUTF8 ("°"), audio.tiltRange)
-        .setTooltip ("How far from the zero angle you tilt for the full shift.");
-    addRow (tiltRows, "Maximum edge shift", 0.0, 0.4, 0.01, "mm", audio.tiltMaxShift)
-        .setTooltip ("How far the jet's aim moves at full tilt. Into the pipe the tone gets fuller (stronger even harmonics), "
-                     "out of it hollower; beyond about 0.1-0.15 mm into the pipe some notes stop speaking.");
+    addRow (tiltRows, "Range (full change at)", 5.0, 60.0, 1.0, juce::String::fromUTF8 ("°"), audio.tiltRange)
+        .setTooltip ("How far from the zero angle you tilt for the full change.");
+    addRow (tiltRows, "Edge shift", 0.0, 0.4, 0.01, "mm", audio.tiltMaxShift)
+        .setTooltip ("How far the jet's aim moves at full tilt. Subtle: into the pipe the tone gets a little fuller (stronger "
+                     "even harmonics, ~4 dB), out of it hollower; beyond about 0.1-0.15 mm into the pipe some notes stop speaking.");
+    addRow (tiltRows, "Jet spreading change", -4.0, 4.0, 0.1, "", audio.tiltMaxSpreading)
+        .setTooltip ("Added to the instrument's jet spreading at full tilt (taken off the other way; it never goes below 0). "
+                     "More: the hard-blown notes come out purer and louder; less: buzzier. Clear above ~500 Pa, none on soft "
+                     "notes, whose jet isn't turbulent. Negative swaps the direction. 0 = off.");
+    addRow (tiltRows, "Breath noise change", -18.0, 18.0, 0.5, "dB", audio.tiltMaxNoiseDb)
+        .setTooltip ("How much louder the breath noise gets at full tilt (quieter the other way). Negative swaps the direction. 0 = off.");
 
     startTimerHz (30);
 }
@@ -283,11 +289,23 @@ void SensorsPage::timerCallback()
                       juce::dontSendNotification);
     const auto tilt = audio.tiltResponse();
     const float tiltNow = audio.measuredTilt.load();
-    tiltInfo.setText ("Now " + juce::String (tiltNow, 1) + juce::String::fromUTF8 ("°") + " (zero "
-                          + juce::String (tilt.zero, 1) + juce::String::fromUTF8 ("°") + "): edge offset "
-                          + (tilt.enabled ? juce::String (tilt.edgeShiftMm (tiltNow) >= 0.0f ? "+" : "") + juce::String (tilt.edgeShiftMm (tiltNow), 3) + " mm"
-                                          : juce::String ("unchanged (off)")),
-                      juce::dontSendNotification);
+    auto signedValue = [] (float v, int decimals) { return (v >= 0.0f ? "+" : "") + juce::String (v, decimals); };
+    juce::String tiltNowText = "Now " + juce::String (tiltNow, 1) + juce::String::fromUTF8 ("°") + " (zero "
+                               + juce::String (tilt.zero, 1) + juce::String::fromUTF8 ("°") + "): ";
+    if (! tilt.enabled)
+        tiltNowText << "voicing unchanged (off)";
+    else
+    {
+        juce::StringArray changes;
+        if (tilt.maxShift != 0.0f)
+            changes.add ("edge " + signedValue (tilt.edgeShiftMm (tiltNow), 3) + " mm");
+        if (tilt.maxSpreading != 0.0f)
+            changes.add ("spreading " + signedValue (tilt.spreadingShift (tiltNow), 2));
+        if (tilt.maxNoiseDb != 0.0f)
+            changes.add ("noise " + signedValue (tilt.noiseDb (tiltNow), 1) + " dB");
+        tiltNowText << (changes.isEmpty() ? juce::String ("no amounts set") : changes.joinIntoString (", "));
+    }
+    tiltInfo.setText (tiltNowText, juce::dontSendNotification);
 
     {
         const float coverage = audio.measuredCoverage[0].load();
@@ -376,5 +394,5 @@ void SensorsPage::resized()
     holeJumpToggle.setBounds (holeShape.getBounds().withX (holeShapeHelp.getRight() + 10).withWidth (230));
     holeJumpHelp.setBounds (holeShape.getBounds().withX (holeJumpToggle.getRight()).withWidth (20));
     thumbHelp.setBounds (thumbTitle.getBounds().withX (thumbTitle.getX() + 215).withWidth (20));
-    tiltHelp.setBounds (tiltTitle.getBounds().withX (tiltTitle.getX() + 135).withWidth (20));
+    tiltHelp.setBounds (tiltTitle.getBounds().withX (tiltTitle.getX() + 180).withWidth (20));
 }

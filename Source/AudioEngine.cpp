@@ -279,7 +279,10 @@ whistle::Controls AudioEngine::controlsFromFrame (const warbl::SensorFrame& fram
         haveTilt = true;
         measuredTilt = smoothedTilt;
     }
-    c.edgeShift = tiltResponse().edgeShiftMm (smoothedTilt) * 0.001f;
+    const auto tilt = tiltResponse();
+    c.edgeShift = tilt.edgeShiftMm (smoothedTilt) * 0.001f;
+    c.spreadingShift = tilt.spreadingShift (smoothedTilt);
+    c.noiseGain = juce::Decibels::decibelsToGain (tilt.noiseDb (smoothedTilt));
 
     const float measured = std::max (0.0f, (float) ((int) frame.pressure - ambient14.load()) * kPascalPerCount);
     measuredPressure = measured;

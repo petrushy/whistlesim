@@ -459,6 +459,8 @@ void WhistleModel::setControls (const Controls& controls, double rampSeconds)
     footStep = (target.footOpenness - current.footOpenness) / rampSamples;
     pressureStep = (target.mouthPressure - current.mouthPressure) / rampSamples;
     edgeStep = (target.edgeShift - current.edgeShift) / rampSamples;
+    spreadingStep = (target.spreadingShift - current.spreadingShift) / rampSamples;
+    noiseGainStep = (target.noiseGain - current.noiseGain) / rampSamples;
     rampRemaining = rampSamples;
 }
 
@@ -471,6 +473,8 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         current.footOpenness += footStep;
         current.mouthPressure += pressureStep;
         current.edgeShift += edgeStep;
+        current.spreadingShift += spreadingStep;
+        current.noiseGain += noiseGainStep;
         if (--rampRemaining == 0)
             current = target;
     }
@@ -552,7 +556,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     noiseHigh += noiseHighA * (noiseLow - noiseHigh);
     const float band = (noiseLow - noiseHigh) * noiseNorm * 1.4f;  // Second pole: ~1.4x to keep the level
 
-    const float amount = breathNoise.load (std::memory_order_relaxed);
+    const float amount = breathNoise.load (std::memory_order_relaxed) * std::max (0.0f, current.noiseGain);
     // Edge noise: of order rho U^2 (below). The edge-dipole law (U^3) let the hiss overtake the tone at the high
     // pressures of the top notes.
 
@@ -615,7 +619,8 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
 
     // The jet's half-width where it meets the edge: 0.4 h leaving the flue, widening across the window as it becomes
     // turbulent (plane turbulent jet: ~0.1 per unit distance).
-    const float jetHalfWidth = 0.4f * h + jetSpreading.load (std::memory_order_relaxed) * turbulent * 0.1f * cfg.windowLength;
+    const float spreading = std::max (0.0f, jetSpreading.load (std::memory_order_relaxed) + current.spreadingShift);
+    const float jetHalfWidth = 0.4f * h + spreading * turbulent * 0.1f * cfg.windowLength;
     // The slow jet's extra growth is for long waves (at and below the band centre), not for high resonances.
     jetBoostLow += jetBoostA * (filtered - jetBoostLow);
     float grown = jetAmplification * (filtered + jetSlowBoost * jetBoostLow);

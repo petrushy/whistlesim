@@ -127,10 +127,15 @@ struct Thumb
     }
 };
 
-// Tilt aims the jet: WARBL's elevation (degrees, from the accelerometer) shifts where the jet meets the edge, as
-// if the whistle's voicing were slightly flexible. A real fipple flute is rigid; this is an extra control, and the
-// physics still decides what it does (mostly the balance of even and odd harmonics). Zeroed at the player's
-// normal playing angle, with a dead zone around it, then a straight line up to the maximum shift at +-range.
+// Tilt changes the voicing: WARBL's elevation (degrees, from the accelerometer) moves up to three voicing settings,
+// as if the whistle's voicing were flexible. A real fipple flute is rigid; this is an extra control, and the physics
+// still decides what it does. Zeroed at the player's normal playing angle, with a dead zone around it, then a
+// straight line up to each setting's full change at +-range; a setting whose amount is 0 is left alone.
+//  - Edge shift: where the jet meets the edge. Subtle: mostly the balance of even and odd harmonics, by ~4 dB.
+//  - Jet spreading: how much the jet widens once turbulent. Clear above ~500 Pa: on the wooden whistle 0 -> 3 -> 6
+//    takes the second octave's H2/H4 from -16/-29 through -25/-43 to -31/-55 dB (buzzy to pure), ~3 dB louder per step.
+//    No effect on softly blown notes, whose jet isn't turbulent.
+//  - Breath noise: the hiss at the jet and edge, in dB.
 struct Tilt
 {
     bool enabled = false;
@@ -140,17 +145,25 @@ struct Tilt
     float maxShift = 0.1f;     // mm. On the D whistle +0.1 mm raises the 2nd harmonic 4-6 dB (fuller), -0.15 mm lowers it
                                // ~6 dB (hollower); +0.15 mm already silences some notes near their thresholds.
     bool invert = false;       // Swap the direction (it depends on how the sensor sits in WARBL)
+    float maxSpreading = 0.0f;  // Jet spreading added at full tilt (negative: less spreading that way); 0 = off
+    float maxNoiseDb = 0.0f;    // Breath noise change at full tilt, dB (negative: quieter that way); 0 = off
 
-    // Edge offset change in mm for an elevation in degrees.
-    float edgeShiftMm (float elevation) const
+    // How far the tilt is towards full: -1..1, 0 inside the dead zone.
+    float amount (float elevation) const
     {
         if (! enabled)
             return 0.0f;
         const float x = (invert ? -1.0f : 1.0f) * (elevation - zero);
         const float beyond = std::max (0.0f, std::abs (x) - deadZone);
         const float u = std::min (1.0f, beyond / std::max (1.0f, range - deadZone));
-        return (x < 0.0f ? -u : u) * maxShift;
+        return x < 0.0f ? -u : u;
     }
+    // Edge offset change in mm for an elevation in degrees.
+    float edgeShiftMm (float elevation) const { return amount (elevation) * maxShift; }
+    // Jet spreading added (to the voicing's) for an elevation.
+    float spreadingShift (float elevation) const { return amount (elevation) * maxSpreading; }
+    // Breath noise change in dB for an elevation.
+    float noiseDb (float elevation) const { return amount (elevation) * maxNoiseDb; }
 };
 
 } // namespace response

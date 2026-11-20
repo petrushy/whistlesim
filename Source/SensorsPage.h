@@ -64,8 +64,8 @@ private:
     HelpDot holeJumpHelp { "Hold back sudden jumps", [this] { return holeJumpToggle.getTooltip(); } };
     HelpDot holeShapeHelp { "Hole response shape", [this] { return holeShape.getTooltip(); } };
     HelpDot thumbHelp { "Thumb hole (recorder pinch)", [this] { return thumbTitle.getTooltip(); } };
-    HelpDot tiltHelp { "Tilt aims the jet", [this] { return tiltTitle.getTooltip(); } };
-    juce::Label tiltTitle { {}, "Tilt aims the jet" }, tiltInfo;
+    HelpDot tiltHelp { "Tilt changes the voicing", [this] { return tiltTitle.getTooltip(); } };
+    juce::Label tiltTitle { {}, "Tilt changes the voicing" }, tiltInfo;
     juce::ToggleButton tiltToggle { "On" }, tiltInvertToggle { "Invert" };
     juce::TextButton tiltZeroButton { "Set zero now" };
     juce::TextButton breathDefaults { "Defaults" }, holeDefaults { "Defaults" };

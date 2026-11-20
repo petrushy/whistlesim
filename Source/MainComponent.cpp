@@ -31,6 +31,8 @@ juce::var sensorsToVar (const AudioEngine& a)
     d->setProperty ("tiltDeadZone_deg", a.tiltDeadZone.load());
     d->setProperty ("tiltRange_deg", a.tiltRange.load());
     d->setProperty ("tiltMaxShift_mm", a.tiltMaxShift.load());
+    d->setProperty ("tiltMaxSpreading", a.tiltMaxSpreading.load());
+    d->setProperty ("tiltMaxNoise_dB", a.tiltMaxNoiseDb.load());
     return o;
 }
 
@@ -61,6 +63,8 @@ void sensorsFromVar (const juce::var& o, AudioEngine& a)
     read ("tiltDeadZone_deg", a.tiltDeadZone);
     read ("tiltRange_deg", a.tiltRange);
     read ("tiltMaxShift_mm", a.tiltMaxShift);
+    read ("tiltMaxSpreading", a.tiltMaxSpreading);
+    read ("tiltMaxNoise_dB", a.tiltMaxNoiseDb);
     if (o.hasProperty ("tiltEnabled"))
         a.tiltEnabled = (bool) o["tiltEnabled"];
     if (o.hasProperty ("tiltInvert"))
