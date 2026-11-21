@@ -498,15 +498,29 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     //    to leave at that speed (Bernoulli): rho L dU/dt = p - rho U^2 / 2. Time constant L / U: ~1 ms when
     //    blowing softly, ~0.3 ms when blowing hard. Solved implicitly, which is stable for any length; with
     //    no mass the speed follows the pressure at once.
+    //    Viscous drag: once the breath stops, the Bernoulli term alone lets the air coast (U = U0 / (1 + U0 t / 2L):
+    //    still ~1 m/s 50 ms later), and that slow jet keeps feeding the bore, so a note's end rang on as a pure
+    //    tone (Q ~120 against the bore's ~70) that glided as the fingers moved. Below the speed at which the flow
+    //    is fully developed over the windway (entry length 0.16 h^2 U / nu = L: ~2.6 m/s for 1 x 28 mm) the
+    //    walls stop it, as plane Poiseuille flow (8 mu L / h^2 per m/s on the core speed: ~8 ms). Faster, the
+    //    boundary layers are thin and the core is inviscid (the flow share below covers them), so the drag fades
+    //    out as (U_fd / U)^2: a few Pa at the softest playing.
     const float pressure = std::max (0.0f, current.mouthPressure);
     const float massLength = windwayMass.load (std::memory_order_relaxed) * cfg.windwayLength;  // m
     if (massLength > 1.0e-6f)
     {
-        // U' + a U'^2 = b, with a = dt / 2L, b = U + p dt / (rho L); root written to avoid cancellation.
+        // U' d + a U'^2 = b, with a = dt / 2L, b = U + p dt / (rho L), d = 1 + dt drag / (rho L) (drag at the
+        // previous speed); root written to avoid cancellation.
         const float dt = 1.0f / (float) rate;
+        const float hw = cfg.windwayHeight;
+        const float developedSpeed = cfg.windwayLength * kKinematicViscosity / (0.16f * hw * hw);  // m/s
+        const float relative = windwaySpeed / std::max (1.0e-3f, developedSpeed);
+        const float drag = windwayFriction.load (std::memory_order_relaxed) * 8.0f * (float) kAirViscosity * cfg.windwayLength
+                           / (hw * hw) / (1.0f + relative * relative);  // Pa per m/s
         const float a = dt / (2.0f * massLength);
         const float b = windwaySpeed + pressure * dt / (rho * massLength);
-        windwaySpeed = 2.0f * b / (1.0f + std::sqrt (1.0f + 4.0f * a * b));
+        const float damped = 1.0f + drag * dt / (rho * massLength);
+        windwaySpeed = 2.0f * b / (damped + std::sqrt (damped * damped + 4.0f * a * b));
     }
     else
     {
