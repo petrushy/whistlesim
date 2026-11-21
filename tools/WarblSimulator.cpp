@@ -1,4 +1,4 @@
-// Pretends to be a WARBL sending the sensor stream, through virtual MIDI ports named "WARBL Simulator".
+// Pretends to be a WARBL (firmware 4.8, protocol version 3) sending the sensor stream, through virtual MIDI ports named "WARBL Simulator".
 // For trying the host app or a synth without the instrument. Plays a slow scale with breath swells
 // (see SimulatedPlayer.h). The app also has this built in ("Simulate WARBL").
 //
@@ -41,16 +41,18 @@ private:
 
         const auto* data = m.getSysExData();
         const auto size = (size_t) m.getSysExDataSize();
-        const auto type = warbl::messageType (data, size);
-        if (! type)
+        // Like firmware 4.8: only commands with WARBL's registered ID (hosts may send the older format as well).
+        const auto header = warbl::parseHeader (data, size);
+        if (! header || header->format != warbl::Format::official)
             return;
+        const auto type = header->type;
 
-        if (*type == warbl::kConfig && size >= 5)
+        if (type == warbl::kConfig && size > header->size)
         {
-            streaming = (data[4] & warbl::kStreamOn) != 0;
+            streaming = (data[header->size] & warbl::kStreamOn) != 0;
             std::printf ("stream %s\n", streaming ? "on" : "off");
         }
-        else if (*type == warbl::kRequestInfo)
+        else if (type == warbl::kRequestInfo)
         {
             send (warbl::kInfo, warbl::encodeInfoPayload (warbl::SimulatedPlayer::info()));
         }
@@ -68,7 +70,7 @@ private:
 
     void send (uint8_t type, const std::vector<uint8_t>& payload)
     {
-        std::vector<uint8_t> data { warbl::kSysExId1, warbl::kSysExId2, warbl::kProtocolVersion, type };
+        auto data = warbl::makeHeader (type);
         data.insert (data.end(), payload.begin(), payload.end());
         output->sendMessageNow (juce::MidiMessage::createSysExMessage (data.data(), (int) data.size()));
     }

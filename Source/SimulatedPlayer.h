@@ -23,7 +23,7 @@ public:
     static DeviceInfo info()
     {
         DeviceInfo i;
-        i.firmwareVersion = 47;
+        i.firmwareVersion = 48;
         i.baseline.fill (kBaseline);
         i.covered.fill (kCovered);
         i.ambientPressure = kAmbient14;
@@ -59,8 +59,11 @@ public:
 
         // Up to ~830 Pa (2000 14-bit counts at ~0.42 Pa each): the low register of a D whistle.
         f.pressure = (uint16_t) (kAmbient14 + breath * 2000.0 + noise (28));
-        f.accel = { (int16_t) (2000 * std::sin (t)), 300, 8000 };
-        f.gyro = { (int16_t) (3000 * std::cos (t * 2.0)), 0, 0 };
+        // As version 3 sends it: the accelerometer's y axis, and a gently rolling instrument held about level.
+        f.accel = { 0, 300, 0 };
+        const double angles[3] = { 14.0 * std::sin (t), 2.0 + std::sin (t * 0.5), 10.0 * std::sin (t * 0.3) };  // Degrees
+        for (size_t axis = 0; axis < 3; ++axis)
+            f.orientation[axis] = (int16_t) std::lround (angles[axis] * kAngleScale);
         f.flags = 1;
         return f;
     }

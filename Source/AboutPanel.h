@@ -21,8 +21,8 @@ public:
                   juce::FontOptions (14.0f), body);
         s.append (juce::String::fromUTF8 ("Created by Petrus Hyvönen\n"), juce::FontOptions (15.0f, juce::Font::bold), heading);
         s.append (juce::String::fromUTF8 ("© 2026 Petrus Hyvönen\n\n"), juce::FontOptions (13.0f), quiet);
-        s.append ("WARBL and WARBL2 are designed by Andrew Mowry. WhistleSim plays from a fork of the WARBL2 "
-                  "firmware that adds the sensor stream, and is built with the JUCE framework.\n\n"
+        s.append ("WARBL and WARBL2 are designed by Andrew Mowry. WhistleSim plays from the sensor stream of the WARBL2 "
+                  "firmware (version 4.8 and later), and is built with the JUCE framework.\n\n"
                   "Free software under the GNU General Public License, version 3.",
                   juce::FontOptions (14.0f), body);
         text.createLayout (s, (float) textWidth);

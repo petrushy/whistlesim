@@ -62,14 +62,18 @@ juce::String StreamReceiver::getStreamingPortName() const
     return in != nullptr ? in->getName() : juce::String();
 }
 
+// Each command goes out in both formats: the official firmware (4.8 on) only answers its registered ID, the earlier
+// experimental firmware only 7D 57, and each ignores the other's.
 void StreamReceiver::setStream (bool on, bool suppressNotes)
 {
-    sendSysEx (warbl::makeConfig (on, suppressNotes));
+    sendSysEx (warbl::makeConfig (on, suppressNotes, warbl::Format::official));
+    sendSysEx (warbl::makeConfig (on, suppressNotes, warbl::Format::legacy));
 }
 
 void StreamReceiver::requestInfo()
 {
-    sendSysEx (warbl::makeRequestInfo());
+    sendSysEx (warbl::makeRequestInfo (warbl::Format::official));
+    sendSysEx (warbl::makeRequestInfo (warbl::Format::legacy));
 }
 
 void StreamReceiver::sendSysEx (const std::vector<uint8_t>& data)
@@ -164,18 +168,23 @@ void StreamReceiver::setSimulating (bool shouldSimulate)
 
 void StreamReceiver::hiResTimerCallback()
 {
-    const auto frame = player.frame ((double) simulatedTick++ * 0.002);
+    const auto tick = simulatedTick++;
     if (! simulateBluetooth)
     {
-        acceptFrame (frame, juce::Time::getMillisecondCounterHiRes());
+        acceptFrame (player.frame ((double) tick * 0.002), juce::Time::getMillisecondCounterHiRes());
         return;
     }
-    // As over Bluetooth: the frames of a 15 ms connection interval in one batch, through the real encoder and decoder.
-    simulatedBatch.push_back (frame);
-    if (simulatedBatch.size() >= 7 + (simulatedTick % 2))  // 7.5 frames per 15 ms on average
+    // As over Bluetooth: a sample every 3 ms (the firmware's loop with BLE), and the 5 samples of a 15 ms connection
+    // interval in one batch, through the real encoder and decoder.
+    const auto sample = tick * 2 / 3, previous = tick > 0 ? (tick - 1) * 2 / 3 : (uint64_t) -1;
+    if (sample == previous)
+        return;
+    simulatedBatch.push_back (player.frame ((double) sample * 0.003));
+    if (simulatedBatch.size() >= 5)
     {
         auto data = warbl::encodeBatchPayload (simulatedBatch);
-        data.insert (data.begin(), { warbl::kSysExId1, warbl::kSysExId2, warbl::kProtocolVersion, warbl::kBatch });
+        const auto header = warbl::makeHeader (warbl::kBatch);
+        data.insert (data.begin(), header.begin(), header.end());
         acceptBatch (data.data(), data.size(), juce::Time::getMillisecondCounterHiRes());
         simulatedBatch.clear();
     }
