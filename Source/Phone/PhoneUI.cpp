@@ -1000,6 +1000,50 @@ private:
 };
 
 //==============================================================================
+namespace
+{
+// Named values in fixed rows, names on the left and values on the right, so changing numbers don't move anything.
+class StatRows : public juce::Component
+{
+public:
+    explicit StatRows (juce::StringArray namesToShow) : names (std::move (namesToShow))
+    {
+        for (int i = 0; i < names.size(); ++i)
+            values.add ({});
+        setInterceptsMouseClicks (false, false);
+    }
+
+    static constexpr int rowHeight = 24;
+    int preferredHeight() const { return names.size() * rowHeight; }
+
+    void setValues (const juce::StringArray& newValues)
+    {
+        if (newValues != values)
+        {
+            values = newValues;
+            repaint();
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        for (int i = 0; i < names.size(); ++i)
+        {
+            const auto row = juce::Rectangle<int> (0, i * rowHeight, getWidth(), rowHeight);
+            g.setFont (font (15.0f));
+            g.setColour (colours::secondary);
+            g.drawText (names[i], row, juce::Justification::centredLeft);
+            g.setColour (colours::text);
+            g.drawText (values[i], row, juce::Justification::centredRight);
+        }
+    }
+
+private:
+    juce::StringArray names, values;
+};
+} // namespace
+
+//==============================================================================
 class PhoneUI::SetupScreen : public Screen
 {
 public:
@@ -1021,6 +1065,11 @@ public:
         content.add (infoButton, [] (int) { return 46; });
         content.add (simulate, [this] (int w) { return simulate.preferredHeight (w); }, 4);
         content.add (smooth, [this] (int w) { return smooth.preferredHeight (w); });
+        content.add (diagnosticsHeading, [] (int) { return 28; }, 10);
+        content.add (diagnostics, [this] (int) { return diagnostics.preferredHeight(); });
+        content.add (diagnosticsNote, [this] (int w) { return diagnosticsNote.preferredHeight (w); }, 4);
+        resetButton.onClick = [this] { c.receiver().resetStats(); c.audio().heldHoleJumps = 0; };
+        content.add (resetButton, [] (int) { return 46; });
         content.add (outputHeading, [] (int) { return 28; }, 10);
         content.add (output, [this] (int w) { return output.preferredHeight (w); });
         content.add (bufferRow, [] (int) { return 40; });
@@ -1030,6 +1079,10 @@ public:
         content.add (aboutButton, [] (int) { return 46; }, 10);
         content.attachTo (*this);
         bufferNote.setLines ({ { "A smaller buffer answers sooner. If the sound crackles, choose a larger one.", sizes::caption, colours::secondary } });
+        diagnosticsNote.setLines ({ { "Rates and the loop are over the last half second; the counts since connecting or Reset. The loop is "
+                                      "WARBL's own time between frames: 2 ms over USB, 3 ms with a Bluetooth connection. Jitter is how much "
+                                      "later than the fastest recent frame each one arrived.",
+                                      sizes::caption, colours::secondary } });
     }
 
     void refresh() override
@@ -1048,6 +1101,7 @@ public:
             lines.push_back ({ c.deviceInfo(), sizes::caption, colours::secondary });
         warbl.setLines (lines);
         infoButton.setEnabled (c.receiver().isConnected() && ! c.receiver().isSimulating());
+        refreshDiagnostics (state.streaming, stats);
         simulate.refresh();
         smooth.refresh();
         refreshOutput();
@@ -1056,6 +1110,44 @@ public:
     void resized() override { content.layout (getLocalBounds()); }
 
 private:
+    // The stream's statistics, as the desktop Monitor shows them; dashes while nothing streams.
+    void refreshDiagnostics (bool streaming, const StreamReceiver::Stats& stats)
+    {
+        if (! diagnostics.isShowing())
+            return;
+        if (! streaming)
+        {
+            juce::StringArray dashes;
+            for (int i = 0; i < kDiagnosticRows; ++i)
+                dashes.add (juce::String::fromUTF8 ("\xe2\x80\x93"));
+            diagnostics.setValues (dashes);
+            return;
+        }
+        auto ms = [] (double v, int decimals) { return juce::String (v, decimals) + " ms"; };
+        auto jitter = [&stats] (double share)
+        {
+            const double v = stats.jitterPercentileMs (share);
+            return v < 0.0 ? juce::String ("-") : juce::String (v, 1);
+        };
+        const double lostShare = 100.0 * (double) stats.lostFrames / (double) std::max<uint64_t> (1, stats.frames + stats.lostFrames);
+        auto& audio = c.audio();
+        diagnostics.setValues ({
+            juce::String (juce::roundToInt (stats.framesPerSecond)),
+            stats.bluetooth && stats.batchIntervalMs > 0.0
+                ? juce::String (juce::roundToInt (1000.0 / stats.batchIntervalMs)) + " (" + juce::String (stats.framesPerBatch, 1) + " frames, every "
+                      + ms (stats.batchIntervalMs, 1) + ")"
+                : juce::String (juce::roundToInt (stats.framesPerSecond)) + " (one frame each)",
+            ms (stats.loopMs, 2) + ", max " + ms (stats.loopMaxMs, 1),
+            juce::String ((juce::int64) stats.lostFrames) + " (" + juce::String (lostShare, 2) + " %)",
+            jitter (0.5) + " / " + jitter (0.99) + " / " + jitter (0.999) + " ms",
+            juce::String (juce::roundToInt (stats.freshHoles * 100.0)) + " % of frames",
+            juce::String ((juce::int64) stats.rejectedHoleReadings),
+            juce::String ((juce::int64) audio.heldHoleJumps.load()),
+            ! stats.bluetooth ? juce::String ("not used (USB)")
+                              : audio.smoothBluetooth.load() ? "+" + ms (audio.bluetoothDelayMs.load(), 1) : juce::String ("off"),
+        });
+    }
+
     void refreshOutput()
     {
         auto& deviceManager = c.audio().deviceManager;
@@ -1127,8 +1219,13 @@ private:
     DesktopControls& c;
     ScrollingContent content;
     Heading title { "Setup", sizes::title };
-    Heading warblHeading { "WARBL" }, outputHeading { "Sound output" }, recordingsHeading { "Recordings" };
-    InfoBlock warbl, output, bufferNote, recordings;
+    Heading warblHeading { "WARBL" }, outputHeading { "Sound output" }, recordingsHeading { "Recordings" },
+        diagnosticsHeading { "Stream diagnostics" };
+    InfoBlock warbl, output, bufferNote, recordings, diagnosticsNote;
+    static constexpr int kDiagnosticRows = 9;
+    StatRows diagnostics { { "Frames/s", "Messages/s", "WARBL loop", "Lost frames", "Arrival jitter p50/p99/p99.9", "New hole readings",
+                             "Garbled hole readings", "Hole jumps held back", "Bluetooth smoothing" } };
+    juce::TextButton resetButton { "Reset counters" };
     juce::TextButton pairButton { "Pair over Bluetooth..." }, infoButton { "Read WARBL's calibration" }, aboutButton { "About WhistleSim" };
     SettingSwitch simulate { "Simulate WARBL", c.simulate(), "Plays a scripted scale as if from WARBL, through the same path as the real stream." };
     SettingSwitch smooth { "Smooth Bluetooth", c.smoothBluetooth(),

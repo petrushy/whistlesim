@@ -126,27 +126,18 @@ void TimingView::paint (juce::Graphics& g)
     g.fillAll (panel);
     auto area = getLocalBounds().reduced (8);
 
-    uint64_t total = stats.histogramOverflow;
     uint32_t peak = 1;
     for (auto c : stats.histogram)
-    {
-        total += c;
         peak = std::max (peak, c);
-    }
 
     auto percentile = [&] (double p) -> juce::String
     {
-        if (total == 0)
+        const double ms = stats.jitterPercentileMs (p);
+        if (ms < 0.0)
             return "-";
-        const auto target = (uint64_t) std::ceil (p * (double) total);
-        uint64_t sum = 0;
-        for (size_t i = 0; i < stats.histogram.size(); ++i)
-        {
-            sum += stats.histogram[i];
-            if (sum >= target)
-                return juce::String ((double) (i + 1) * StreamReceiver::kHistogramBinMs, 1) + " ms";
-        }
-        return "> " + juce::String (StreamReceiver::kHistogramBins * StreamReceiver::kHistogramBinMs, 0) + " ms";
+        if (ms >= StreamReceiver::kHistogramBins * StreamReceiver::kHistogramBinMs)
+            return "> " + juce::String (ms, 0) + " ms";
+        return juce::String (ms, 1) + " ms";
     };
 
     g.setColour (text);
@@ -424,7 +415,8 @@ void MonitorPage::timerCallback()
 
     const auto stats = receiver.getStats();
     timingView.update (stats);
-    statsLabel.setText (juce::String (stats.framesPerSecond, 0) + " frames/s   lost " + juce::String (stats.lostFrames)
+    statsLabel.setText (juce::String (stats.framesPerSecond, 0) + " frames/s   loop " + juce::String (stats.loopMs, 2) + " ms (max "
+                            + juce::String (stats.loopMaxMs, 1) + ")   lost " + juce::String (stats.lostFrames)
                             + "   new hole readings in " + juce::String (juce::roundToInt (stats.freshHoles * 100.0)) + " % of frames"
                             + "   hole jumps held back " + juce::String ((juce::int64) audio.heldHoleJumps.load())
                             + (stats.bluetooth ? "   Bluetooth: " + juce::String (stats.framesPerBatch, 1) + " frames per batch every "
