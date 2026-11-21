@@ -529,6 +529,44 @@ private:
     float level = 0.0f;
 };
 
+// A horizontal slider that only moves when the touch starts on its thumb, and then follows the finger relatively
+// (the thumb doesn't jump to it). A touch elsewhere on the track is left to the screen, so scrolling past a slider
+// doesn't change it, and a stray touch can't either.
+class ThumbSlider : public juce::Slider
+{
+public:
+    ThumbSlider()
+    {
+        setSliderSnapsToMousePosition (false);
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        // A fingertip is about 40 pt across: accept touches a little wider than the 26 pt thumb that's drawn.
+        const float thumbX = (float) getPositionOfValue (getValue());
+        draggingThumb = isEnabled() && std::abs (e.position.x - thumbX) <= 24.0f;
+        setViewportIgnoreDragFlag (draggingThumb);  // The viewport reads this while dragging: a miss scrolls the screen
+        if (draggingThumb)
+            juce::Slider::mouseDown (e);
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (draggingThumb)
+            juce::Slider::mouseDrag (e);
+    }
+
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (draggingThumb)
+            juce::Slider::mouseUp (e);
+        draggingThumb = false;
+    }
+
+private:
+    bool draggingThumb = false;
+};
+
 // A setting as a touch slider: its name and value above, an optional explanation below. It follows a desktop
 // slider: dragging sets that slider (which does the work and keeps the value), and changes made there show here.
 class SettingSlider : public juce::Component
@@ -542,7 +580,6 @@ public:
         slider.setRange (desktop.getMinimum(), desktop.getMaximum(), desktop.getInterval());
         slider.setDoubleClickReturnValue (false, 0.0);
         slider.setScrollWheelEnabled (false);
-        slider.setViewportIgnoreDragFlag (true);  // Dragging it moves it, not the screen
         slider.setValue (desktop.getValue(), juce::dontSendNotification);
         slider.onValueChange = [this]
         {
@@ -612,7 +649,7 @@ private:
 
     juce::String name, description;
     juce::Slider& desktop;
-    juce::Slider slider;
+    ThumbSlider slider;
     juce::TextButton lessButton { juce::String::fromUTF8 ("\xe2\x88\x92") }, moreButton { "+" };
 };
 
