@@ -1,6 +1,8 @@
 # Notes on the WARBL 4.8 sensor stream
 
-Points found while porting WhistleSim to the sensor stream in the WARBL2 4.8 beta (amowry/WARBL2 main at 709d15b, `warbl2_firmware/Sensor_stream.ino`) and its spec, `WARBL_sensor_stream_protocol_v3.md` (copied here as [WARBL_sensor_stream_protocol_v3.md](WARBL_sensor_stream_protocol_v3.md)). Gathered on 2026-11-21 to raise with Andrew Mowry. Status: not yet tested on hardware.
+Points found while porting WhistleSim to the sensor stream in the WARBL2 4.8 beta (amowry/WARBL2 main at 709d15b, `warbl2_firmware/Sensor_stream.ino`) and its spec, `WARBL_sensor_stream_protocol_v3.md` (copied here as [WARBL_sensor_stream_protocol_v3.md](WARBL_sensor_stream_protocol_v3.md)). Gathered on 2026-11-21 to raise with Andrew Mowry.
+
+**Tested on hardware (2026-11-21, USB, Honeywell sensor):** 4.8 streams to WhistleSim at about 500 frames/s with no lost frames and no hangs so far, and plays the same as the experimental firmware. The loop is 2 ms without a Bluetooth connection and 3 ms with one (point 4).
 
 The wire layouts in the spec match the firmware source: the USB frame (39 bytes), the BLE batch (sizes as in the table), STREAM_INFO (62 bytes), the commands, and the renewal timeout.
 
