@@ -17,6 +17,7 @@ public:
 
     MonitorPage& getMonitor() { return *monitor; }
     InstrumentPage& getInstrumentPage() const { return *instrument; }
+    SensorsPage& getSensorsPage() const { return *sensors; }
     StreamReceiver& getReceiver() { return receiver; }
     void showMonitor() { tabs.setCurrentTabIndex (0); }
     void showInstrument() { tabs.setCurrentTabIndex (1); }
@@ -43,6 +44,7 @@ private:
     StreamReceiver receiver;
     AudioEngine audio { receiver };
     InstrumentPage* instrument = nullptr;  // Owned by tabs.
+    SensorsPage* sensors = nullptr;        // Owned by tabs.
     bool saveOnExit = true;
 
     juce::TabbedComponent tabs { juce::TabbedButtonBar::TabsAtTop };

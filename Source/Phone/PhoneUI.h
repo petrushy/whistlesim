@@ -23,6 +23,7 @@ public:
         play,
         instrument,
         room,
+        sensors,
         setup,
         numTabs
     };
@@ -44,8 +45,10 @@ public:
 private:
     class TabBar;
     class PlayScreen;
+    class SettingsScreen;
     class InstrumentScreen;
     class RoomScreen;
+    class SensorsScreen;
     class SetupScreen;
 
     struct Screen : public juce::Component

@@ -101,7 +101,8 @@ MainComponent::MainComponent()
     };
     tabs.addTab ("Monitor", background, monitor, true);
     tabs.addTab ("Instrument", background, instrument, true);
-    tabs.addTab ("Sensors", background, new SensorsPage (audio), true);
+    sensors = new SensorsPage (audio);
+    tabs.addTab ("Sensors", background, sensors, true);
     tabs.addTab ("Model", background, new ModelPage (audio), true);
     tabs.setTabBarDepth (30);
     addAndMakeVisible (tabs);

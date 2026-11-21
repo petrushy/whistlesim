@@ -1,8 +1,8 @@
 // What the iPhone screens use of the app: they drive the desktop pages' own controls (the preset and room lists,
 // the reverb sliders, Simulate WARBL, Record...) instead of the engine directly, so a change made on the phone
 // does exactly what it does on the desktop, and is saved the same way. The pages keep running behind the phone
-// screens (connection, stream renewal, recording), whichever screen is shown. Friend of MonitorPage and
-// InstrumentPage.
+// screens (connection, stream renewal, recording), whichever screen is shown. Friend of MonitorPage,
+// InstrumentPage and SensorsPage.
 
 #pragma once
 
@@ -84,6 +84,20 @@ public:
         return groups;
     }
 
+    // Sensors (the desktop's Sensors tab): how breath pressure and tone-hole coverage become the model's breath and
+    // hole openings. Each list in the tab's order, with its labels.
+    std::vector<Setting> breathSettings() { return settingsOf (sensors().breathRows); }
+    std::vector<Setting> holeSettings() { return settingsOf (sensors().holeRows); }
+    std::vector<Setting> thumbSettings() { return settingsOf (sensors().thumbRows); }
+    juce::ComboBox& holeShape() { return sensors().holeShape; }
+    juce::ToggleButton& holdHoleJumps() { return sensors().holeJumpToggle; }
+    juce::ToggleButton& thumbOwnResponse() { return sensors().thumbToggle; }
+    juce::String breathNow() { return sensors().breathInfo.getText(); }  // Sensitivity, and measured -> breath to the model now
+    juce::String thumbNow() { return sensors().thumbInfo.getText(); }
+    juce::String thumbExplanation() { return sensors().thumbTitle.getTooltip(); }
+    void breathDefaults() { sensors().breathDefaults.onClick(); }
+    void holeDefaults() { sensors().holeDefaults.onClick(); }
+
     // Room
     juce::ComboBox& roomBox() { return monitor().roomBox; }
     juce::Slider& reverbLevel() { return monitor().wetSlider; }
@@ -125,6 +139,16 @@ public:
 private:
     MonitorPage& monitor() { return main.getMonitor(); }
     InstrumentPage& instrument() { return main.getInstrumentPage(); }
+    SensorsPage& sensors() { return main.getSensorsPage(); }
+
+    template <typename Rows>
+    static std::vector<Setting> settingsOf (Rows& rows)
+    {
+        std::vector<Setting> settings;
+        for (auto& row : rows)
+            settings.push_back ({ row.label->getText(), row.slider.get() });
+        return settings;
+    }
 
     MainComponent& main;
 };
