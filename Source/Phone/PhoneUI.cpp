@@ -270,7 +270,7 @@ public:
         connection.onTap = [this] { owner.showTab (setup); };
         addAndMakeVisible (connection);
 
-        presetCard.titleSize = 22.0f;
+        presetCard.titleSize = 16.0f;  // Long names (up to ~56 characters) fit on two lines beside the arrows
         presetCard.rightSpace = 100;
         presetCard.onTap = [this] { owner.showPresetList(); };
         addAndMakeVisible (presetCard);
@@ -613,7 +613,7 @@ public:
     explicit InstrumentScreen (PhoneUI& ownerToUse) : owner (ownerToUse), c (ownerToUse.controls)
     {
         // The instrument and its presets
-        presetCard.titleSize = 20.0f;
+        presetCard.titleSize = 17.0f;  // Long names fit on two lines
         presetCard.onTap = [this] { owner.showPresetList(); };
         saveButton.onClick = [this]
         {
