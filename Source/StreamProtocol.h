@@ -1,16 +1,25 @@
-// WARBL2 sensor stream protocol (the firmware side is Sensor_stream.ino in petrushy/WARBL2, branch sensor-stream; see its SENSOR_STREAM.md).
-// No JUCE dependency, so the same decoder can be used by the test app, a synth plugin, or tests.
+// WARBL2 sensor stream protocol. No JUCE dependency, so the same decoder can be used by the test app, a synth plugin,
+// or tests.
 //
-// SysEx (without F0/F7): 7D 57 <protocol version> <type> <payload>
+// Two formats, told apart by the SysEx header (data without F0/F7):
+//  - 00 03 0F <version 3> <type> <payload>: the official firmware (WARBL 4.8 and later), with WARBL's registered
+//    manufacturer ID. Spec: docs/WARBL_sensor_stream_protocol_v3.md; firmware: Sensor_stream.ino in amowry/WARBL2.
+//  - 7D 57 <version 1-2> <type> <payload>: the earlier experimental firmware (petrushy/WARBL2, branch sensor-stream,
+//    SENSOR_STREAM.md). Still decoded, so a WARBL that hasn't been updated keeps working.
 // Payloads are bit-packed MSB-first, 7 bits per data byte.
-// Version 2 sends the pressure at 14 bits (version 1: 12) and adds the 14-bit ambient pressure to the info. Both
-// are decoded; pressures are given at 14 bits either way. Commands haven't changed, so they go out as version 1,
-// which every firmware accepts.
+//
+// What changed in version 3: tone holes are 10-bit in Bluetooth batches too; the motion data is the accelerometer's
+// y axis plus WARBL's own roll, elevation and yaw (instead of three accelerometer and three gyro axes); a Bluetooth
+// batch holds at most 16 samples. Version 2 sends the pressure at 14 bits (version 1: 12) and adds the 14-bit ambient
+// pressure to the info. Pressures are given at 14 bits whatever the version.
+//
+// The host sends its commands in both formats (see makeConfig), since each firmware ignores the other's.
 
 #pragma once
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -19,11 +28,17 @@
 namespace warbl
 {
 
-constexpr uint8_t kSysExId1 = 0x7D;
-constexpr uint8_t kSysExId2 = 0x57;
-constexpr uint8_t kProtocolVersion = 2;  // What WARBL sends (and the encoders below write)
-constexpr uint8_t kCommandVersion = 1;   // What the host sends
-constexpr size_t kHeaderSize = 4;  // ID1, ID2, version, type
+enum class Format
+{
+    official,  // 00 03 0F, version 3
+    legacy     // 7D 57, versions 1-2
+};
+
+constexpr std::array<uint8_t, 3> kWarblId { 0x00, 0x03, 0x0F };  // WARBL's registered MIDI manufacturer ID
+constexpr std::array<uint8_t, 2> kLegacyId { 0x7D, 0x57 };        // 7D: the non-commercial ID the experimental firmware used
+constexpr uint8_t kProtocolVersion = 3;        // What the official firmware sends (and the encoders below write)
+constexpr uint8_t kLegacyMaxVersion = 2;       // The experimental firmware's versions are 1 and 2
+constexpr uint8_t kLegacyCommandVersion = 1;   // What the experimental firmware accepts from every host
 
 enum MessageType : uint8_t
 {
@@ -38,13 +53,16 @@ enum ConfigFlags : uint8_t
 {
     kStreamOn = 0x01,
     kSuppressNotes = 0x02,
-    kKeepAlive = 0x04  // The host repeats the command every second; WARBL stops the stream ~3 s after it stops doing so
+    // The host repeats the command every second; WARBL stops the stream ~3 s after it stops doing so. Version 3
+    // firmware does that for every stream and ignores the bit; the experimental firmware needs it.
+    kKeepAlive = 0x04
 };
 
 constexpr int kNumHoles = 9;
 constexpr double kDeviceTicksPerSecond = 32768.0;  // Frame timestamps are RTC2 ticks.
 constexpr uint32_t kTimestampBits = 21;            // Wraps every 64 s.
 constexpr uint32_t kSeqBits = 14;
+constexpr float kAngleScale = 32767.0f / 180.0f;   // Version 3 angles: counts per degree, signed 16-bit, +-180 degrees
 
 // Tone hole order as used by the firmware (holeCovered bit i is hole i).
 inline const char* holeName (int index)
@@ -55,24 +73,45 @@ inline const char* holeName (int index)
 
 struct SensorFrame
 {
+    uint8_t version = kProtocolVersion;        // The protocol version it came in (says which motion fields are set)
     uint16_t seq = 0;
-    uint32_t timestamp = 0;                 // Device time, 1/32768 s, 21 bits.
+    uint32_t timestamp = 0;                    // Device time, 1/32768 s, 21 bits.
     std::array<uint16_t, kNumHoles> holes {};  // 10-bit, ambient-light corrected, unsmoothed, no baseline subtracted.
-    uint16_t pressure = 0;                  // 14-bit raw ADC (version 1's 12-bit readings x 4).
-    std::array<int16_t, 3> accel {};        // Raw LSM6DSOX counts.
-    std::array<int16_t, 3> gyro {};
-    uint16_t holeCovered = 0;               // Firmware's covered/uncovered decision (hint).
+    uint16_t pressure = 0;                     // 14-bit raw ADC (version 1's 12-bit readings x 4).
+    std::array<int16_t, 3> accel {};           // Raw LSM6DSOX counts. Version 3 sends only y (accel[1]); x and z stay 0.
+    std::array<int16_t, 3> gyro {};            // Raw counts, versions 1-2 over USB only.
+    std::array<int16_t, 3> orientation {};     // Version 3: WARBL's roll, elevation and yaw, kAngleScale counts per degree.
+    uint16_t holeCovered = 0;                  // Firmware's covered/uncovered decision (hint; not sent over Bluetooth).
     uint8_t flags = 0;
 
     bool holesUpdated() const { return (flags & 0x01) != 0; }
     bool holesRejected() const { return (flags & 0x02) != 0; }  // WARBL rejected a garbled tone hole transfer (kept the last)
+    bool hasOrientation() const { return version >= 3; }
+
+    // Version 3: roll (0), elevation (1) or yaw (2) in degrees, -180..180.
+    float angleDegrees (int axis) const { return (float) orientation[(size_t) axis] / kAngleScale; }
+
+    // The angle of WARBL's long axis to the horizontal, in degrees, or nothing if this frame doesn't tell.
+    // Version 3: WARBL's own elevation, fused from gyro and accelerometer. Earlier: from gravity alone (the sensor's y
+    // axis is the long axis), which rolling the instrument doesn't change.
+    std::optional<float> elevationDegrees() const
+    {
+        if (hasOrientation())
+            return angleDegrees (1);
+        const float ax = accel[0], ay = accel[1], az = accel[2];
+        if (std::abs (ax) + std::abs (ay) + std::abs (az) <= 100.0f)  // No IMU reading yet
+            return std::nullopt;
+        return std::atan2 (ay, std::hypot (ax, az)) * 57.29577951f;
+    }
 };
 
 struct DeviceInfo
 {
     uint16_t firmwareVersion = 0;
     std::array<uint16_t, kNumHoles> baseline {};  // Reading with the hole open.
-    std::array<uint16_t, kNumHoles> covered {};   // Reading with the hole covered (calibration).
+    // Reading with the hole covered, from calibration: an absolute reading like the baseline, in every version. (The
+    // v3 spec calls these thresholds "relative to baseline", but the firmware sends toneholeCovered as it is.)
+    std::array<uint16_t, kNumHoles> covered {};
     uint16_t ambientPressure = 0;                 // 14-bit (from version 1, the firmware's 10-bit value x 16).
     uint16_t accelRange = 0;                      // Adafruit lsm6ds_accel_range_t
     uint16_t gyroRange = 0;                       // Adafruit lsm6ds_gyro_range_t
@@ -132,6 +171,8 @@ public:
         return value;
     }
 
+    int16_t getSigned16() { return (int16_t) (uint16_t) get (16); }
+
 private:
     const uint8_t* data;
     size_t size;
@@ -159,28 +200,68 @@ private:
     int bitsInByte = 0;
 };
 
-// Pressure bits per frame and batch sample, by protocol version.
-constexpr int pressureBits (uint8_t version) { return version >= 2 ? 14 : 12; }
-constexpr size_t frameBits (uint8_t version) { return kSeqBits + kTimestampBits + kNumHoles * 10 + (size_t) pressureBits (version) + 6 * 16 + 9 + 7; }
-constexpr size_t kFrameBits = frameBits (kProtocolVersion);
-constexpr size_t kInfoValues = 1 + kNumHoles * 2 + 1 + 3;  // Version 1; version 2 adds the 14-bit ambient
+// The header of a WARBL stream SysEx (data without F0/F7).
+struct Header
+{
+    Format format = Format::official;
+    uint8_t version = 0;
+    uint8_t type = 0;
+    size_t size = 0;  // Header bytes before the payload
+};
 
-// Bluetooth batch: the samples of one BLE connection interval in one message, so it fits one BLE packet.
-// Header: first sequence number, timestamps of the first and last sample, count, accelerometer (top 8 bits per
-// axis, once per batch: enough for tilt), flags. Per sample: pressure (12 bits, as USB) and the nine holes with
-// 8 bits (the top 8 of the 10-bit reading). No gyro.
-constexpr size_t kBatchHeaderBits = kSeqBits + 2 * kTimestampBits + 5 + 3 * 8 + 7;
-constexpr size_t batchSampleBits (uint8_t version) { return (size_t) pressureBits (version) + kNumHoles * 8; }
-constexpr size_t kBatchSampleBits = batchSampleBits (kProtocolVersion);
-constexpr int kMaxBatchSamples = 31;
+inline std::optional<Header> parseHeader (const uint8_t* data, size_t size)
+{
+    if (size >= kWarblId.size() + 2 && std::equal (kWarblId.begin(), kWarblId.end(), data))
+    {
+        const uint8_t version = data[kWarblId.size()];
+        if (version < 3)  // The official firmware sends version 3 (it accepts commands as 1-3, but those aren't streams)
+            return std::nullopt;
+        return Header { Format::official, version, data[kWarblId.size() + 1], kWarblId.size() + 2 };
+    }
+    if (size >= kLegacyId.size() + 2 && std::equal (kLegacyId.begin(), kLegacyId.end(), data))
+    {
+        const uint8_t version = data[kLegacyId.size()];
+        if (version < 1 || version > kLegacyMaxVersion)
+            return std::nullopt;
+        return Header { Format::legacy, version, data[kLegacyId.size() + 1], kLegacyId.size() + 2 };
+    }
+    return std::nullopt;
+}
 
 // The message type of a WARBL stream SysEx (data without F0/F7), or nothing if it isn't one.
 inline std::optional<uint8_t> messageType (const uint8_t* data, size_t size)
 {
-    if (size < kHeaderSize || data[0] != kSysExId1 || data[1] != kSysExId2 || data[2] < 1 || data[2] > kProtocolVersion)
-        return std::nullopt;
-    return data[3];
+    if (const auto header = parseHeader (data, size))
+        return header->type;
+    return std::nullopt;
 }
+
+// The header bytes for a message the official firmware would send (version 3).
+inline std::vector<uint8_t> makeHeader (uint8_t type)
+{
+    return { kWarblId[0], kWarblId[1], kWarblId[2], kProtocolVersion, type };
+}
+
+// Pressure bits per frame and batch sample, by protocol version.
+constexpr int pressureBits (uint8_t version) { return version >= 2 ? 14 : 12; }
+
+// Motion bits: version 3 sends accel y, roll, elevation and yaw; earlier versions three accel and three gyro axes.
+constexpr size_t frameMotionBits (uint8_t version) { return version >= 3 ? 4 * 16 : 6 * 16; }
+constexpr size_t frameBits (uint8_t version)
+{
+    return kSeqBits + kTimestampBits + kNumHoles * 10 + (size_t) pressureBits (version) + frameMotionBits (version) + 9 + 7;
+}
+constexpr size_t kInfoValues = 1 + kNumHoles * 2 + 1 + 3;  // Version 1; version 2 adds the 14-bit ambient
+
+// Bluetooth batch: the samples of one BLE connection interval in one message, so it fits one BLE packet.
+// Header: first sequence number, timestamps of the first and last sample, count, the motion once per batch, flags.
+//  - Version 3: accel y, roll, elevation, yaw (16 bits each). Per sample: pressure (14 bits), then the nine holes (10).
+//  - Version 1-2: accelerometer xyz (top 8 bits each). Per sample: pressure, then the nine holes at 8 bits (the top 8).
+constexpr size_t batchMotionBits (uint8_t version) { return version >= 3 ? 4 * 16 : 3 * 8; }
+constexpr size_t batchHeaderBits (uint8_t version) { return kSeqBits + 2 * kTimestampBits + 5 + batchMotionBits (version) + 7; }
+constexpr int batchHoleBits (uint8_t version) { return version >= 3 ? 10 : 8; }
+constexpr size_t batchSampleBits (uint8_t version) { return (size_t) pressureBits (version) + kNumHoles * (size_t) batchHoleBits (version); }
+constexpr int maxBatchSamples (uint8_t version) { return version >= 3 ? 16 : 31; }
 
 // A pressure as sent in this version, at 14 bits.
 inline uint16_t readPressure (BitReader& r, uint8_t version)
@@ -190,24 +271,35 @@ inline uint16_t readPressure (BitReader& r, uint8_t version)
 
 inline std::optional<SensorFrame> decodeFrame (const uint8_t* data, size_t size)
 {
-    if (messageType (data, size) != kFrame)
+    const auto header = parseHeader (data, size);
+    if (! header || header->type != kFrame)
         return std::nullopt;
 
-    const uint8_t version = data[2];
-    BitReader r (data + kHeaderSize, size - kHeaderSize);
+    const uint8_t version = header->version;
+    BitReader r (data + header->size, size - header->size);
     if (! r.canRead (frameBits (version)))
         return std::nullopt;
 
     SensorFrame f;
+    f.version = version;
     f.seq = (uint16_t) r.get (kSeqBits);
     f.timestamp = r.get (kTimestampBits);
     for (auto& h : f.holes)
         h = (uint16_t) r.get (10);
     f.pressure = readPressure (r, version);
-    for (auto& a : f.accel)
-        a = (int16_t) (uint16_t) r.get (16);
-    for (auto& g : f.gyro)
-        g = (int16_t) (uint16_t) r.get (16);
+    if (version >= 3)
+    {
+        f.accel[1] = r.getSigned16();
+        for (auto& angle : f.orientation)
+            angle = r.getSigned16();
+    }
+    else
+    {
+        for (auto& a : f.accel)
+            a = r.getSigned16();
+        for (auto& g : f.gyro)
+            g = r.getSigned16();
+    }
     f.holeCovered = (uint16_t) r.get (9);
     f.flags = (uint8_t) r.get (7);
     return f;
@@ -217,34 +309,46 @@ inline std::optional<SensorFrame> decodeFrame (const uint8_t* data, size_t size)
 inline std::vector<SensorFrame> decodeBatch (const uint8_t* data, size_t size)
 {
     std::vector<SensorFrame> frames;
-    if (messageType (data, size) != kBatch)
+    const auto header = parseHeader (data, size);
+    if (! header || header->type != kBatch)
         return frames;
 
-    const uint8_t version = data[2];
-    BitReader r (data + kHeaderSize, size - kHeaderSize);
-    if (! r.canRead (kBatchHeaderBits))
+    const uint8_t version = header->version;
+    BitReader r (data + header->size, size - header->size);
+    if (! r.canRead (batchHeaderBits (version)))
         return frames;
     const auto seq = r.get (kSeqBits);
     const auto first = r.get (kTimestampBits), last = r.get (kTimestampBits);
     const int count = (int) r.get (5);
-    std::array<int16_t, 3> accel {};
-    for (auto& a : accel)
-        a = (int16_t) ((int8_t) (uint8_t) r.get (8) * 256);
+    std::array<int16_t, 3> accel {}, orientation {};
+    if (version >= 3)
+    {
+        accel[1] = r.getSigned16();
+        for (auto& angle : orientation)
+            angle = r.getSigned16();
+    }
+    else
+    {
+        for (auto& a : accel)
+            a = (int16_t) ((int8_t) (uint8_t) r.get (8) * 256);
+    }
     const auto flags = (uint8_t) r.get (7);
-    if (count < 1 || ! r.canRead (batchSampleBits (version) * (size_t) count))
+    if (count < 1 || count > maxBatchSamples (version) || ! r.canRead (batchSampleBits (version) * (size_t) count))
         return frames;
 
     const uint32_t span = (last - first) & ((1u << kTimestampBits) - 1);
     for (int i = 0; i < count; ++i)
     {
         SensorFrame f;
+        f.version = version;
         f.seq = (uint16_t) ((seq + (uint32_t) i) & ((1u << kSeqBits) - 1));
         f.timestamp = (first + (count > 1 ? span * (uint32_t) i / (uint32_t) (count - 1) : 0)) & ((1u << kTimestampBits) - 1);
         f.pressure = readPressure (r, version);
         for (auto& h : f.holes)
-            h = (uint16_t) (r.get (8) * 4 + 2);  // Middle of the 8-bit step
-        f.accel = accel;
-        f.flags = flags;
+            h = version >= 3 ? (uint16_t) r.get (10) : (uint16_t) (r.get (8) * 4 + 2);  // 8 bits: the middle of the step
+        f.accel = accel;  // The motion was read once, near the batch's last sample
+        f.orientation = orientation;
+        f.flags = flags;  // ORed over the batch
         frames.push_back (f);
     }
     return frames;
@@ -252,11 +356,12 @@ inline std::vector<SensorFrame> decodeBatch (const uint8_t* data, size_t size)
 
 inline std::optional<DeviceInfo> decodeInfo (const uint8_t* data, size_t size)
 {
-    if (messageType (data, size) != kInfo)
+    const auto header = parseHeader (data, size);
+    if (! header || header->type != kInfo)
         return std::nullopt;
 
-    const uint8_t version = data[2];
-    BitReader r (data + kHeaderSize, size - kHeaderSize);
+    const uint8_t version = header->version;
+    BitReader r (data + header->size, size - header->size);
     if (! r.canRead ((kInfoValues + (version >= 2 ? 1 : 0)) * 16))
         return std::nullopt;
 
@@ -266,7 +371,7 @@ inline std::optional<DeviceInfo> decodeInfo (const uint8_t* data, size_t size)
         b = (uint16_t) r.get (16);
     for (auto& c : info.covered)
         c = (uint16_t) r.get (16);
-    info.ambientPressure = (uint16_t) (r.get (16) << 4);  // The firmware's 10-bit value
+    info.ambientPressure = (uint16_t) (r.get (16) << 4);  // The firmware's 10-bit value (legacy sensorCalibration)
     info.accelRange = (uint16_t) r.get (16);
     info.gyroRange = (uint16_t) r.get (16);
     info.loopPeriodMs = (uint16_t) r.get (16);
@@ -275,7 +380,7 @@ inline std::optional<DeviceInfo> decodeInfo (const uint8_t* data, size_t size)
     return info;
 }
 
-// Packs a frame as the firmware does (payload only, without the 4-byte header). For the simulator and tests.
+// Packs a frame as the official firmware does (version 3 payload, without the header). For the simulator and tests.
 inline std::vector<uint8_t> encodeFramePayload (const SensorFrame& f)
 {
     BitWriter w;
@@ -284,33 +389,37 @@ inline std::vector<uint8_t> encodeFramePayload (const SensorFrame& f)
     for (auto h : f.holes)
         w.put (h & 0x3FFu, 10);
     w.put (f.pressure & 0x3FFFu, 14);
-    for (auto a : f.accel)
-        w.put ((uint16_t) a, 16);
-    for (auto g : f.gyro)
-        w.put ((uint16_t) g, 16);
+    w.put ((uint16_t) f.accel[1], 16);
+    for (auto angle : f.orientation)
+        w.put ((uint16_t) angle, 16);
     w.put (f.holeCovered & 0x1FFu, 9);
     w.put (f.flags & 0x7Fu, 7);
     return w.bytes;
 }
 
-// Packs frames as a Bluetooth batch (payload only), as the firmware does. For the simulator and tests.
+// Packs frames (at most 16) as a version 3 Bluetooth batch (payload only), as the official firmware does: the
+// motion is the last frame's, the flags are ORed. For the simulator and tests.
 inline std::vector<uint8_t> encodeBatchPayload (const std::vector<SensorFrame>& frames)
 {
     BitWriter w;
     if (frames.empty())
         return w.bytes;
+    uint8_t flags = 0;
+    for (const auto& f : frames)
+        flags |= f.flags;
     w.put (frames.front().seq & ((1u << kSeqBits) - 1), kSeqBits);
     w.put (frames.front().timestamp & ((1u << kTimestampBits) - 1), kTimestampBits);
     w.put (frames.back().timestamp & ((1u << kTimestampBits) - 1), kTimestampBits);
     w.put ((uint32_t) frames.size() & 0x1Fu, 5);
-    for (auto a : frames.back().accel)
-        w.put ((uint8_t) (int8_t) (a / 256), 8);
-    w.put (frames.back().flags & 0x7Fu, 7);
+    w.put ((uint16_t) frames.back().accel[1], 16);
+    for (auto angle : frames.back().orientation)
+        w.put ((uint16_t) angle, 16);
+    w.put (flags & 0x7Fu, 7);
     for (const auto& f : frames)
     {
         w.put (f.pressure & 0x3FFFu, 14);
         for (auto h : f.holes)
-            w.put ((uint32_t) std::min<uint16_t> (h, 1023) >> 2, 8);
+            w.put (std::min<uint16_t> (h, 1023), 10);
     }
     return w.bytes;
 }
@@ -331,18 +440,25 @@ inline std::vector<uint8_t> encodeInfoPayload (const DeviceInfo& info)
     return w.bytes;
 }
 
-// Host -> WARBL commands (SysEx data without F0/F7).
-// With keepAlive the host must repeat it at least every ~3 s (the app: every second), or WARBL stops the stream by
-// itself: a crashed or killed host can't leave it streaming. Firmware before the keep-alive ignores the bit.
-inline std::vector<uint8_t> makeConfig (bool streamOn, bool suppressNotes, bool keepAlive = true)
+// Host -> WARBL commands (SysEx data without F0/F7), for the official firmware or the experimental one.
+// The host repeats an active config every second: WARBL stops a stream it hasn't renewed for 3 s, so a crashed or
+// killed host can't leave it streaming. The keep-alive bit is what the experimental firmware needs for that;
+// version 3 does it anyway.
+inline std::vector<uint8_t> makeConfig (bool streamOn, bool suppressNotes, Format format = Format::official)
 {
-    return { kSysExId1, kSysExId2, kCommandVersion, kConfig,
-             (uint8_t) ((streamOn ? kStreamOn : 0) | (suppressNotes ? kSuppressNotes : 0) | (streamOn && keepAlive ? kKeepAlive : 0)) };
+    const auto flags = (uint8_t) ((streamOn ? kStreamOn : 0) | (streamOn && suppressNotes ? kSuppressNotes : 0) | (streamOn ? kKeepAlive : 0));
+    if (format == Format::legacy)
+        return { kLegacyId[0], kLegacyId[1], kLegacyCommandVersion, kConfig, flags };
+    auto data = makeHeader (kConfig);
+    data.push_back (flags);
+    return data;
 }
 
-inline std::vector<uint8_t> makeRequestInfo()
+inline std::vector<uint8_t> makeRequestInfo (Format format = Format::official)
 {
-    return { kSysExId1, kSysExId2, kCommandVersion, kRequestInfo };
+    if (format == Format::legacy)
+        return { kLegacyId[0], kLegacyId[1], kLegacyCommandVersion, kRequestInfo };
+    return makeHeader (kRequestInfo);
 }
 
 // Extends wrapping device timestamps and sequence numbers to continuous counters.

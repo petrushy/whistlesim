@@ -1,10 +1,10 @@
 # WhistleSim
 
-A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder from a WARBL2 wind controller, plus room reverb. WARBL sends raw sensor frames over USB MIDI SysEx; the firmware side lives in petrushy/WARBL2, branch `sensor-stream` (`warbl2_firmware/Sensor_stream.ino`, protocol in `SENSOR_STREAM.md`), usually checked out at `../WARBL2-phy`. This repo was split out of that one's `host/` folder on 2026-11-10, with its history.
+A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder from a WARBL2 wind controller, plus room reverb. WARBL sends raw sensor frames over USB or Bluetooth MIDI SysEx. The stream is in the official WARBL2 firmware from 4.8 (amowry/WARBL2, `warbl2_firmware/Sensor_stream.ino`; protocol version 3, spec in `docs/WARBL_sensor_stream_protocol_v3.md`; the user's fork, petrushy/WARBL2, is usually checked out at `../WARBL2-phy` with upstream as remote `upstream`). The app still decodes the earlier experimental firmware (fork branch `sensor-stream`, `SENSOR_STREAM.md`, protocol 1-2 with ID 7D 57). Open questions about 4.8 for its author are in `docs/WARBL-4.8-notes.md`. This repo was split out of that one's `host/` folder on 2026-11-10, with its history.
 
 ## Layout
 
-- `Source/StreamProtocol.h`: protocol decoder and encoder, no JUCE. It must match the firmware; the version byte in each frame says which format it is.
+- `Source/StreamProtocol.h`: protocol decoder and encoder, no JUCE. It must match the firmware; the ID and version byte in each message say which format it is.
 - `Source/Whistle/`: geometry, frequency-domain acoustics (`Acoustics`) and the time-domain model (`WhistleModel`).
 - `Source/*Page`: the Monitor, Instrument, Sensors and Model tabs.
 - `tools/`: lowercase. WarblSimulator, ReverbCheck, WhistleCheck, stream_monitor.py, fit_voicing.py (searches a voicing against a recording, with WhistleCheck), and `Real-examples/` (recordings of real whistles the presets are fitted to).
@@ -35,6 +35,6 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 - **Preset dimensions are tuned offline.** After changing the acoustics or a preset, run `WhistleCheck code` and paste the printed values into `WhistleGeometry.cpp`; `PresetTuningTest` checks them.
 - **Holes:** there are eight, one per WARBL finger sensor (LT, L1–L3, R1–R4). Each has an enabled flag, and code must skip plugged holes.
 - **Verifying model changes:** run `WhistleCheck` (`play`, `chart`, `slide`) before and after. It measures what the model actually plays. For a voicing, `analyse <recording> <preset>` scores it against a recorded whistle, and `transition`, `glide` and `breath` check it stays playable. `transition` and `glide` time the fundamental only: a rich tone's harmonics add zero crossings, which once read as register jumps (`raw=1` gives the old reading).
-- **Protocol changes** go in both repos: bump the version byte, keep decoding the older versions, and update `SENSOR_STREAM.md` in the firmware repo.
+- **Protocol:** the official firmware defines it now; changes are suggested to its author (Andrew Mowry), not made here. Keep decoding the older versions, and send commands in both formats while the experimental firmware may still be in use.
 - **Instrument files** keep the format ID `warbl-whistle` (older files must still load).
 - Match the surrounding style: comments explain why, units are in comments, and variable names are descriptive.

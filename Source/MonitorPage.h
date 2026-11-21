@@ -116,7 +116,7 @@ private:
     HoleView holeView;
     ScopeView pressureScope { "Breath pressure measured (Pa above ambient)", -150.0f, 2500.0f };
     ScopeView accelScope { "Accelerometer (g)", -2.0f, 2.0f };
-    ScopeView gyroScope { "Gyro (deg/s)", -500.0f, 500.0f };
+    ScopeView orientationScope { "Orientation (degrees)", -90.0f, 90.0f };
     TimingView timingView;
 
     std::optional<warbl::DeviceInfo> deviceInfo;

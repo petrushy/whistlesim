@@ -204,7 +204,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
     addAndMakeVisible (pairButton);
    #endif
 
-    for (auto* c : std::initializer_list<juce::Component*> { &holeView, &pressureScope, &accelScope, &gyroScope, &timingView })
+    for (auto* c : std::initializer_list<juce::Component*> { &holeView, &pressureScope, &accelScope, &orientationScope, &timingView })
         addAndMakeVisible (c);
 
     streamButton.setToggleState (true, juce::dontSendNotification);  // Streaming is what the app is for.
@@ -464,24 +464,39 @@ void MonitorPage::timerCallback()
     const int ambient = deviceInfo ? deviceInfo->ambientPressure : 0;
     ScopeView::Trace pressure { "pressure", accent, {} };
     ScopeView::Trace ax { "x", juce::Colours::indianred, {} }, ay { "y", juce::Colours::lightgreen, {} }, az { "z", juce::Colours::cornflowerblue, {} };
-    ScopeView::Trace gx { "x", juce::Colours::indianred, {} }, gy { "y", juce::Colours::lightgreen, {} }, gz { "z", juce::Colours::cornflowerblue, {} };
+    ScopeView::Trace roll { "roll", juce::Colours::indianred, {} }, elevation { "elevation", juce::Colours::lightgreen, {} },
+        yaw { "yaw", juce::Colours::cornflowerblue, {} };
     const warbl::DeviceInfo units = deviceInfo.value_or (warbl::DeviceInfo {});
+    const bool threeAxes = ! history.back().frame.hasOrientation();  // Firmware before 4.8 sent x and z too
 
     for (const auto& r : history)
     {
         const auto& f = r.frame;
         pressure.values.push_back ((float) ((int) f.pressure - ambient) * AudioEngine::kPascalPerCount);
-        ax.values.push_back (units.accelToG (f.accel[0]));
         ay.values.push_back (units.accelToG (f.accel[1]));
-        az.values.push_back (units.accelToG (f.accel[2]));
-        gx.values.push_back (units.gyroToDps (f.gyro[0]));
-        gy.values.push_back (units.gyroToDps (f.gyro[1]));
-        gz.values.push_back (units.gyroToDps (f.gyro[2]));
+        if (threeAxes)
+        {
+            ax.values.push_back (units.accelToG (f.accel[0]));
+            az.values.push_back (units.accelToG (f.accel[2]));
+        }
+        // Firmware 4.8 sends WARBL's own angles; before that only the elevation can be worked out (from gravity).
+        if (f.hasOrientation())
+        {
+            roll.values.push_back (f.angleDegrees (0));
+            yaw.values.push_back (f.angleDegrees (2));
+        }
+        elevation.values.push_back (f.elevationDegrees().value_or (0.0f));
     }
 
     pressureScope.setTraces ({ pressure });
-    accelScope.setTraces ({ ax, ay, az });
-    gyroScope.setTraces ({ gx, gy, gz });
+    if (threeAxes)
+        accelScope.setTraces ({ ax, ay, az });
+    else
+        accelScope.setTraces ({ ay });
+    if (roll.values.size() == history.size())
+        orientationScope.setTraces ({ roll, elevation, yaw });
+    else
+        orientationScope.setTraces ({ elevation });
 }
 
 bool MonitorPage::keyPressed (const juce::KeyPress& key)
@@ -550,5 +565,5 @@ void MonitorPage::resized()
     bottom.removeFromBottom (6);
     auto left = bottom.removeFromLeft (bottom.getWidth() / 2);
     accelScope.setBounds (left.withTrimmedRight (3));
-    gyroScope.setBounds (bottom.withTrimmedLeft (3));
+    orientationScope.setBounds (bottom.withTrimmedLeft (3));
 }
