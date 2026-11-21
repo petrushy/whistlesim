@@ -98,11 +98,13 @@ Voicing presetVoicing (size_t index)
     if (index < presets().size() && presets()[index].name.startsWith ("D whistle, Golden (measured), real pressure"))
     {
         // The same whistle played at the mouth pressures measured on it (Real-examples/Golden-pressure-1-swells-*,
-        // WARBL's mouthpiece in the mouth beside the whistle's): D5 sounds from ~150 to ~310 Pa, G5 ~190-700, B5
-        // ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that and holds each note 3-4 x past the real
-        // break. Searched against those swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's
-        // band higher (its notes speak and break at lower pressure), a little less jet gain and bend. Its first
-        // octave is in tune within ~1.5 x of the measured scale's pressures; it still holds notes past the real break.
+        // WARBL's mouthpiece in the mouth beside the whistle's): the swells went from ~150 to ~310 Pa on D5, G5
+        // ~190-700, B5 ~300-880, D6 ~420-1000, where the voicing above needs 1.3-3 x that. Searched against those
+        // swells, pressure by pressure (level, pitch, H2, H3, H5, H7-H10): the jet's band higher (its notes speak and
+        // break at lower pressure), a little less jet gain and bend. Its first octave is in tune within ~1.5 x of the
+        // measured scale's pressures. The swells stopped short of the breaks: blown through them (Golden-pressure-3-
+        // breaks-*), its breaks upward are close to the real ones, but its upper registers fall back at ~1.4 x the
+        // real pressure (Model-limitations-brief.md, section 11).
         v.jetStrouhal = 0.03f;
         v.jetGain = 0.76f;
         v.jetBend = 5.7f;
