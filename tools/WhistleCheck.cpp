@@ -212,6 +212,7 @@ static void jetVoicingArgs (int argc, char* argv[], int from, Voicing& v)
         if (arg.startsWith ("tap=")) v.fingerTap = value;
         if (arg.startsWith ("soft=")) v.fingerSoftness = value;
         if (arg.startsWith ("knock=")) v.bodyKnock = value;
+        if (arg.startsWith ("gap=")) v.fingerGapDamping = value;  // Finger gap damping: 0 off, 1 physical
         if (arg.startsWith ("bodypitch=")) v.bodyPitch = value;
         if (arg.startsWith ("bodyring=")) v.bodyRing = value;
     }
@@ -1703,8 +1704,19 @@ int main (int argc, char* argv[])
         }
         if (frames.empty())
             return 1;
+        for (int i = 3; i < argc; ++i)  // preset=<name>: a built-in preset's geometry and voicing instead of the recorded instrument
+            if (juce::String (argv[i]).startsWith ("preset="))
+            {
+                const auto index = (size_t) presetArg (juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).toRawUTF8());
+                instrument.geometry = presets()[index];
+                instrument.voicing = presetVoicing (index);
+            }
         if (strouhalOverride > 0.0f) instrument.voicing.jetStrouhal = strouhalOverride;
         jetVoicingArgs (argc, argv, 3, instrument.voicing);  // noise=, gain=, spread= ...: other voicings on the same playing
+        windwayArgs (argc, argv, 3, instrument.geometry);
+        instrument.voicing.vortexLoss *= vortexArg;  // vortex= scales the preset's, as in the other checks
+        instrument.voicing.windwayMass *= windwayMass;  // mass=, friction= scale the recorded voicing's
+        instrument.voicing.windwayFriction *= windwayFriction;
         if (outputMaxOverride > 0.0f) breath.outputMax = outputMaxOverride;
         const auto& g = instrument.geometry;
         std::printf ("Jet Strouhal %.3f, breath output max %.0f Pa.\n", instrument.voicing.jetStrouhal, breath.outputMax);
@@ -1751,10 +1763,45 @@ int main (int argc, char* argv[])
         std::vector<float> out;
         std::vector<Controls> controlsAt;  // Per output sample... too big; per frame instead
         std::vector<size_t> frameStart;
+        // Finger landings, as AudioEngine::controlsFromFrame finds them (taps and body knocks; taps=0 leaves them out).
+        bool replayTaps = true;
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("taps="))
+                replayTaps = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getIntValue() != 0;
+        std::array<std::array<float, 4>, kNumHoles> fingerHeights {};
+        std::array<bool, kNumHoles> fingerArmed {};
+        double frameInterval = 0.002;  // s, smoothed as the app does
+        int landings = 0;
         for (size_t i = 0; i < frames.size(); ++i)
         {
             const double interval = i + 1 < frames.size() ? (frames[i + 1].ms - frames[i].ms) / 1000.0 : 0.002;
+            if (i > 0)
+                frameInterval += 0.1 * (std::clamp ((frames[i].ms - frames[i - 1].ms) / 1000.0, 0.0005, 0.02) - frameInterval);
             const auto c = controlsFor (frames[i]);
+            if (replayTaps && (frames[i].flags & 0x01) != 0)
+                for (int hole = 0; hole < kNumHoles; ++hole)
+                {
+                    if (! g.holes[(size_t) hole].enabled)
+                        continue;
+                    const auto sensor = (size_t) kSensorForHole[(size_t) hole];
+                    const float span = (float) std::max (1, covered[sensor] - baseline[sensor]);
+                    const float coverage = (float) (frames[i].h[sensor] - baseline[sensor]) / span;
+                    const float x = std::clamp (coverage / std::max (0.1f, holes.closedAt), 0.02f, 1.0f);
+                    const float height = holes.fingerRange * 0.001f * (1.0f / std::sqrt (x) - 1.0f);
+                    auto& past = fingerHeights[(size_t) hole];
+                    if (x < 0.7f)
+                        fingerArmed[(size_t) hole] = true;
+                    else if (x >= 0.95f && fingerArmed[(size_t) hole])
+                    {
+                        fingerArmed[(size_t) hole] = false;
+                        const float speed = std::min (2.0f, (past[2] - height) / (3.0f * (float) frameInterval));
+                        if (std::getenv ("WHISTLECHECK_TAPS") != nullptr)
+                            std::printf ("land %.3f s hole %d speed %.2f m/s\n", (frames[i].ms - frames.front().ms) / 1000.0, hole, speed);
+                        model.fingerLands (hole, speed);
+                        ++landings;
+                    }
+                    past = { height, past[0], past[1], past[2] };
+                }
             model.setControls (c, std::clamp (interval, 0.0005, 0.004));
             const int n = std::max (1, (int) std::lround (std::clamp (interval, 0.0, 0.05) * rate));
             frameStart.push_back (out.size());
@@ -2432,6 +2479,92 @@ int main (int argc, char* argv[])
                          10.0 * std::log10 (change / (total + 1e-20) + 1e-12));
         }
         saveWavArg (argc, argv, "taps", all, rate);
+        return 0;
+    }
+
+    if (mode == "release")  // release [preset] [note=G5] [pa=<Pa>] [to=<share>] [ms=<ramp>] [voicing options]: a note as the breath falls
+    {
+        // A real whistle's sound follows the breath down at once (the Golden with WARBL measuring mouth pressure:
+        // ~-11 dB when the breath has fallen to half). Holds a note, lowers the breath to a share of it over a
+        // ramp, and logs every 2 ms the level against the note's, the jet's swing across the edge and what it
+        // feeds the bore (drive and vortex loss, H1-band rms), then the level the lower breath settles at.
+        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
+        auto g = presets()[index];
+        windwayArgs (argc, argv, 3, g);
+        auto voicing = presetVoicing (index);
+        voicing.breathNoise = 0.0f;
+        jetVoicingArgs (argc, argv, 3, voicing);
+        voicing.vortexLoss *= vortexArg;
+        double pressure = 400.0, share = 0.4, rampMs = 15.0;
+        std::string noteArg = "G5";
+        for (int i = 3; i < argc; ++i)
+        {
+            const juce::String arg (argv[i]);
+            const double value = arg.fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
+            if (arg.startsWith ("pa=")) pressure = value;
+            if (arg.startsWith ("to=")) share = value;
+            if (arg.startsWith ("ms=")) rampMs = value;
+            if (arg.startsWith ("note=")) noteArg = arg.fromFirstOccurrenceOf ("=", false, false).toStdString();
+        }
+        const ChartFingering* chosen = nullptr;
+        for (const auto& entry : chartFor (g.chart))
+            if (noteName (lowestNote (g) * std::pow (2.0, entry.semitones / 12.0)) == noteArg)
+            {
+                chosen = &entry;
+                break;
+            }
+        if (chosen == nullptr) { std::printf ("No chart note %s\n", noteArg.c_str()); return 1; }
+        constexpr double rate = 48000.0;
+        auto controls = controlsFor (chosen->openness (g));
+        WhistleModel model;
+        model.setGeometry (g);
+        model.prepare (rate);
+        model.setVoicing (voicing);
+        std::vector<float> jetLog;
+        std::vector<float> out;
+        auto renderMs = [&] (double pa, double ms)
+        {
+            controls.mouthPressure = (float) pa;
+            model.setControls (controls, 0.001);
+            const auto n = (size_t) (ms * rate / 1000.0);
+            out.resize (out.size() + n);
+            model.render (out.data() + out.size() - n, (int) n);
+        };
+        for (int k = 0; k < 600; ++k)  // 0.6 s to settle
+            renderMs (pressure, 1.0);
+        auto rms = [] (const float* x, size_t n) { double s = 0.0; for (size_t i = 0; i < n; ++i) s += (double) x[i] * x[i]; return std::sqrt (s / (double) std::max<size_t> (1, n)); };
+        const double noteLevel = rms (out.data() + out.size() - (size_t) (0.1 * rate), (size_t) (0.1 * rate));
+        std::printf ("%s, %s %s at %.0f Pa, breath to %.0f %% over %.0f ms\n"
+                     "     ms     Pa  jet m/s  level dB   swing max  drive  vortex (Pa rms over 2 ms)\n",
+                     g.name.toRawUTF8(), noteArg.c_str(), chosen->holePattern (g).c_str(), pressure, share * 100.0, rampMs);
+        model.jetLog = &jetLog;
+        const size_t perStep = (size_t) (0.002 * rate);
+        for (int step = -5; step < 60; ++step)
+        {
+            const double t = step * 2.0;
+            const double pa = t <= 0.0 ? pressure : t >= rampMs ? pressure * share : pressure * (1.0 - (1.0 - share) * t / rampMs);
+            jetLog.clear();
+            renderMs (pa, 1.0);
+            renderMs (pa, 1.0);
+            double swing = 0.0, drive = 0.0, vortex = 0.0;
+            const size_t samples = jetLog.size() / 4;
+            for (size_t i = 0; i < samples; ++i)
+            {
+                swing = std::max (swing, (double) std::abs (jetLog[4 * i]));
+                drive += (double) jetLog[4 * i + 2] * jetLog[4 * i + 2];
+                vortex += (double) jetLog[4 * i + 3] * jetLog[4 * i + 3];
+            }
+            const double level = rms (out.data() + out.size() - perStep, perStep);
+            std::printf ("  %+5.0f %6.0f  %6.1f   %7.1f     %6.2f  %6.1f  %6.1f\n", t, pa, (double) model.jetVelocity.load(),
+                         20.0 * std::log10 (level / noteLevel + 1e-12), swing, std::sqrt (drive / std::max<size_t> (1, samples)),
+                         std::sqrt (vortex / std::max<size_t> (1, samples)));
+        }
+        model.jetLog = nullptr;
+        for (int k = 0; k < 600; ++k)
+            renderMs (pressure * share, 1.0);
+        const double settled = rms (out.data() + out.size() - (size_t) (0.1 * rate), (size_t) (0.1 * rate));
+        std::printf ("  settles at %.1f dB after 0.6 s at %.0f Pa\n", 20.0 * std::log10 (settled / noteLevel + 1e-12), pressure * share);
+        saveWavArg (argc, argv, "release", out, rate);
         return 0;
     }
 
