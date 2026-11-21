@@ -99,6 +99,13 @@ public:
         double framesPerBatch = 0.0, batchIntervalMs = 0.0;  // Smoothed  // Share of recent frames with a new tone hole reading (WARBL's ATmega kept up)
         std::array<uint32_t, kHistogramBins> histogram {};
         uint32_t histogramOverflow = 0;
+        // WARBL's loop period, from its timestamps between consecutive frames over the last 0.5 s: the mean and the
+        // longest. Within a Bluetooth batch the timestamps are WARBL's estimates, so there the longest is less exact.
+        double loopMs = 0.0, loopMaxMs = 0.0;
+
+        // The arrival jitter below which this share (0-1) of frames came; negative before any frame, and the
+        // histogram's end (kHistogramBins * kHistogramBinMs) when beyond it.
+        double jitterPercentileMs (double share) const;
     };
 
     Stats getStats() const;
@@ -125,6 +132,9 @@ private:
     double windowStartMs = 0.0;
     double rateWindowStartMs = 0.0;
     uint64_t rateWindowFrames = 0, rateWindowHoleUpdates = 0;
+    double lastDeviceMs = -1.0;  // The previous frame's device time
+    double rateWindowLoopSumMs = 0.0, rateWindowLoopMaxMs = 0.0;
+    uint64_t rateWindowLoops = 0;
 
     std::atomic<bool> simulating { false };
     warbl::SimulatedPlayer player;  // Simulator timer thread only.

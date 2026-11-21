@@ -133,7 +133,7 @@ public:
         g.fillAll (colours::card);
         g.setColour (colours::separator);
         g.fillRect (0, 0, getWidth(), 1);
-        static const char* names[] = { "Play", "Instrument", "Room", "Setup" };
+        static const char* names[] = { "Play", "Instrument", "Room", "Sensors", "Setup" };
         const float slot = (float) getWidth() / (float) numTabs;
         for (int i = 0; i < numTabs; ++i)
         {
@@ -180,6 +180,18 @@ private:
                     p.addCentredArc (c.x, c.y, radius, radius, 0.0f, 0.55f, juce::MathConstants<float>::pi - 0.55f, true);
                 }
                 g.strokePath (p, stroke);
+                break;
+            }
+            case sensors:  // A response curve on its axes
+            {
+                p.startNewSubPath (r.getX() + 1.0f, r.getY());
+                p.lineTo (r.getX() + 1.0f, r.getBottom());
+                p.lineTo (r.getRight(), r.getBottom());
+                g.strokePath (p, stroke);
+                juce::Path curve;
+                curve.startNewSubPath (r.getX() + 4.0f, r.getBottom() - 3.0f);
+                curve.cubicTo (r.getCentreX(), r.getBottom() - 3.0f, r.getCentreX(), r.getY() + 3.0f, r.getRight() - 1.0f, r.getY() + 3.0f);
+                g.strokePath (curve, stroke);
                 break;
             }
             case setup:  // A cog
@@ -270,7 +282,7 @@ public:
         connection.onTap = [this] { owner.showTab (setup); };
         addAndMakeVisible (connection);
 
-        presetCard.titleSize = 22.0f;
+        presetCard.titleSize = 16.0f;  // Long names (up to ~56 characters) fit on two lines beside the arrows
         presetCard.rightSpace = 100;
         presetCard.onTap = [this] { owner.showPresetList(); };
         addAndMakeVisible (presetCard);
@@ -607,13 +619,99 @@ std::pair<juce::String, juce::String> splitHeading (const juce::String& heading)
 } // namespace
 
 //==============================================================================
-class PhoneUI::InstrumentScreen : public Screen
+// A scrolling screen of settings in folding sections, each a slider, switch or list that follows a desktop control.
+class PhoneUI::SettingsScreen : public Screen
 {
 public:
-    explicit InstrumentScreen (PhoneUI& ownerToUse) : owner (ownerToUse), c (ownerToUse.controls)
+    explicit SettingsScreen (PhoneUI& ownerToUse) : owner (ownerToUse), c (ownerToUse.controls) {}
+
+    void resized() override { content.layout (getLocalBounds()); }
+
+protected:
+    // The settings shown follow their desktop controls (changes made elsewhere, enabled or not).
+    void refreshSettings()
+    {
+        for (auto& [card, box] : pickers)
+            card->setTitle (box->getText());
+        for (auto& s : sliders)
+            if (s->isShowing())
+                s->refresh();
+        for (auto& s : switches)
+            if (s->isShowing())
+                s->refresh();
+    }
+
+    void addSection (const juce::String& heading, const juce::String& subtitle, bool expanded)
+    {
+        auto section = std::make_unique<FoldingHeading> (heading, subtitle, expanded);
+        auto* s = section.get();
+        s->onToggle = [this] { resized(); };
+        content.add (*s, [s] (int w) { return s->preferredHeight (w); }, 10);
+        sections.push_back (std::move (section));
+    }
+
+    // Call once all sections are added: folded sections hide their members.
+    void finishSections()
+    {
+        for (auto& section : sections)
+            section->apply();
+        content.attachTo (*this);
+    }
+
+    void addMember (juce::Component& component, std::function<int (int)> height, int gap = 0)
+    {
+        content.add (component, std::move (height), gap);
+        sections.back()->members.push_back (&component);
+    }
+
+    void addPicker (const juce::String& caption, juce::ComboBox& box)
+    {
+        auto card = std::make_unique<TapCard> (caption);
+        card->titleSize = sizes::body;
+        card->onTap = [this, caption, &box]
+        {
+            owner.present (std::make_unique<ChoiceSheet> (caption, itemsOf (box), box.getSelectedId(),
+                                                          [&box] (int id) { box.setSelectedId (id, juce::sendNotificationSync); }));
+        };
+        addMember (*card, [] (int) { return 60; });
+        pickers.push_back ({ std::move (card), &box });
+    }
+
+    void addSlider (const juce::String& name, juce::Slider& slider, const juce::String& description)
+    {
+        auto s = std::make_unique<SettingSlider> (name, slider, description);
+        auto* p = s.get();
+        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, 4);
+        sliders.push_back (std::move (s));
+    }
+
+    void addSwitch (const juce::String& name, juce::ToggleButton& button, const juce::String& description, int gap = 4)
+    {
+        auto s = std::make_unique<SettingSwitch> (name, button, description);
+        auto* p = s.get();
+        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, gap);
+        switches.push_back (std::move (s));
+    }
+
+    PhoneUI& owner;
+    DesktopControls& c;
+    ScrollingContent content;
+
+private:
+    std::vector<std::unique_ptr<FoldingHeading>> sections;
+    std::vector<std::pair<std::unique_ptr<TapCard>, juce::ComboBox*>> pickers;
+    std::vector<std::unique_ptr<SettingSlider>> sliders;
+    std::vector<std::unique_ptr<SettingSwitch>> switches;
+};
+
+//==============================================================================
+class PhoneUI::InstrumentScreen : public SettingsScreen
+{
+public:
+    explicit InstrumentScreen (PhoneUI& ownerToUse) : SettingsScreen (ownerToUse)
     {
         // The instrument and its presets
-        presetCard.titleSize = 20.0f;
+        presetCard.titleSize = 17.0f;  // Long names fit on two lines
         presetCard.onTap = [this] { owner.showPresetList(); };
         saveButton.onClick = [this]
         {
@@ -680,9 +778,7 @@ public:
                 addSwitch ("Bell closes the foot", c.bell(), c.bell().getTooltip(), 10);
         }
 
-        for (auto& section : sections)
-            section->apply();
-        content.attachTo (*this);
+        finishSections();
     }
 
     void refresh() override
@@ -690,68 +786,12 @@ public:
         presetCard.setTitle (c.presetBox().getText());
         deleteButton.setEnabled (c.canDeletePreset());
         status.setLines ({ { c.instrumentStatus(), sizes::caption, colours::secondary } });
-        for (auto& [card, box] : pickers)
-            card->setTitle (box->getText());
-        for (auto& s : sliders)
-            if (s->isShowing())
-                s->refresh();
-        for (auto& s : switches)
-            if (s->isShowing())
-                s->refresh();
+        refreshSettings();
         if (tuningList.isShowing())
             tuningList.set (c.tuningTable());
     }
 
-    void resized() override { content.layout (getLocalBounds()); }
-
 private:
-    void addSection (const juce::String& heading, const juce::String& subtitle, bool expanded)
-    {
-        auto section = std::make_unique<FoldingHeading> (heading, subtitle, expanded);
-        auto* s = section.get();
-        s->onToggle = [this] { resized(); };
-        content.add (*s, [s] (int w) { return s->preferredHeight (w); }, 10);
-        sections.push_back (std::move (section));
-    }
-
-    void addMember (juce::Component& component, std::function<int (int)> height, int gap = 0)
-    {
-        content.add (component, std::move (height), gap);
-        sections.back()->members.push_back (&component);
-    }
-
-    void addPicker (const juce::String& caption, juce::ComboBox& box)
-    {
-        auto card = std::make_unique<TapCard> (caption);
-        card->titleSize = sizes::body;
-        card->onTap = [this, caption, &box]
-        {
-            owner.present (std::make_unique<ChoiceSheet> (caption, itemsOf (box), box.getSelectedId(),
-                                                          [&box] (int id) { box.setSelectedId (id, juce::sendNotificationSync); }));
-        };
-        addMember (*card, [] (int) { return 60; });
-        pickers.push_back ({ std::move (card), &box });
-    }
-
-    void addSlider (const juce::String& name, juce::Slider& slider, const juce::String& description)
-    {
-        auto s = std::make_unique<SettingSlider> (name, slider, description);
-        auto* p = s.get();
-        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, 4);
-        sliders.push_back (std::move (s));
-    }
-
-    void addSwitch (const juce::String& name, juce::ToggleButton& button, const juce::String& description, int gap = 4)
-    {
-        auto s = std::make_unique<SettingSwitch> (name, button, description);
-        auto* p = s.get();
-        addMember (*p, [p] (int w) { return p->preferredHeight (w); }, gap);
-        switches.push_back (std::move (s));
-    }
-
-    PhoneUI& owner;
-    DesktopControls& c;
-    ScrollingContent content;
     Heading title { "Instrument", sizes::title };
     TapCard presetCard { "Preset" };
     ButtonGrid fileButtons { 2 };
@@ -759,10 +799,6 @@ private:
         importButton { "Import file..." }, tuneButton { "Tune holes" };
     InfoBlock status;
     TuningList tuningList;
-    std::vector<std::unique_ptr<FoldingHeading>> sections;
-    std::vector<std::pair<std::unique_ptr<TapCard>, juce::ComboBox*>> pickers;
-    std::vector<std::unique_ptr<SettingSlider>> sliders;
-    std::vector<std::unique_ptr<SettingSwitch>> switches;
 };
 
 //==============================================================================
@@ -814,6 +850,200 @@ private:
 };
 
 //==============================================================================
+namespace
+{
+// Each tone hole now: its name, its coverage (0 = open, 1 = covered at WARBL's calibration) and a bar for how closed
+// the model's hole is, for setting the hole response while lowering a finger. Plugged holes are dimmed.
+class HoleReadings : public juce::Component
+{
+public:
+    explicit HoleReadings (AudioEngine& audioToUse) : audio (audioToUse) { setInterceptsMouseClicks (false, false); }
+
+    void paint (juce::Graphics& g) override
+    {
+        const float column = (float) getWidth() / (float) whistle::kNumHoles;
+        for (int i = 0; i < whistle::kNumHoles; ++i)
+        {
+            const float coverage = audio.measuredCoverage[(size_t) i].load();
+            const float closed = std::clamp (audio.holeClosedness (i, coverage), 0.0f, 1.0f);
+            const bool used = audio.holeRadius[(size_t) i].load() > 0.0f;
+            auto area = juce::Rectangle<float> (column * (float) i, 0.0f, column, (float) getHeight()).reduced (3.0f, 0.0f);
+            g.setColour (colours::secondary.withMultipliedAlpha (used ? 1.0f : 0.4f));
+            g.setFont (font (sizes::caption));
+            g.drawText (whistle::kHoleNames[(size_t) i], area.removeFromTop (16.0f), juce::Justification::centred);
+            g.setColour (colours::text.withMultipliedAlpha (used ? 1.0f : 0.4f));
+            g.setFont (font (15.0f));
+            g.drawText (juce::String (coverage, 2), area.removeFromTop (20.0f), juce::Justification::centred);
+            auto bar = area.reduced (column * 0.25f, 4.0f);
+            g.setColour (colours::separator);
+            g.fillRoundedRectangle (bar, 3.0f);
+            g.setColour (colours::finger.withMultipliedAlpha (used ? 1.0f : 0.4f));
+            g.fillRoundedRectangle (bar.withTrimmedTop (bar.getHeight() * (1.0f - closed)), 3.0f);
+        }
+    }
+
+private:
+    AudioEngine& audio;
+};
+} // namespace
+
+// The breath now, in fixed places so the numbers can change without moving anything: the measured pressure and the
+// breath the model gets (after the response and the instrument's own breath scale and curve), and the sensitivity.
+class BreathReading : public juce::Component
+{
+public:
+    explicit BreathReading (AudioEngine& audioToUse) : audio (audioToUse) { setInterceptsMouseClicks (false, false); }
+
+    static constexpr int height = 64;
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto b = audio.breathResponse();
+        const float measured = audio.measuredPressure.load();
+        const float toModel = response::instrumentBreath (b.map (measured), b.outputMax, audio.whistleModel.breathScale.load(),
+                                                          audio.whistleModel.breathCurve.load());
+        auto area = getLocalBounds();
+        auto sensitivity = area.removeFromBottom (18);
+        auto left = area.removeFromLeft (area.getWidth() / 2);
+        drawValue (g, left, "Measured", measured);
+        drawValue (g, area, "To the model", toModel);
+        g.setColour (colours::secondary);
+        g.setFont (font (sizes::caption));
+        g.drawText ("Sensitivity " + juce::String (b.outputMax / std::max (1.0f, b.inputMax - b.inputMin), 2) + "x",
+                    sensitivity, juce::Justification::centredLeft);
+    }
+
+private:
+    static void drawValue (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, float pascals)
+    {
+        g.setColour (colours::secondary);
+        g.setFont (font (sizes::caption));
+        g.drawText (name, area.removeFromTop (18), juce::Justification::centredLeft);
+        g.setColour (colours::text);
+        g.setFont (font (22.0f, true));
+        g.drawText (juce::String (juce::roundToInt (pascals)) + " Pa", area, juce::Justification::centredLeft);
+    }
+
+    AudioEngine& audio;
+};
+
+// The desktop's Sensors tab: how breath pressure and tone-hole coverage become the model's breath and hole openings.
+class PhoneUI::SensorsScreen : public SettingsScreen
+{
+public:
+    explicit SensorsScreen (PhoneUI& ownerToUse) : SettingsScreen (ownerToUse)
+    {
+        intro.setLines ({ { "How WARBL's readings become the breath and finger holes the model plays. Changes apply at once and are kept.",
+                            sizes::caption, colours::secondary } });
+        content.add (title, [] (int) { return 36; });
+        content.add (intro, [this] (int w) { return intro.preferredHeight (w); });
+
+        addSection ("Breath", "The measured pressure, through an input range and a curve, becomes the breath the model gets. Blow from "
+                              "softly to hard and watch the reading.", true);
+        addMember (breathNow, [] (int) { return BreathReading::height; });
+        for (const auto& setting : c.breathSettings())
+            addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
+        breathDefaults.onClick = [this]
+        {
+            owner.present (std::make_unique<ConfirmSheet> ("Breath defaults", "Set the four breath settings back to their defaults?", "Set defaults", false,
+                                                           [this] { c.breathDefaults(); }));
+        };
+        addMember (breathDefaults, [] (int) { return 46; }, 4);
+
+        addSection ("Tone holes", "How much each hole is covered (0 = open, 1 = covered, from WARBL's own calibration) becomes how closed "
+                                  "the model's hole is (the bars). Lower a finger slowly and watch.", true);
+        addMember (holes, [] (int) { return 96; });
+        addPicker ("Response shape", c.holeShape());
+        for (const auto& setting : c.holeSettings())
+            addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
+        addSwitch ("Hold back sudden jumps", c.holdHoleJumps(), c.holdHoleJumps().getTooltip(), 10);
+        holeDefaults.onClick = [this]
+        {
+            owner.present (std::make_unique<ConfirmSheet> ("Tone hole defaults", "Set the tone hole settings and shape back to their defaults?",
+                                                           "Set defaults", false, [this] { c.holeDefaults(); }));
+        };
+        addMember (holeDefaults, [] (int) { return 46; }, 4);
+
+        addSection ("Thumb hole (recorder pinch)", c.thumbExplanation(), false);
+        addSwitch ("Own response", c.thumbOwnResponse(), "Off: the thumb hole follows the tone hole settings above.");
+        // Room for the reading's longest form, so changing numbers never move what's below.
+        addMember (thumbNow, [this] (int w) { return textHeight (thumbNowLongest(), font (sizes::caption), w) + 4; });
+        for (const auto& setting : c.thumbSettings())
+            addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
+
+        finishSections();
+    }
+
+    void refresh() override
+    {
+        if (breathNow.isShowing())
+            breathNow.repaint();
+        thumbNow.setLines ({ { c.thumbNow(), sizes::caption, colours::secondary } });
+        if (holes.isShowing())
+            holes.repaint();
+        refreshSettings();
+    }
+
+private:
+    // The thumb reading with its widest numbers.
+    juce::String thumbNowLongest()
+    {
+        return c.thumbNow().replace (c.thumbNow().fromFirstOccurrenceOf ("coverage ", false, false).upToFirstOccurrenceOf (" %", false, false),
+                                     "-0.00 -> 100");
+    }
+
+    Heading title { "Sensors", sizes::title };
+    InfoBlock intro, thumbNow;
+    BreathReading breathNow { c.audio() };
+    HoleReadings holes { c.audio() };
+    juce::TextButton breathDefaults { "Breath defaults" }, holeDefaults { "Tone hole defaults" };
+};
+
+//==============================================================================
+namespace
+{
+// Named values in fixed rows, names on the left and values on the right, so changing numbers don't move anything.
+class StatRows : public juce::Component
+{
+public:
+    explicit StatRows (juce::StringArray namesToShow) : names (std::move (namesToShow))
+    {
+        for (int i = 0; i < names.size(); ++i)
+            values.add ({});
+        setInterceptsMouseClicks (false, false);
+    }
+
+    static constexpr int rowHeight = 24;
+    int preferredHeight() const { return names.size() * rowHeight; }
+
+    void setValues (const juce::StringArray& newValues)
+    {
+        if (newValues != values)
+        {
+            values = newValues;
+            repaint();
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        for (int i = 0; i < names.size(); ++i)
+        {
+            const auto row = juce::Rectangle<int> (0, i * rowHeight, getWidth(), rowHeight);
+            g.setFont (font (15.0f));
+            g.setColour (colours::secondary);
+            g.drawText (names[i], row, juce::Justification::centredLeft);
+            g.setColour (colours::text);
+            g.drawText (values[i], row, juce::Justification::centredRight);
+        }
+    }
+
+private:
+    juce::StringArray names, values;
+};
+} // namespace
+
+//==============================================================================
 class PhoneUI::SetupScreen : public Screen
 {
 public:
@@ -835,6 +1065,11 @@ public:
         content.add (infoButton, [] (int) { return 46; });
         content.add (simulate, [this] (int w) { return simulate.preferredHeight (w); }, 4);
         content.add (smooth, [this] (int w) { return smooth.preferredHeight (w); });
+        content.add (diagnosticsHeading, [] (int) { return 28; }, 10);
+        content.add (diagnostics, [this] (int) { return diagnostics.preferredHeight(); });
+        content.add (diagnosticsNote, [this] (int w) { return diagnosticsNote.preferredHeight (w); }, 4);
+        resetButton.onClick = [this] { c.receiver().resetStats(); c.audio().heldHoleJumps = 0; };
+        content.add (resetButton, [] (int) { return 46; });
         content.add (outputHeading, [] (int) { return 28; }, 10);
         content.add (output, [this] (int w) { return output.preferredHeight (w); });
         content.add (bufferRow, [] (int) { return 40; });
@@ -844,6 +1079,10 @@ public:
         content.add (aboutButton, [] (int) { return 46; }, 10);
         content.attachTo (*this);
         bufferNote.setLines ({ { "A smaller buffer answers sooner. If the sound crackles, choose a larger one.", sizes::caption, colours::secondary } });
+        diagnosticsNote.setLines ({ { "Rates and the loop are over the last half second; the counts since connecting or Reset. The loop is "
+                                      "WARBL's own time between frames: 2 ms over USB, 3 ms with a Bluetooth connection. Jitter is how much "
+                                      "later than the fastest recent frame each one arrived.",
+                                      sizes::caption, colours::secondary } });
     }
 
     void refresh() override
@@ -862,6 +1101,7 @@ public:
             lines.push_back ({ c.deviceInfo(), sizes::caption, colours::secondary });
         warbl.setLines (lines);
         infoButton.setEnabled (c.receiver().isConnected() && ! c.receiver().isSimulating());
+        refreshDiagnostics (state.streaming, stats);
         simulate.refresh();
         smooth.refresh();
         refreshOutput();
@@ -870,6 +1110,44 @@ public:
     void resized() override { content.layout (getLocalBounds()); }
 
 private:
+    // The stream's statistics, as the desktop Monitor shows them; dashes while nothing streams.
+    void refreshDiagnostics (bool streaming, const StreamReceiver::Stats& stats)
+    {
+        if (! diagnostics.isShowing())
+            return;
+        if (! streaming)
+        {
+            juce::StringArray dashes;
+            for (int i = 0; i < kDiagnosticRows; ++i)
+                dashes.add (juce::String::fromUTF8 ("\xe2\x80\x93"));
+            diagnostics.setValues (dashes);
+            return;
+        }
+        auto ms = [] (double v, int decimals) { return juce::String (v, decimals) + " ms"; };
+        auto jitter = [&stats] (double share)
+        {
+            const double v = stats.jitterPercentileMs (share);
+            return v < 0.0 ? juce::String ("-") : juce::String (v, 1);
+        };
+        const double lostShare = 100.0 * (double) stats.lostFrames / (double) std::max<uint64_t> (1, stats.frames + stats.lostFrames);
+        auto& audio = c.audio();
+        diagnostics.setValues ({
+            juce::String (juce::roundToInt (stats.framesPerSecond)),
+            stats.bluetooth && stats.batchIntervalMs > 0.0
+                ? juce::String (juce::roundToInt (1000.0 / stats.batchIntervalMs)) + " (" + juce::String (stats.framesPerBatch, 1) + " frames, every "
+                      + ms (stats.batchIntervalMs, 1) + ")"
+                : juce::String (juce::roundToInt (stats.framesPerSecond)) + " (one frame each)",
+            ms (stats.loopMs, 2) + ", max " + ms (stats.loopMaxMs, 1),
+            juce::String ((juce::int64) stats.lostFrames) + " (" + juce::String (lostShare, 2) + " %)",
+            jitter (0.5) + " / " + jitter (0.99) + " / " + jitter (0.999) + " ms",
+            juce::String (juce::roundToInt (stats.freshHoles * 100.0)) + " % of frames",
+            juce::String ((juce::int64) stats.rejectedHoleReadings),
+            juce::String ((juce::int64) audio.heldHoleJumps.load()),
+            ! stats.bluetooth ? juce::String ("not used (USB)")
+                              : audio.smoothBluetooth.load() ? "+" + ms (audio.bluetoothDelayMs.load(), 1) : juce::String ("off"),
+        });
+    }
+
     void refreshOutput()
     {
         auto& deviceManager = c.audio().deviceManager;
@@ -941,8 +1219,13 @@ private:
     DesktopControls& c;
     ScrollingContent content;
     Heading title { "Setup", sizes::title };
-    Heading warblHeading { "WARBL" }, outputHeading { "Sound output" }, recordingsHeading { "Recordings" };
-    InfoBlock warbl, output, bufferNote, recordings;
+    Heading warblHeading { "WARBL" }, outputHeading { "Sound output" }, recordingsHeading { "Recordings" },
+        diagnosticsHeading { "Stream diagnostics" };
+    InfoBlock warbl, output, bufferNote, recordings, diagnosticsNote;
+    static constexpr int kDiagnosticRows = 9;
+    StatRows diagnostics { { "Frames/s", "Messages/s", "WARBL loop", "Lost frames", "Arrival jitter p50/p99/p99.9", "New hole readings",
+                             "Garbled hole readings", "Hole jumps held back", "Bluetooth smoothing" } };
+    juce::TextButton resetButton { "Reset counters" };
     juce::TextButton pairButton { "Pair over Bluetooth..." }, infoButton { "Read WARBL's calibration" }, aboutButton { "About WhistleSim" };
     SettingSwitch simulate { "Simulate WARBL", c.simulate(), "Plays a scripted scale as if from WARBL, through the same path as the real stream." };
     SettingSwitch smooth { "Smooth Bluetooth", c.smoothBluetooth(),
@@ -962,6 +1245,7 @@ PhoneUI::PhoneUI (std::unique_ptr<MainComponent> mainToShow) : main (std::move (
     screens[play] = std::make_unique<PlayScreen> (*this);
     screens[instrument] = std::make_unique<InstrumentScreen> (*this);
     screens[room] = std::make_unique<RoomScreen> (*this);
+    screens[sensors] = std::make_unique<SensorsScreen> (*this);
     screens[setup] = std::make_unique<SetupScreen> (*this);
     for (auto& screen : screens)
         addChildComponent (*screen);

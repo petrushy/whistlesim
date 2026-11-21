@@ -203,6 +203,9 @@ void StreamReceiver::acceptFrame (const warbl::SensorFrame& frame, double nowMs,
         windowMin[0] = windowMin[1] = 1.0e12;
         windowStartMs = rateWindowStartMs = nowMs;
         rateWindowFrames = 0;
+        lastDeviceMs = -1.0;
+        rateWindowLoopSumMs = rateWindowLoopMaxMs = 0.0;
+        rateWindowLoops = 0;
         timestampUnwrapper.reset();
     }
 
@@ -234,9 +237,20 @@ void StreamReceiver::acceptFrame (const warbl::SensorFrame& frame, double nowMs,
 
     const juce::SpinLock::ScopedLockType lock (statsLock);
 
+    const bool consecutive = lastSeq >= 0 && ((frame.seq - lastSeq) & ((1 << warbl::kSeqBits) - 1)) == 1;
     if (lastSeq >= 0)
         stats.lostFrames += (uint64_t) ((frame.seq - lastSeq - 1) & ((1 << warbl::kSeqBits) - 1));
     lastSeq = frame.seq;
+
+    // The loop period: device time between consecutive frames (one frame per WARBL loop).
+    if (consecutive && lastDeviceMs >= 0.0)
+    {
+        const double loop = received.deviceMs - lastDeviceMs;
+        rateWindowLoopSumMs += loop;
+        rateWindowLoopMaxMs = std::max (rateWindowLoopMaxMs, loop);
+        rateWindowLoops++;
+    }
+    lastDeviceMs = received.deviceMs;
 
     stats.frames++;
     const auto bin = (int) (extraDelay / kHistogramBinMs);
@@ -254,10 +268,32 @@ void StreamReceiver::acceptFrame (const warbl::SensorFrame& frame, double nowMs,
     {
         stats.framesPerSecond = (double) rateWindowFrames * 1000.0 / (nowMs - rateWindowStartMs);
         stats.freshHoles = (double) rateWindowHoleUpdates / (double) std::max<uint64_t> (1, rateWindowFrames);
+        stats.loopMs = rateWindowLoops > 0 ? rateWindowLoopSumMs / (double) rateWindowLoops : 0.0;
+        stats.loopMaxMs = rateWindowLoopMaxMs;
         rateWindowFrames = 0;
         rateWindowHoleUpdates = 0;
+        rateWindowLoopSumMs = rateWindowLoopMaxMs = 0.0;
+        rateWindowLoops = 0;
         rateWindowStartMs = nowMs;
     }
+}
+
+double StreamReceiver::Stats::jitterPercentileMs (double share) const
+{
+    uint64_t total = histogramOverflow;
+    for (auto count : histogram)
+        total += count;
+    if (total == 0)
+        return -1.0;
+    const auto target = (uint64_t) std::ceil (share * (double) total);
+    uint64_t sum = 0;
+    for (size_t i = 0; i < histogram.size(); ++i)
+    {
+        sum += histogram[i];
+        if (sum >= target)
+            return (double) (i + 1) * kHistogramBinMs;
+    }
+    return kHistogramBins * kHistogramBinMs;
 }
 
 StreamReceiver::Stats StreamReceiver::getStats() const
