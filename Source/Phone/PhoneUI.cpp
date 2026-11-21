@@ -887,6 +887,46 @@ private:
 };
 } // namespace
 
+// The breath now, in fixed places so the numbers can change without moving anything: the measured pressure and the
+// breath the model gets (after the response and the instrument's own breath scale and curve), and the sensitivity.
+class BreathReading : public juce::Component
+{
+public:
+    explicit BreathReading (AudioEngine& audioToUse) : audio (audioToUse) { setInterceptsMouseClicks (false, false); }
+
+    static constexpr int height = 64;
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto b = audio.breathResponse();
+        const float measured = audio.measuredPressure.load();
+        const float toModel = response::instrumentBreath (b.map (measured), b.outputMax, audio.whistleModel.breathScale.load(),
+                                                          audio.whistleModel.breathCurve.load());
+        auto area = getLocalBounds();
+        auto sensitivity = area.removeFromBottom (18);
+        auto left = area.removeFromLeft (area.getWidth() / 2);
+        drawValue (g, left, "Measured", measured);
+        drawValue (g, area, "To the model", toModel);
+        g.setColour (colours::secondary);
+        g.setFont (font (sizes::caption));
+        g.drawText ("Sensitivity " + juce::String (b.outputMax / std::max (1.0f, b.inputMax - b.inputMin), 2) + "x",
+                    sensitivity, juce::Justification::centredLeft);
+    }
+
+private:
+    static void drawValue (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, float pascals)
+    {
+        g.setColour (colours::secondary);
+        g.setFont (font (sizes::caption));
+        g.drawText (name, area.removeFromTop (18), juce::Justification::centredLeft);
+        g.setColour (colours::text);
+        g.setFont (font (22.0f, true));
+        g.drawText (juce::String (juce::roundToInt (pascals)) + " Pa", area, juce::Justification::centredLeft);
+    }
+
+    AudioEngine& audio;
+};
+
 // The desktop's Sensors tab: how breath pressure and tone-hole coverage become the model's breath and hole openings.
 class PhoneUI::SensorsScreen : public SettingsScreen
 {
@@ -900,7 +940,7 @@ public:
 
         addSection ("Breath", "The measured pressure, through an input range and a curve, becomes the breath the model gets. Blow from "
                               "softly to hard and watch the reading.", true);
-        addMember (breathNow, [this] (int w) { return breathNow.preferredHeight (w); });
+        addMember (breathNow, [] (int) { return BreathReading::height; });
         for (const auto& setting : c.breathSettings())
             addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
         breathDefaults.onClick = [this]
@@ -926,25 +966,18 @@ public:
 
         addSection ("Thumb hole (recorder pinch)", c.thumbExplanation(), false);
         addSwitch ("Own response", c.thumbOwnResponse(), "Off: the thumb hole follows the tone hole settings above.");
-        addMember (thumbNow, [this] (int w) { return thumbNow.preferredHeight (w); });
+        // Room for the reading's longest form, so changing numbers never move what's below.
+        addMember (thumbNow, [this] (int w) { return textHeight (thumbNowLongest(), font (sizes::caption), w) + 4; });
         for (const auto& setting : c.thumbSettings())
             addSlider (setting.name, *setting.slider, setting.slider->getTooltip());
 
-        for (auto* block : { &breathNow, &thumbNow })
-            block->onHeightChange = [this] { resized(); };
         finishSections();
     }
 
     void refresh() override
     {
-        // "Sensitivity 2.50x\nNow: measured 120 Pa -> 300 Pa to the model": the reading large, the sensitivity small.
-        const auto breath = juce::StringArray::fromLines (c.breathNow());
-        std::vector<InfoBlock::Line> lines;
-        if (breath.size() > 1)
-            lines.push_back ({ breath[1], sizes::body, colours::text, true });
-        if (breath.size() > 0)
-            lines.push_back ({ breath[0], sizes::caption, colours::secondary });
-        breathNow.setLines (lines);
+        if (breathNow.isShowing())
+            breathNow.repaint();
         thumbNow.setLines ({ { c.thumbNow(), sizes::caption, colours::secondary } });
         if (holes.isShowing())
             holes.repaint();
@@ -952,8 +985,16 @@ public:
     }
 
 private:
+    // The thumb reading with its widest numbers.
+    juce::String thumbNowLongest()
+    {
+        return c.thumbNow().replace (c.thumbNow().fromFirstOccurrenceOf ("coverage ", false, false).upToFirstOccurrenceOf (" %", false, false),
+                                     "-0.00 -> 100");
+    }
+
     Heading title { "Sensors", sizes::title };
-    InfoBlock intro, breathNow, thumbNow;
+    InfoBlock intro, thumbNow;
+    BreathReading breathNow { c.audio() };
     HoleReadings holes { c.audio() };
     juce::TextButton breathDefaults { "Breath defaults" }, holeDefaults { "Tone hole defaults" };
 };

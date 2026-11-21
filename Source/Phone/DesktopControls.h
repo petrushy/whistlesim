@@ -92,7 +92,6 @@ public:
     juce::ComboBox& holeShape() { return sensors().holeShape; }
     juce::ToggleButton& holdHoleJumps() { return sensors().holeJumpToggle; }
     juce::ToggleButton& thumbOwnResponse() { return sensors().thumbToggle; }
-    juce::String breathNow() { return sensors().breathInfo.getText(); }  // Sensitivity, and measured -> breath to the model now
     juce::String thumbNow() { return sensors().thumbInfo.getText(); }
     juce::String thumbExplanation() { return sensors().thumbTitle.getTooltip(); }
     void breathDefaults() { sensors().breathDefaults.onClick(); }
