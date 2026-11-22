@@ -35,7 +35,7 @@ public:
         // "--snapshot <file.png>" saves a picture of the window after a few seconds, then quits.
         const auto args = juce::StringArray::fromTokens (commandLine, true);
         // "--output <device>" picks the audio output; "--play" plays the test phrase at start.
-        // "--monitor", "--instrument", "--sensors", "--model" open that tab; "--about" the About window (the
+        // "--monitor", "--instrument", "--workshop", "--sensors", "--model" open that tab; "--about" the About window (the
         // snapshot is then of that window).
         if (auto* main = getMain())
         {
@@ -54,10 +54,16 @@ public:
                 monitor.playTestPhrase();
             if (args.contains ("--record"))  // Starts recording at once (saved when the app quits)
                 monitor.startRecording();
+            const auto size = args.indexOf ("--size");  // --size 2400x1300: the window's size (for snapshots of wide layouts)
+            if (size >= 0 && size + 1 < args.size())
+                main->setSize (args[size + 1].upToFirstOccurrenceOf ("x", false, true).getIntValue(),
+                               args[size + 1].fromFirstOccurrenceOf ("x", false, true).getIntValue());
             if (args.contains ("--monitor"))
                 main->showMonitor();
             if (args.contains ("--instrument"))
                 main->showInstrument();
+            if (args.contains ("--workshop"))
+                main->showWorkshop();
             if (args.contains ("--sensors"))
                 main->showSensors();
             if (args.contains ("--model"))
@@ -89,8 +95,20 @@ public:
             if (auto* main = getMain())
                 main->setSaveStateOnExit (false);  // Don't overwrite the user's settings from a test run.
             const juce::File file (args[index + 1].unquoted());
-            juce::Timer::callAfterDelay (6000, [this, file]
+            // --learn: Learn my breath from the start (with --simulate, the scripted player's breath), stopped just
+            // before the snapshot, 20 s in.
+            const bool learn = args.contains ("--learn");
+            if (learn)
+                if (auto* main = getMain())
+                    main->getWorkshopPage().setLearning (true);
+            juce::Timer::callAfterDelay (learn ? 20000 : 6000, [this, file, learn]
             {
+                if (auto* main = getMain(); main != nullptr && learn)
+                {
+                    main->getWorkshopPage().setLearning (false);
+                    for (const auto& [id, pressure] : main->getInstrumentPage().getGeometry().tuning.learnedBreath)
+                        std::printf ("learned %s: %.0f Pa\n", id.c_str(), pressure);
+                }
                 if (auto* main = getMain())
                     std::printf ("audio CPU %.1f %%\n", main->getMonitor().getCpuUsage() * 100.0);
                 auto* shown = mainWindow->getContentComponent();

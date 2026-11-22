@@ -10,8 +10,9 @@
 #include "Whistle/Acoustics.h"
 #include "Whistle/InstrumentFile.h"
 
-// Side view of the whistle to scale. Holes show how open they are; in manual play, clicking a hole covers or
-// uncovers it, and right-clicking half-covers it.
+// Front view of the whistle to scale, upright (mouthpiece at the top). Holes show how open they are; the thumb hole,
+// on the back, is drawn beside the tube. In manual play, clicking a hole covers or uncovers it, and right-clicking
+// half-covers it.
 class WhistleView : public juce::Component
 {
 public:
@@ -23,29 +24,20 @@ public:
 private:
     juce::Rectangle<float> holeBounds (int hole) const;
     juce::Rectangle<float> footBounds() const;
-    float xFor (double metres) const;
+    float yFor (double metres) const;  // Upright: distance from the window down the tube, in px
+    float scale() const;               // px per metre, the same along and across the tube
+    float axisX() const;               // The tube's centre line
 
     AudioEngine& audio;
     whistle::Geometry geometry;
 };
 
-// Every fingering of a standard whistle chart, with how far the geometry's resonance is from its note.
-class TuningTable : public juce::Component
+// The default look, with the sliders' value boxes' text as big as the box allows (the settings scale with the
+// window).
+class ScaledValueLook : public juce::LookAndFeel_V4
 {
 public:
-    struct Entry
-    {
-        juce::String note;
-        juce::String pattern;
-        double cents = 0.0;
-    };
-
-    void setEntries (std::vector<Entry> e) { entries = std::move (e); repaint(); }
-    const std::vector<Entry>& getEntries() const { return entries; }
-    void paint (juce::Graphics&) override;
-
-private:
-    std::vector<Entry> entries;
+    juce::Font getLabelFont (juce::Label& label) override { return juce::FontOptions (juce::jmax (12.0f, label.getHeight() * 0.62f)); }
 };
 
 class InstrumentPage : public juce::Component, private juce::Timer
@@ -62,6 +54,17 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+
+    // For the Tuning workshop tab, which tunes this instrument.
+    const whistle::Geometry& getGeometry() const { return geometry; }
+    void applyGeometry (const whistle::Geometry&);  // Takes the whole geometry, as the sliders would
+    double lowestNoteHz() const;                    // The key and octave chosen, at the reference A
+    std::function<void()> onInstrumentChanged;      // Geometry, voicing, key or reference changed
+    void setTuningSummary (const juce::String&);    // One line from the Tuning workshop, shown under the drawing
+    // The key, octave, reference A and fingering chart: what the tuner aims for (the sound never uses them), shown on
+    // the Tuning workshop tab. They stay this page's (the phone screens and Play scale use them).
+    void showTuningControlsIn (juce::Component& parent);
+    void layOutTuningControls (juce::Rectangle<int> row, juce::Rectangle<int> chartRow);
 
 private:
     friend class DesktopControls;  // The iPhone screens drive these controls
@@ -83,16 +86,18 @@ private:
     void addHeading (juce::String name);
 
     void geometryChanged();
+    void voicingChanged();  // The played pitch changes with the voicing too
     void refreshSliders();
     void timerCallback() override;
 
+    ScaledValueLook valueLook;  // Before the sliders that use it, so it outlives them
     AudioEngine& audio;
     whistle::Geometry geometry;
 
     juce::ComboBox presetBox, materialBox, keyBox, octaveBox;
     juce::Slider referenceBox;  // Reference A (Hz)
     juce::Label referenceLabel { {}, "A =" };
-    juce::TextButton tuneButton { "Tune holes" }, savePresetButton { "Save preset..." }, deleteButton { "Delete" },
+    juce::TextButton savePresetButton { "Save preset..." }, deleteButton { "Delete" },
         exportButton { "Export..." }, importButton { "Import..." };
     std::unique_ptr<juce::FileChooser> fileChooser;
     void saveToFile();
@@ -110,13 +115,11 @@ private:
     void deletePreset();                             // Asks first, then deleteUserPreset
     void deleteUserPreset (const juce::File&);       // Deletes it and goes on to the next preset
     juce::File selectedUserPreset() const;           // The player's preset selected in the list, if one is
-    juce::ToggleButton crossButton { "Also tune cross-fingerings with hole size (whistle: C natural sets L1)" };
     juce::ToggleButton bellButton { "Bell   (the bell sensor closes the open foot)" };
     HelpDot bellHelp { "Bell", [this] { return bellButton.getTooltip(); } };
     juce::ComboBox chartBox;
     std::array<std::unique_ptr<juce::ToggleButton>, whistle::kNumHoles> holeToggles;
     std::array<size_t, whistle::kNumHoles> holeRow {};  // Index in rows of each hole's position slider.
-    double lowestNoteHz() const;
     void showKeyOfInstrument();
     void setHoleEnabled (int hole, bool enabled);
     juce::Label tuneStatus;
@@ -129,14 +132,10 @@ private:
     juce::Viewport settingsView;               // Scrolls them
 
     WhistleView whistleView { audio };
-    TuningTable tuningTable;
     juce::ToggleButton enableButton { "Sound on" }, manualButton { "Play from screen" };
     juce::TextButton scaleButton { "Play scale" };
     juce::Slider manualBreath;
-    juce::Label manualBreathLabel { {}, "Breath" }, liveLabel, tableTitle;
-
-    bool tuningDirty = true;
-    int tuningCountdown = 0;
+    juce::Label manualBreathLabel { {}, "Breath" }, liveLabel, tuningSummary;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentPage)
 };

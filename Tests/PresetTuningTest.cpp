@@ -1,5 +1,5 @@
-// The presets hold tuned dimensions (from `WhistleCheck code`). This checks they are still in tune with the
-// current acoustics: a fresh least-squares fit can't improve on them.
+// The presets' charts and keys, the L1-R3 / L2-R4 copies, and the tuning slide. Whether they play in tune is
+// PlayedTuningTest's (it plays the model).
 
 #include "Whistle/Acoustics.h"
 
@@ -22,19 +22,6 @@ int main()
                                || std::abs (lowest - (alto ? 349.228 : 261.626)) > 0.01))
         {
             std::printf ("FAILED recorder key/chart: %s, %.2f Hz\n", g.name.toRawUTF8(), lowest);
-            ++failures;
-        }
-        // Refitting has to find next to nothing: the preset is at the tuner's minimum. Not for a measured
-        // instrument, whose bore and holes are a real whistle's, however the tuner would place them.
-        if (g.name.contains ("(measured)"))
-            continue;
-        const auto now = tuningError (g, lowest);
-        auto refitted = g;
-        fitTuning (refitted, lowest, true);
-        const auto best = tuningError (refitted, lowest);
-        if (now.rms - best.rms > 0.5)
-        {
-            std::printf ("FAILED %s: %.1f cents rms, a fit reaches %.1f (retune with WhistleCheck code)\n", g.name.toRawUTF8(), now.rms, best.rms);
             ++failures;
         }
     }
@@ -66,6 +53,45 @@ int main()
         }
     }
 
-    std::printf (failures == 0 ? "All presets in tune\n" : "%d notes out of tune\n", failures);
+    // The tuning slide: pulling it out moves the tube below the joint (holes and taper with it) and flattens every
+    // note; pushing it back gives the same instrument; and pulled out, its best setting is found where it was.
+    for (const auto& preset : presets())
+    {
+        const double lowest = presetLowestNote (preset);
+        auto out = preset;
+        setSlide (out, 0.004);
+        auto back = out;
+        setSlide (back, 0.0);
+        for (int i = 0; i < kNumHoles; ++i)
+        {
+            const auto& hole = preset.holes[(size_t) i];
+            if (hole.enabled && std::abs (out.radiusAt (out.holes[(size_t) i].position) - preset.radiusAt (hole.position)) > 1.0e-9)
+            {
+                std::printf ("FAILED %s: the bore at %s changes width with the slide\n", preset.name.toRawUTF8(), kHoleNames[(size_t) i]);
+                ++failures;
+            }
+        }
+        for (const auto& c : chartFor (preset.chart))
+        {
+            const double made = predictedCents (preset, c, lowest);
+            if (std::abs (made) >= kCentsNotReachable)
+                continue;
+            const double pulled = predictedCents (out, c, lowest), returned = predictedCents (back, c, lowest);
+            if (pulled > made - 1.0 || std::abs (returned - made) > 0.01)
+            {
+                std::printf ("FAILED %s slide, %s: %+.2f made, %+.2f pulled out 4 mm, %+.2f pushed back\n", preset.name.toRawUTF8(),
+                             c.name, made, pulled, returned);
+                ++failures;
+            }
+        }
+        const double made = bestSlide (preset, lowest), pulled = bestSlide (out, lowest);
+        if (std::abs (pulled - made) > 0.0002)
+        {
+            std::printf ("FAILED %s: best slide %.2f mm, pulled out 4 mm %.2f mm\n", preset.name.toRawUTF8(), made * 1000.0, pulled * 1000.0);
+            ++failures;
+        }
+    }
+
+    std::printf (failures == 0 ? "All preset checks passed\n" : "%d failures\n", failures);
     return failures == 0 ? 0 : 1;
 }

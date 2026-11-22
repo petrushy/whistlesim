@@ -190,7 +190,8 @@ const std::vector<ChartFingering>& chartFor (FingeringChart chart)
         { "D", "xxxxxx", 0, 1, bore },         { "E", "xxxxxo", 2, 1, 5 },            { "F#", "xxxxoo", 4, 1, 4 },
         { "G", "xxxooo", 5, 1, 3 },            { "A", "xxoooo", 7, 1, 2 },            { "B", "xooooo", 9, 1, 1 },
         { "C nat", "oxxooo", 10, 1, none, 0 }, { "C#", "oooooo", 11, 1, 0 },
-        { "high D", "oxxxxx", 12, 2 },         { "high D", "xxxxxx", 12, 2 },         { "high E", "xxxxxo", 14, 2 },
+        // High D overblown with every hole covered is shown but left out of the tuning: whistle players don't use it.
+        { "high D", "oxxxxx", 12, 2 },         { "high D", "xxxxxx", 12, 2, none, none, false },        { "high E", "xxxxxo", 14, 2 },
         { "high F#", "xxxxoo", 16, 2 },        { "high G", "xxxooo", 17, 2 },         { "high A", "xxoooo", 19, 2 },
         { "high B", "xooooo", 21, 2 },
     };
@@ -218,29 +219,183 @@ const std::vector<ChartFingering>& chartFor (FingeringChart chart)
         { "top C", "pxooxxoo", 24, 3 },                     { "top C#", "pxoxxoxox", 25, 3 },      { "top D", "pxoxxoxo", 26, 3 },
     };
 
-    // Härjedalspipa: six holes opened from the bottom, cylindrical bore, in the traditional scale on A#:
-    // A#, C-20, D+35, D#, F, G-20, A (cents from equal temperament), and the same an octave up by overblowing.
-    static const std::vector<ChartFingering> harjedal {
-        { "A#", "xxxxxx", 0.0, 1, bore },        { "C-20", "xxxxxo", 1.8, 1, 5 },        { "D+35", "xxxxoo", 4.35, 1, 4 },
-        { "D#", "xxxooo", 5.0, 1, 3 },           { "F", "xxoooo", 7.0, 1, 2 },           { "G-20", "xooooo", 8.8, 1, 1 },
-        { "A", "oooooo", 11.0, 1, 0 },
-        { "high A#", "xxxxxx", 12.0, 2 },        { "high C-20", "xxxxxo", 13.8, 2 },     { "high D+35", "xxxxoo", 16.35, 2 },
-        { "high D#", "xxxooo", 17.0, 2 },        { "high F", "xxoooo", 19.0, 2 },        { "high G-20", "xooooo", 20.8, 2 },
-        { "high A", "oooooo", 23.0, 2 },
-    };
-
     switch (chart)
     {
         case FingeringChart::baroqueRecorder: return recorder;
-        case FingeringChart::harjedalspipa: return harjedal;
         case FingeringChart::whistle: break;
     }
     return whistle;
 }
 
+std::string fingeringId (const ChartFingering& c)
+{
+    return std::string (c.name) + " " + c.pattern;
+}
+
+bool fingeringCounts (const Geometry& g, const ChartFingering& c)
+{
+    const auto found = g.tuning.fingerings.find (fingeringId (c));
+    return found != g.tuning.fingerings.end() ? found->second : c.counts;
+}
+
+namespace
+{
+// The degrees (semitones above the tonic) of a major or natural minor scale.
+bool inScale (int degree, bool minor)
+{
+    static constexpr bool major[] = { true, false, true, false, true, true, false, true, false, true, false, true };
+    static constexpr bool naturalMinor[] = { true, false, true, true, false, true, false, true, true, false, true, false };
+    return (minor ? naturalMinor : major)[((degree % 12) + 12) % 12];
+}
+
+// Solves a small linear system A x = b (Gaussian elimination, partial pivoting). False if singular.
+bool solveSmall (std::vector<std::vector<double>> a, std::vector<double> b, std::vector<double>& x)
+{
+    const size_t n = b.size();
+    for (size_t col = 0; col < n; ++col)
+    {
+        size_t pivot = col;
+        for (size_t row = col + 1; row < n; ++row)
+            if (std::abs (a[row][col]) > std::abs (a[pivot][col]))
+                pivot = row;
+        if (std::abs (a[pivot][col]) < 1.0e-12)
+            return false;
+        std::swap (a[col], a[pivot]);
+        std::swap (b[col], b[pivot]);
+        for (size_t row = col + 1; row < n; ++row)
+        {
+            const double factor = a[row][col] / a[col][col];
+            for (size_t k = col; k < n; ++k)
+                a[row][k] -= factor * a[col][k];
+            b[row] -= factor * b[col];
+        }
+    }
+    x.assign (n, 0.0);
+    for (size_t row = n; row-- > 0;)
+    {
+        double sum = b[row];
+        for (size_t k = row + 1; k < n; ++k)
+            sum -= a[row][k] * x[k];
+        x[row] = sum / a[row][row];
+    }
+    return true;
+}
+
+// The offsets (cents from equal, degree 0 = 0) that make the chords of the weighted keys as pure as possible:
+// for each key its tonic chord (weight 1) and the chords on its fourth and fifth degree (0.5 each, minor ones in
+// a minor key, so they stay in its scale), each with a pure fifth and a pure third (least squares).
+std::array<double, 12> bestForKeys (const TuningGoal& goal)
+{
+    constexpr double kFifth = 701.955, kMajorThird = 386.314, kMinorThird = 315.641;
+    struct Interval { int from, to; double cents, weight; };
+    std::vector<Interval> intervals;
+    for (int key = 0; key < 24; ++key)
+    {
+        const double weight = goal.keys[(size_t) key];
+        if (weight <= 0.0)
+            continue;
+        const bool minor = key >= TuningGoal::kMinor;
+        const int tonic = key % 12;
+        for (const auto& [root, share] : { std::pair { 0, 1.0 }, std::pair { 5, 0.5 }, std::pair { 7, 0.5 } })
+        {
+            const int r = tonic + root;
+            const double w = weight * share;
+            intervals.push_back ({ r, r + 7, kFifth, w });
+            intervals.push_back ({ r, r + (minor ? 3 : 4), minor ? kMinorThird : kMajorThird, w });
+        }
+    }
+
+    // Unknowns: the offsets of degrees 1-11. Each interval wants offset(to) - offset(from) = pure - equal; a tiny
+    // pull to 0 settles the degrees no chord uses.
+    constexpr size_t n = 11;
+    std::vector<std::vector<double>> normal (n, std::vector<double> (n, 0.0));
+    std::vector<double> right (n, 0.0), x;
+    for (size_t k = 0; k < n; ++k)
+        normal[k][k] += 1.0e-4;
+    for (const auto& i : intervals)
+    {
+        const int to = ((i.to % 12) + 12) % 12, from = ((i.from % 12) + 12) % 12;
+        const double want = i.cents - 100.0 * (i.to - i.from);
+        // Row: +1 at `to`, -1 at `from` (degree 0 is fixed at 0, so it has no column).
+        std::array<std::pair<int, double>, 2> row { { { to, 1.0 }, { from, -1.0 } } };
+        for (const auto& [a, va] : row)
+        {
+            if (a == 0)
+                continue;
+            right[(size_t) a - 1] += i.weight * va * want;
+            for (const auto& [b, vb] : row)
+                if (b != 0)
+                    normal[(size_t) a - 1][(size_t) b - 1] += i.weight * va * vb;
+        }
+    }
+    std::array<double, 12> offsets {};
+    if (! intervals.empty() && solveSmall (normal, right, x))
+        for (size_t k = 0; k < n; ++k)
+            offsets[k + 1] = x[k];
+    return offsets;
+}
+} // namespace
+
+std::array<double, 12> temperamentCents (const TuningGoal& goal)
+{
+    std::array<double, 12> offsets {};
+    switch (goal.temperament)
+    {
+        case Temperament::equal:
+            return offsets;
+        case Temperament::meantone:
+        {
+            // Fifths a quarter of a syntonic comma narrow (696.58 c): degree d is f fifths from the tonic, f in -5..6.
+            constexpr double kNarrowing = 696.578 - 700.0;
+            for (int f = -5; f <= 6; ++f)
+                offsets[(size_t) (((7 * f) % 12 + 12) % 12)] = f * kNarrowing;
+            break;
+        }
+        case Temperament::just:
+        {
+            // 1 16/15 9/8 6/5 5/4 4/3 45/32 3/2 8/5 5/3 16/9 15/8 (16/9 for the flat seventh: the fourth of the fourth).
+            static constexpr double ratios[] = { 1.0, 16.0 / 15.0, 9.0 / 8.0, 6.0 / 5.0, 5.0 / 4.0, 4.0 / 3.0,
+                                                 45.0 / 32.0, 3.0 / 2.0, 8.0 / 5.0, 5.0 / 3.0, 16.0 / 9.0, 15.0 / 8.0 };
+            for (int d = 0; d < 12; ++d)
+                offsets[(size_t) d] = 1200.0 * std::log2 (ratios[d]) - 100.0 * d;
+            break;
+        }
+        case Temperament::bestForKeys:
+            offsets = bestForKeys (goal);
+            break;
+        case Temperament::harjedalSwedish:
+            offsets[2] = -20.0;
+            offsets[4] = 35.0;
+            offsets[9] = -20.0;
+            break;
+        case Temperament::harjedalEnglish:
+            offsets[4] = offsets[9] = offsets[11] = -22.5;
+            break;
+        case Temperament::custom:
+            offsets = goal.custom;
+            offsets[0] = 0.0;  // The slide sets the overall pitch
+            break;
+    }
+    const double keep = 1.0 - juce::jlimit (0.0, 1.0, goal.towardEqual);
+    for (auto& o : offsets)
+        o *= keep;
+    return offsets;
+}
+
+double targetCents (const Geometry& g, const ChartFingering& c)
+{
+    const int degree = (((int) std::lround (c.semitones)) % 12 + 12) % 12;
+    return temperamentCents (g.tuning)[(size_t) degree];
+}
+
+double targetHz (const Geometry& g, const ChartFingering& c, double lowestHz)
+{
+    return lowestHz * std::pow (2.0, (c.semitones + 0.01 * targetCents (g, c)) / 12.0);
+}
+
 double predictedCents (const Geometry& g, const ChartFingering& c, double lowestHz)
 {
-    const double target = lowestHz * std::pow (2.0, c.semitones / 12.0);
+    const double target = targetHz (g, c, lowestHz);
     double nearest = 0.0;
     for (double f : resonances (g, c.openness (g), target * 0.7, target * 1.4))
         if (nearest == 0.0 || std::abs (std::log2 (f / target)) < std::abs (std::log2 (nearest / target)))
@@ -297,7 +452,7 @@ bool solveLength (Geometry& g, double& value, double lo, double hi, const Openne
 bool tunePositions (Geometry& g, double lowestHz, bool resize = false)
 {
     const auto& chart = chartFor (g.chart);
-    auto targetFor = [&] (const ChartFingering& c) { return lowestHz * std::pow (2.0, c.semitones / 12.0); };
+    auto targetFor = [&] (const ChartFingering& c) { return targetHz (g, c, lowestHz); };
 
     // Closely spaced holes (e.g. a recorder's) need more passes.
     for (int pass = 0; pass < 20; ++pass)
@@ -388,24 +543,39 @@ bool solveLinear (std::vector<std::vector<double>> a, std::vector<double> b, std
 }
 } // namespace
 
-double tuningWeight (FingeringChart kind, const ChartFingering& c)
+double tuningWeight (const Geometry& g, const ChartFingering& c)
 {
+    if (! fingeringCounts (g, c))
+        return 0.0;
     double weight = 1.0;
-    // Accidentals (forks and cross-fingerings) and the third octave: a player leans on these anyway, and they
-    // shouldn't pull the plain scale out of tune. The Härjedalspipa's chart is its scale: every note counts.
-    if (kind != FingeringChart::harjedalspipa)
+    // A note in none of the keys that count (a fork or cross-fingering in another key) 0.3, one in all of them 1:
+    // a player leans on the others anyway, and they shouldn't pull the keys' notes out of tune. The third octave
+    // 0.3 as well.
     {
         const int degree = ((int) std::lround (c.semitones)) % 12;
-        const bool inScale = degree == 0 || degree == 2 || degree == 4 || degree == 5 || degree == 7 || degree == 9 || degree == 11;
-        if (! inScale || c.reg >= 3)
-            weight = 0.3;
+        double share = 0.0, most = 0.0;
+        for (int d = 0; d < 12; ++d)
+        {
+            double here = 0.0;
+            for (int key = 0; key < 24; ++key)
+                if (g.tuning.keys[(size_t) key] > 0.0 && inScale (d - key % 12, key >= TuningGoal::kMinor))
+                    here += g.tuning.keys[(size_t) key];
+            most = std::max (most, here);
+            if (d == degree)
+                share = here;
+        }
+        weight = most > 0.0 ? 0.3 + 0.7 * share / most : (inScale (degree, false) ? 1.0 : 0.3);
+        if (c.reg >= 3)
+            weight *= 0.3;
+        if (g.chart == FingeringChart::whistle && g.tuning.topHoleForHighD && std::string (c.pattern) == "oxxooo")
+            weight *= 0.1;  // C natural gives L1's size up to high D (TuningGoal::topHoleForHighD)
     }
-    // A note with two fingerings (the whistle's high D) counts once in all.
+    // A note with two fingerings that count (the whistle's high D) counts once in all.
     int sameNote = 0;
-    for (const auto& other : chartFor (kind))
-        if (std::abs (other.semitones - c.semitones) < 0.01)
+    for (const auto& other : chartFor (g.chart))
+        if (fingeringCounts (g, other) && std::abs (other.semitones - c.semitones) < 0.01)
             ++sameNote;
-    return weight / sameNote;
+    return weight / std::max (1, sameNote);
 }
 
 TuningError tuningError (const Geometry& g, double lowestHz)
@@ -414,7 +584,7 @@ TuningError tuningError (const Geometry& g, double lowestHz)
     double sum = 0.0, total = 0.0;
     for (const auto& c : chartFor (g.chart))
     {
-        const double cents = predictedCents (g, c, lowestHz), weight = tuningWeight (g.chart, c);
+        const double cents = predictedCents (g, c, lowestHz), weight = tuningWeight (g, c);
         if (std::abs (cents) >= kCentsNotReachable)
             continue;  // A plugged hole's note
         sum += weight * cents * cents;
@@ -426,18 +596,83 @@ TuningError tuningError (const Geometry& g, double lowestHz)
     return result;
 }
 
-void fitTuning (Geometry& g, double lowestHz, bool fitSizes)
+void setSlide (Geometry& g, double slide)
 {
-    // The notes to fit, as (fingering, square root of its weight). A note far from its target isn't this
-    // instrument's (its hole is plugged): chasing it would only detune the others.
-    struct Note { const ChartFingering* fingering; double rootWeight; };
-    std::vector<Note> notes;
-    for (const auto& c : chartFor (g.chart))
-        if (std::abs (predictedCents (g, c, lowestHz)) < kCentsNotReachable)
-            notes.push_back ({ &c, std::sqrt (tuningWeight (g.chart, c)) });
+    const double change = slide - g.slide;
+    const double joint = g.slideJoint();
+    g.boreLength += change;
+    for (auto& hole : g.holes)
+        if (hole.position > joint)
+            hole.position += change;
+    g.slide = slide;
+}
 
-    // The unknowns: the bore's length, each hole's position in use, and the sizes the chart lets the tuner set.
-    constexpr int kBore = -1;
+double bestSlide (const Geometry& g, double lowestHz, const std::vector<double>* pullCents)
+{
+    // Each note's cents move almost in proportion to the slide (a short tube more than a long one), so a few
+    // Gauss-Newton steps on the weighted squared error find the best setting. A note's pull from its resonance is
+    // taken to stay the same while the slide moves.
+    struct Note { const ChartFingering* fingering; double weight, pull; };
+    std::vector<Note> notes;
+    const auto& chart = chartFor (g.chart);
+    for (size_t i = 0; i < chart.size(); ++i)
+    {
+        const double pull = pullCents != nullptr ? (i < pullCents->size() ? (*pullCents)[i] : std::nan ("")) : 0.0;
+        if (std::isfinite (pull) && std::abs (predictedCents (g, chart[i], lowestHz)) < kCentsNotReachable)
+            notes.push_back ({ &chart[i], tuningWeight (g, chart[i]), pull });
+    }
+    if (notes.empty())
+        return g.slide;
+
+    constexpr double kStep = 0.0005;  // m: the change the slope is measured over
+    auto at = [&] (double slide)
+    {
+        auto moved = g;
+        setSlide (moved, slide);
+        std::vector<double> cents;
+        for (const auto& n : notes)
+            cents.push_back (predictedCents (moved, *n.fingering, lowestHz) + n.pull);
+        return cents;
+    };
+    double slide = g.slide;
+    for (int iteration = 0; iteration < 4; ++iteration)
+    {
+        const auto here = at (slide), further = at (slide + kStep);
+        double gradient = 0.0, curvature = 0.0;
+        for (size_t i = 0; i < notes.size(); ++i)
+        {
+            const double slope = (further[i] - here[i]) / kStep;
+            gradient += notes[i].weight * here[i] * slope;
+            curvature += notes[i].weight * slope * slope;
+        }
+        if (curvature <= 0.0)
+            break;
+        const double next = juce::jlimit (kSlideMin, kSlideMax, slide - gradient / curvature);
+        const bool settled = std::abs (next - slide) < 0.00002;
+        slide = next;
+        if (settled)
+            break;
+    }
+    return slide;
+}
+
+void fitTuning (Geometry& g, double lowestHz, bool fitSizes, const std::vector<double>* aimCents, bool fitHead)
+{
+    // The notes to fit, as (fingering, square root of its weight, the resonance's aim in cents from the note). A
+    // note far from its aim isn't this instrument's (its hole is plugged): chasing it would only detune the others.
+    struct Note { const ChartFingering* fingering; double rootWeight, aim; };
+    std::vector<Note> notes;
+    const auto& chart = chartFor (g.chart);
+    for (size_t i = 0; i < chart.size(); ++i)
+    {
+        const double aim = aimCents != nullptr && i < aimCents->size() ? (*aimCents)[i] : 0.0;
+        if (std::abs (predictedCents (g, chart[i], lowestHz) - aim) < kCentsNotReachable)
+            notes.push_back ({ &chart[i], std::sqrt (tuningWeight (g, chart[i])), aim });
+    }
+
+    // The unknowns: the bore's length, each hole's position in use, the sizes the chart lets the tuner set, and with
+    // fitHead the head section's diameter (it sets how the octaves lie, which the holes can't).
+    constexpr int kBore = -1, kHead = -2;
     struct Unknown { int hole; bool isSize; };
     std::vector<Unknown> unknowns { { kBore, false } };
     std::vector<int> sized;
@@ -446,18 +681,22 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes)
         const int hole = ChartFingering::holeFor (g, c.tunes);
         if (hole >= 0 && g.holes[(size_t) hole].enabled)
             unknowns.push_back ({ hole, false });
-        const int sizeHole = ChartFingering::holeFor (g, c.tunesDiameter);
+        // A size is fitted only for a note that counts (the Härjedalspipa leaves C natural out: L1 keeps its size).
+        const int sizeHole = fingeringCounts (g, c) ? ChartFingering::holeFor (g, c.tunesDiameter) : -1;
         if (fitSizes && sizeHole >= 0 && g.holes[(size_t) sizeHole].enabled
             && std::find (sized.begin(), sized.end(), sizeHole) == sized.end())
             sized.push_back (sizeHole);
     }
     for (int hole : sized)
         unknowns.push_back ({ hole, true });
+    if (fitHead && g.headLength > 0.0)
+        unknowns.push_back ({ kHead, true });
     const size_t m = unknowns.size();
 
     // Resizing a hole is a bigger change to the instrument than moving it, and changes its tone: each 10 % is
     // charged like 1.5 cents on a note, so that a hole isn't reshaped for a fraction of a cent.
     const auto startSizes = g.holes;
+    const double startHead = g.headDiameter;
     constexpr double kCentsPerLogSize = 15.0;
 
     auto errors = [&] (const Geometry& trial)
@@ -465,9 +704,16 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes)
         std::vector<double> out;
         out.reserve (notes.size() + sized.size());
         for (const auto& n : notes)
-            out.push_back (n.rootWeight * predictedCents (trial, *n.fingering, lowestHz));
+            out.push_back (n.rootWeight * (predictedCents (trial, *n.fingering, lowestHz) - n.aim));
         for (int hole : sized)
-            out.push_back (kCentsPerLogSize * std::log (trial.holes[(size_t) hole].diameter / startSizes[(size_t) hole].diameter));
+        {
+            // L1 given to high D (TuningGoal::topHoleForHighD) is free to change a lot: its size moves high D only ~3 c
+            // per 10 %, and the player asked for it.
+            const bool givenToHighD = g.chart == FingeringChart::whistle && g.tuning.topHoleForHighD && hole == ChartFingering::holeFor (g, 0);
+            out.push_back ((givenToHighD ? 0.1 : 1.0) * kCentsPerLogSize * std::log (trial.holes[(size_t) hole].diameter / startSizes[(size_t) hole].diameter));
+        }
+        if (fitHead && g.headLength > 0.0)
+            out.push_back (kCentsPerLogSize * std::log (trial.headDiameter / startHead));
         return out;
     };
     auto cost = [] (const std::vector<double>& e)
@@ -487,6 +733,8 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes)
             const auto u = unknowns[k];
             if (u.hole == kBore)
                 trial.boreLength = juce::jlimit (0.05, 2.0, trial.boreLength + step[k]);
+            else if (u.hole == kHead)  // Within 60-140 % of the bore below it
+                trial.headDiameter = juce::jlimit (0.6 * trial.boreDiameterTop, 1.4 * trial.boreDiameterTop, trial.headDiameter * std::exp (step[k]));
             else if (u.isSize)
             {
                 auto& hole = trial.holes[(size_t) u.hole];

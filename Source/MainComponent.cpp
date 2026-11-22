@@ -101,6 +101,8 @@ MainComponent::MainComponent()
     };
     tabs.addTab ("Monitor", background, monitor, true);
     tabs.addTab ("Instrument", background, instrument, true);
+    workshop = new WorkshopPage (audio, *instrument);
+    tabs.addTab ("Tuning workshop", background, workshop, true);
     sensors = new SensorsPage (audio);
     tabs.addTab ("Sensors", background, sensors, true);
     tabs.addTab ("Model", background, new ModelPage (audio), true);

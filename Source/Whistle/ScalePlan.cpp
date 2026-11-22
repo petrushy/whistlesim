@@ -18,10 +18,10 @@ std::string noteName (double hz)
     return names[(midi % 12 + 12) % 12] + std::to_string (midi / 12 - 1);
 }
 
-// Plays one fingering at one pressure (blown up over 40 ms, like a player) and returns the pitch, or 0 if it
-// doesn't sound clearly as a note: periodic, and at least -40 dBFS (~60 dB SPL at the listener), not a whisper
-// right at the threshold that may not start at all when played.
-double play (const Geometry& g, const Voicing& v, const Openness& open, double pressure)
+
+} // namespace
+
+double playNote (const Geometry& g, const Voicing& v, const Openness& open, double pressure)
 {
     constexpr double rate = 48000.0;
     WhistleModel model;
@@ -57,8 +57,6 @@ double play (const Geometry& g, const Voicing& v, const Openness& open, double p
     const double f = measurePitch (settled, rate, clarity);
     return clarity > 0.8 ? f : 0.0;
 }
-} // namespace
-
 int scaleControlsAt (const std::vector<ScaleStep>& steps, double t, Controls& controls)
 {
     const int step = (int) (t / kScaleNoteSeconds);
@@ -100,7 +98,7 @@ std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lo
         if (c.semitones > semitones || done.count (c.semitones) > 0)
             continue;
 
-        const double target = lowestHz * std::pow (2.0, c.semitones / 12.0);
+        const double target = targetHz (g, c, lowestHz);  // In the instrument's temperament
         const auto open = c.openness (g);
         float aim = 0.0f;  // Cents from the note to play at
         if (aimCents != nullptr)
@@ -117,10 +115,10 @@ std::vector<ScaleStep> planScale (const Geometry& g, const Voicing& v, double lo
         // and where it crosses over to the next register the pitch reading can land on the note by chance.
         struct Candidate { float pressure, cents; bool reliable; };
         std::vector<Candidate> candidates;
-        bool softerSounds = play (g, v, open, from / 1.15) > 0.0;
+        bool softerSounds = playNote (g, v, open, from / 1.15) > 0.0;
         for (double pressure = from; pressure <= to; pressure *= 1.15)
         {
-            const double f = play (g, v, open, pressure);
+            const double f = playNote (g, v, open, pressure);
             const bool sounds = f > 0.0;
             candidates.push_back ({ (float) pressure, sounds ? (float) (1200.0 * std::log2 (f / target)) : 1.0e9f, sounds && softerSounds });
             softerSounds = sounds;

@@ -19,6 +19,7 @@
 #include "Whistle/JetStability.h"
 #include "Whistle/PitchDetect.h"
 #include "Whistle/ScalePlan.h"
+#include "Whistle/PlayedTuning.h"
 #include "Whistle/WhistleModel.h"
 
 #include <cmath>
@@ -390,7 +391,7 @@ static void chart (const Geometry& g)
     for (const auto& c : chartFor (g.chart))
     {
         const auto open = c.openness (g);
-        const double target = lowest * std::pow (2.0, c.semitones / 12.0);
+        const double target = targetHz (g, c, lowest);
         const double cents = predictedCents (g, c, lowest);
 
         std::vector<std::pair<double, double>> hits;  // Pressure, cents from target
@@ -448,6 +449,99 @@ static void head (const Geometry& base)
 int main (int argc, char* argv[])
 {
     const juce::String mode = argc > 1 ? argv[1] : "table";
+
+    if (mode == "temperaments")  // temperaments [toward=0-1]: offsets (cents from equal) by degree, and the D/G/Em/Bm chords' errors
+    {
+        double toward = 0.0;
+        for (int i = 2; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("toward="))
+                toward = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
+        TuningGoal goal;
+        goal.keys = {};
+        goal.keys[0] = goal.keys[5] = 1.0;                                            // D, G (on a D whistle)
+        goal.keys[TuningGoal::kMinor + 2] = goal.keys[TuningGoal::kMinor + 9] = 1.0;  // Em, Bm
+        goal.towardEqual = toward;
+        static const char* names[] = { "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C", "C#" };
+        std::printf ("Degrees on a D whistle; chords: third and fifth from pure (c)\n           ");
+        for (auto* n : names)
+            std::printf ("%5s", n);
+        std::printf ("   D maj        G maj        A maj        Em           Bm         rms\n");
+        for (auto t : { Temperament::equal, Temperament::meantone, Temperament::just, Temperament::bestForKeys, Temperament::harjedalSwedish,
+                        Temperament::harjedalEnglish })
+        {
+            goal.temperament = t;
+            const auto o = temperamentCents (goal);
+            static const char* labels[] = { "equal", "meantone", "just", "best", "harj. (sv)", "harj. (en)", "custom" };
+            std::printf ("%-10s ", labels[(int) t]);
+            for (double v : o)
+                std::printf ("%+5.0f", v);
+            double sum = 0.0;
+            int count = 0;
+            for (const auto& [root, minor] : { std::pair { 0, false }, std::pair { 5, false }, std::pair { 7, false }, std::pair { 2, true }, std::pair { 9, true } })
+            {
+                auto at = [&] (int d) { return o[(size_t) (d % 12)]; };
+                const double third = (minor ? 300.0 : 400.0) + at (root + (minor ? 3 : 4)) - at (root) - (minor ? 315.641 : 386.314);
+                const double fifth = 700.0 + at (root + 7) - at (root) - 701.955;
+                std::printf ("   %+4.0f %+4.0f  ", third, fifth);
+                sum += third * third + fifth * fifth;
+                count += 2;
+            }
+            std::printf (" %5.1f\n", std::sqrt (sum / count));
+        }
+        return 0;
+    }
+
+    if (mode == "played" || mode == "playtune")  // played [preset]: each note's pitch at the middle of its pressures; playtune: tune to that
+    {
+        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
+        auto g = presets()[index];
+        const auto voicing = presetVoicing (index);
+        int passes = 3;
+        bool shapeHead = true;  // head=0: holes and bore length only
+        for (int i = 3; i < argc; ++i)
+        {
+            const juce::String arg (argv[i]);
+            if (arg.startsWith ("passes="))
+                passes = arg.fromFirstOccurrenceOf ("=", false, false).getIntValue();
+            if (arg == "head=0")
+                shapeHead = false;
+        }
+        const double lowest = lowestNote (g);
+        auto report = [&] (const Geometry& geometry, const std::vector<PlayedNote>& notes, const char* title)
+        {
+            std::printf ("\n%s, %s: played at the middle of each note's pressures\n  note      fingering  resonance   sounds at      played at     played   pull\n",
+                         geometry.name.toRawUTF8(), title);
+            for (const auto& n : notes)
+            {
+                const auto& c = chartFor (geometry.chart)[n.chartIndex];
+                if (! n.sounds)
+                {
+                    std::printf ("  %-8s  %s   %+5.0f c    (doesn't sound as this note)\n", c.name, c.holePattern (geometry).c_str(), n.resonance);
+                    continue;
+                }
+                std::printf ("  %-8s  %s   %+5.0f c    %4.0f-%4.0f Pa   %5.0f Pa   %+5.0f c  %+5.0f c\n", c.name, c.holePattern (geometry).c_str(), n.resonance,
+                             n.lowPa, n.highPa, n.pressure, n.cents, n.cents - n.resonance);
+            }
+            std::printf ("  played %.1f c rms (weighted as the tuner), resonances %.1f c rms\n", playedRms (geometry, notes), tuningError (geometry, lowest).rms);
+        };
+        report (g, measurePlayed (g, voicing, lowest), "as it is");
+        if (mode == "playtune")
+        {
+            std::vector<PlayedNote> notes;
+            if (! tuneToPlayed (g, voicing, lowest, true, shapeHead, passes, &notes))
+            {
+                std::printf ("The tuner didn't converge\n");
+                return 1;
+            }
+            report (g, notes, "tuned to the played pitch");
+            std::printf ("  code: length %.5f, head %.4f long, %.5f diameter at the window, straight %.4f\n    { {", g.boreLength, g.headLength,
+                         g.headDiameter, g.headStraightLength);
+            for (const auto& h : g.holes)
+                std::printf (" { %s, %.5f, %.5f },", h.enabled ? "true" : "false", h.position, h.diameter);
+            std::printf (" } }\n");
+        }
+        return 0;
+    }
 
     if (mode == "chart" || mode == "chartc")  // chart [preset]; chartc retunes with the cross-fingered C natural first
     {
@@ -2514,7 +2608,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "onset")  // onset [preset] [fingering] [p=<Pa>] [seed=<n>] [voicing options]: pitch and level every 10 ms as a note starts
+    if (mode == "onset")  // onset [preset] [fingering|note=E6] [p=<Pa>] [seed=<n>] [voicing options]: pitch and level every 10 ms as a note starts
     {
         const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
         auto g = presets()[index];
@@ -2530,9 +2624,18 @@ int main (int argc, char* argv[])
             if (arg.containsOnly ("0123456789")) which = arg.getIntValue();
             if (arg.startsWith ("p=")) pressure = arg.fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         }
-        const auto fingerings = lowRegister (g);
+        auto fingerings = lowRegister (g);  // The index counts these; note=E6 picks any chart note instead
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("note="))
+                for (const auto& entry : chartFor (g.chart))
+                    if (noteName (lowestNote (g) * std::pow (2.0, entry.semitones / 12.0)) == juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).toStdString())
+                    {
+                        fingerings = { entry };
+                        which = 0;
+                        break;
+                    }
         const auto& c = fingerings[(size_t) juce::jlimit (0, (int) fingerings.size() - 1, which)];
-        const double target = lowestNote (g) * std::pow (2.0, c.semitones / 12.0);
+        const double target = targetHz (g, c, lowestNote (g));
         constexpr double rate = 48000.0;
         WhistleModel model;
         applyTestArgs (model);
@@ -3995,10 +4098,18 @@ int main (int argc, char* argv[])
         if (mode == "code" && argc > 2 && presetArg (argv[2]) != presetIndex)
             continue;  // code <index>: one preset only
 
-        if (mode == "code")  // The presets' holes as code, for WhistleGeometry.cpp (after tuning them with tunec).
+        if (mode == "code")  // The presets' dimensions as code, for WhistleGeometry.cpp, tuned to the played pitch
         {
-            tuneToScale (g, lowestNote (g), true);
-            std::printf ("  %s: length %.5f\n    { {", g.name.toRawUTF8(), g.boreLength);
+            if (g.name.contains ("(measured)"))
+            {
+                std::printf ("  %s: measured, not tuned\n", g.name.toRawUTF8());
+                continue;
+            }
+            // Whistles also get their head section shaped (the octaves); recorders and the Härjedalspipa keep their bores.
+            std::vector<PlayedNote> notes;
+            tuneToPlayed (g, presetVoicing ((size_t) presetIndex), lowestNote (g), true, g.chart == FingeringChart::whistle, 4, &notes);
+            std::printf ("  %s: played %.1f c rms; length %.5f, head %.4f long, %.5f at the window\n    { {", g.name.toRawUTF8(),
+                         playedRms (g, notes), g.boreLength, g.headLength, g.headDiameter);
             for (const auto& h : g.holes)
                 std::printf (" { %s, %.5f, %.5f },", h.enabled ? "true" : "false", h.position, h.diameter);
             std::printf (" } }\n");
