@@ -197,6 +197,59 @@ static void testLoadedResponse()
     std::printf ("Loaded IR (44.1 kHz at 48 kHz): reflection energy %.4f (%.4f), at sample %d (%.1f)\n", energy, expectedEnergy, peakAt, expectedAt);
 }
 
+// A new response while the last fade is still going (as when the app starts: settings, spread, room, one after
+// another): the level must stay that of one response. A fade that finished while the old engine before it still
+// waited to be deleted once kept raising its gain past 1, and the reverb grew louder and louder. Loaded responses go
+// in at once, so the order is exact: A; B (fading A to B); C during that fade; then nothing more.
+static void testResponseDuringFade()
+{
+    constexpr double rate = 48000.0;
+    constexpr int block = 256;
+    RoomReverb reverb;
+    reverb.wetDb = 0.0f;
+    reverb.prepare (rate, block);
+
+    // Each response: its direct sound (removed, and setting the level) and one reflection half its size, a
+    // different time later in each, so their outputs differ: the input, delayed, at 0.5.
+    auto response = [] (int reflectionAt)
+    {
+        Buffer ir (2, 4800);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            ir.getWritePointer (ch)[100] = 0.5f;
+            ir.getWritePointer (ch)[reflectionAt] = 0.25f;
+        }
+        return ir;
+    };
+    std::mt19937 random (5);
+    std::uniform_real_distribution<float> noise (-0.1f, 0.1f);
+    std::vector<float> in ((size_t) block), silence ((size_t) block, 0.0f), left ((size_t) block), right ((size_t) block);
+    auto run = [&] (int blocks)
+    {
+        float peak = 0.0f;
+        for (int b = 0; b < blocks; ++b)
+        {
+            for (auto& v : in)
+                v = noise (random);
+            std::fill (left.begin(), left.end(), 0.0f);
+            std::fill (right.begin(), right.end(), 0.0f);
+            reverb.process (in.data(), in.data(), silence.data(), silence.data(), left.data(), right.data(), block);
+            for (int i = 0; i < block; ++i)
+                peak = std::max ({ peak, std::abs (left[(size_t) i]), std::abs (right[(size_t) i]) });
+        }
+        return peak;
+    };
+    reverb.loadImpulseResponse (response (580), rate, "A", "");
+    const float steady = run (40);   // A alone: noise up to 0.1 in, up to 0.05 out
+    reverb.loadImpulseResponse (response (1060), rate, "B", "");
+    run (2);                         // Fading from A to B
+    reverb.loadImpulseResponse (response (1540), rate, "C", "");
+    const float after = run (400);   // The A-to-B fade ends, then B to C, then C alone for 2 s
+    check (steady > 0.045f && steady <= 0.0501f, "one response: its level", steady);
+    check (after < 1.1f * steady, "a new response during a fade: the level stays", after / steady);
+    std::printf ("New response during a fade: peak %.4f against %.4f with one response\n", after, steady);
+}
+
 static void benchmark()
 {
     constexpr double rate = 48000.0;
@@ -234,6 +287,7 @@ int main (int argc, char* argv[])
     testConvolver();
     testRoomReverb();
     testLoadedResponse();
+    testResponseDuringFade();
     if (argc > 1 && std::string (argv[1]) == "speed")
         benchmark();
     std::printf (failures == 0 ? "All reverb tests passed\n" : "%d failures\n", failures);
