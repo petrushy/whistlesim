@@ -876,7 +876,8 @@ void InstrumentPage::saveToFile()
 
 void InstrumentPage::loadFromFile()
 {
-    fileChooser = std::make_unique<juce::FileChooser> ("Load whistle", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory), "*.whistle");
+    // JSON too: a cloud drive or another app may have saved a .whistle file as .json.
+    fileChooser = std::make_unique<juce::FileChooser> ("Load whistle", juce::File::getSpecialLocation (juce::File::userDocumentsDirectory), "*.whistle;*.json");
     fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& chooser)
     {
         const auto file = readableChosenFile (chooser, juce::File::getSpecialLocation (juce::File::tempDirectory));
