@@ -29,7 +29,7 @@ Voicing presetVoicing (size_t index)
     struct Fitted { const char* namePart; float spreading, slowGrowth, gain; };
     static constexpr Fitted fitted[] = { { "cylindrical metal", 3.0f, 0.25f, 1.0f },
                                          { "conical metal", 2.0f, 0.5f, 1.0f },
-                                         { "narrow head", 3.0f, 0.5f, 1.15f },
+                                         { "wide head", 3.0f, 0.5f, 1.15f },
                                          { "traditional scale", 2.0f, 0.25f, 1.0f } };
     if (index < presets().size())
         for (const auto& f : fitted)
@@ -210,7 +210,7 @@ Voicing presetVoicing (size_t index)
     {
         struct Level { const char* nameStart; float gainDb; };
         static constexpr Level levels[] = {
-            { "D whistle, cylindrical metal", -6.2f }, { "D whistle, conical metal", -2.5f }, { "D whistle, narrow head", -4.9f },
+            { "D whistle, cylindrical metal", -6.2f }, { "D whistle, conical metal", -2.5f }, { "D whistle, wide head", -4.9f },
             { "D whistle, wood", -2.8f }, { "D whistle, Golden style (bright)", 0.3f }, { "D whistle, Golden style", -2.2f },
             { "D whistle, Generation style", 3.7f }, { "D whistle, L", -3.5f } /* Löf */, { "D whistle, Golden (measured)", 0.0f },
             { "Low D whistle (bright)", 2.0f }, { "Low D whistle", 3.8f }, { "H", -4.1f } /* Härjedalspipa */,
@@ -359,8 +359,8 @@ const std::vector<Geometry>& presets()
             {
                 // Started as a narrower bore around the fipple (10.5 mm, widening to the 12 mm bore over 30 mm), which
                 // widens the octaves: played at the middle of each note's breath its second octave was 30 c sharp. Tuned
-                // to the played pitch, the head came out wide instead.
-                auto g = make ("D whistle, narrow head", 0.26745, 0.0120, 0.0120,
+                // to the played pitch, the head came out wide instead (13.75 mm): hence "wide head" (until 2026-11-22 "narrow head").
+                auto g = make ("D whistle, wide head", 0.26745, 0.0120, 0.0120,
                                { { { false, 0.0, 0.0 }, { true, 0.12527, 0.00508 }, { true, 0.14662, 0.00700 }, { true, 0.16538, 0.00650 },
                                    { true, 0.19285, 0.00720 }, { true, 0.20260, 0.00680 }, { true, 0.22979, 0.00580 }, { false, 0.0, 0.0 } } },
                                0.0005, 1.0, 0.0010, 0.0050, 0.0080);
@@ -607,7 +607,7 @@ const std::vector<Geometry>& presets()
         {
             if (g.name.contains ("cylindrical metal") || g.name.contains ("traditional scale"))
                 g.edgeOffset = 0.00015;
-            else if (g.name.contains ("conical metal") || g.name.contains ("narrow head"))
+            else if (g.name.contains ("conical metal") || g.name.contains ("wide head"))
                 g.edgeOffset = 0.00025;
             else if (g.name.contains ("whistle, wood"))
                 g.edgeOffset = 0.00015;  // As the Golden style, whose fipple it shares
