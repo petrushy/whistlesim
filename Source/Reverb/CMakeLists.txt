@@ -16,3 +16,6 @@ target_compile_features(WhistleReverb PUBLIC cxx_std_20)
 target_include_directories(WhistleReverb PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.." PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 find_package(Threads REQUIRED)  # Rooms are generated on a background thread
 target_link_libraries(WhistleReverb PUBLIC Threads::Threads)
+if (APPLE)
+    target_link_libraries(WhistleReverb PUBLIC "-framework Accelerate")  # vDSP for the FFT
+endif()

@@ -4,6 +4,13 @@
 #include <cassert>
 #include <cmath>
 #include <numbers>
+#include <utility>
+
+// Accelerate with Apple's compiler (GCC can't read its headers; it gets the portable code).
+#if defined(__APPLE__) && defined(__clang__)
+ #define WHISTLESIM_VDSP 1
+ #include <Accelerate/Accelerate.h>
+#endif
 
 namespace reverb
 {
@@ -38,6 +45,60 @@ Fft::Fft (int order) : size (1 << order), half (size / 2)
         realTwiddles[k] = { (float) std::cos (angle), (float) std::sin (angle) };
     }
     scratch.resize ((size_t) half);
+
+#ifdef WHISTLESIM_VDSP
+    // vDSP's real-to-complex DFT, for the sizes it takes (it returns null for others: the portable code does them).
+    forwardSetup = vDSP_DFT_zrop_CreateSetup (nullptr, (vDSP_Length) size, vDSP_DFT_FORWARD);
+    inverseSetup = vDSP_DFT_zrop_CreateSetup ((vDSP_DFT_Setup) forwardSetup, (vDSP_Length) size, vDSP_DFT_INVERSE);
+    if (forwardSetup == nullptr || inverseSetup == nullptr)
+    {
+        if (forwardSetup != nullptr)
+            vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) forwardSetup);
+        if (inverseSetup != nullptr)
+            vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) inverseSetup);
+        forwardSetup = inverseSetup = nullptr;
+    }
+    else
+    {
+        splitIn.resize ((size_t) size);
+        splitOut.resize ((size_t) size);
+    }
+#endif
+}
+
+Fft::~Fft()
+{
+#ifdef WHISTLESIM_VDSP
+    if (forwardSetup != nullptr)
+        vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) forwardSetup);
+    if (inverseSetup != nullptr)
+        vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) inverseSetup);
+#endif
+}
+
+Fft::Fft (Fft&& other) noexcept { *this = std::move (other); }
+
+Fft& Fft::operator= (Fft&& other) noexcept
+{
+    if (this == &other)
+        return *this;
+#ifdef WHISTLESIM_VDSP
+    if (forwardSetup != nullptr)
+        vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) forwardSetup);
+    if (inverseSetup != nullptr)
+        vDSP_DFT_DestroySetup ((vDSP_DFT_Setup) inverseSetup);
+#endif
+    size = other.size;
+    half = other.half;
+    bitReversed = std::move (other.bitReversed);
+    twiddles = std::move (other.twiddles);
+    realTwiddles = std::move (other.realTwiddles);
+    scratch = std::move (other.scratch);
+    splitIn = std::move (other.splitIn);
+    splitOut = std::move (other.splitOut);
+    forwardSetup = std::exchange (other.forwardSetup, nullptr);
+    inverseSetup = std::exchange (other.inverseSetup, nullptr);
+    return *this;
 }
 
 void Fft::complexTransform (std::complex<float>* data, bool inverse) const
@@ -53,13 +114,13 @@ void Fft::complexTransform (std::complex<float>* data, bool inverse) const
         {
             for (int k = 0; k < halfLength; ++k)
             {
-                auto w = twiddles[(size_t) (k * stride)];
-                if (inverse)
-                    w = std::conj (w);
-                const auto a = data[start + k];
-                const auto b = data[start + k + halfLength] * w;
-                data[start + k] = a + b;
-                data[start + k + halfLength] = a - b;
+                // The butterfly in real arithmetic (std::complex's operator* handles infinities and NaNs, slowly).
+                const auto w = twiddles[(size_t) (k * stride)];
+                const float wr = w.real(), wi = inverse ? -w.imag() : w.imag();
+                const auto a = data[start + k], x = data[start + k + halfLength];
+                const float br = x.real() * wr - x.imag() * wi, bi = x.real() * wi + x.imag() * wr;
+                data[start + k] = { a.real() + br, a.imag() + bi };
+                data[start + k + halfLength] = { a.real() - br, a.imag() - bi };
             }
         }
     }
@@ -67,6 +128,25 @@ void Fft::complexTransform (std::complex<float>* data, bool inverse) const
 
 void Fft::forward (const float* samples, std::complex<float>* bins) const
 {
+#ifdef WHISTLESIM_VDSP
+    if (forwardSetup != nullptr)
+    {
+        // vDSP takes the even samples and the odd ones apart, and gives the bins scaled by 2, with bin 0's real part in
+        // the first real slot and bin N/2's (also real) in the first imaginary one.
+        float* evens = splitIn.data();
+        float* odds = splitIn.data() + half;
+        DSPSplitComplex in { evens, odds };
+        vDSP_ctoz (reinterpret_cast<const DSPComplex*> (samples), 2, &in, 1, (vDSP_Length) half);
+        float* re = splitOut.data();
+        float* im = splitOut.data() + half;
+        vDSP_DFT_Execute ((vDSP_DFT_Setup) forwardSetup, evens, odds, re, im);
+        bins[0] = { 0.5f * re[0], 0.0f };
+        bins[half] = { 0.5f * im[0], 0.0f };
+        for (int k = 1; k < half; ++k)
+            bins[k] = { 0.5f * re[k], 0.5f * im[k] };
+        return;
+    }
+#endif
     auto* z = scratch.data();
     for (int n = 0; n < half; ++n)
         z[n] = { samples[2 * n], samples[2 * n + 1] };
@@ -84,6 +164,29 @@ void Fft::forward (const float* samples, std::complex<float>* bins) const
 
 void Fft::inverse (const std::complex<float>* bins, float* samples) const
 {
+#ifdef WHISTLESIM_VDSP
+    if (inverseSetup != nullptr)
+    {
+        // The same packing back; vDSP's inverse gives the samples scaled by N (even and odd apart).
+        float* re = splitIn.data();
+        float* im = splitIn.data() + half;
+        re[0] = bins[0].real();
+        im[0] = bins[half].real();
+        for (int k = 1; k < half; ++k)
+        {
+            re[k] = bins[k].real();
+            im[k] = bins[k].imag();
+        }
+        float* evens = splitOut.data();
+        float* odds = splitOut.data() + half;
+        vDSP_DFT_Execute ((vDSP_DFT_Setup) inverseSetup, re, im, evens, odds);
+        DSPSplitComplex out { evens, odds };
+        vDSP_ztoc (&out, 1, reinterpret_cast<DSPComplex*> (samples), 2, (vDSP_Length) half);
+        const float scale = 1.0f / (float) size;
+        vDSP_vsmul (samples, 1, &scale, samples, 1, (vDSP_Length) size);
+        return;
+    }
+#endif
     auto* z = scratch.data();
     for (int k = 0; k < half; ++k)
     {
