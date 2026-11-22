@@ -371,7 +371,7 @@ void MonitorPage::toggleRecording()
     }
     auto header = recordingHeader ? recordingHeader() : juce::StringArray();
     header.add ("sample_rate " + juce::String (audio.getSampleRate()));
-    header.add (audio.calibrationText());
+    header.add (juce::String (audio.calibrationText()));
     if (recorder.start (audio.getSampleRate(), header))
         recordButton.setButtonText ("Stop recording");
     else
