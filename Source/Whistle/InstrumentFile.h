@@ -18,9 +18,10 @@ struct Instrument
 };
 
 juce::var toVar (const Instrument&);
-std::optional<Instrument> fromVar (const juce::var&, juce::String& error);
+// `base` gives the values a file leaves out (default: the first preset, with the default voicing).
+std::optional<Instrument> fromVar (const juce::var&, juce::String& error, const Instrument* base = nullptr);
 
 juce::String toJson (const Instrument&);
-std::optional<Instrument> fromJson (const juce::String&, juce::String& error);
+std::optional<Instrument> fromJson (const juce::String&, juce::String& error, const Instrument* base = nullptr);
 
 } // namespace whistle

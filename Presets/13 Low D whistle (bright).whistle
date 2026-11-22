@@ -1,0 +1,147 @@
+{
+  "format": "warbl-whistle",
+  "version": 1,
+  "name": "Low D whistle (bright)",
+  "bore": {
+    "length_mm": 531.69,
+    "diameterTop_mm": 22.0,
+    "diameterFoot_mm": 22.0,
+    "wallThickness_mm": 1.0,
+    "wallLoss": 1.0,
+    "headLength_mm": 60.0,
+    "headDiameter_mm": 23.89,
+    "headStraightLength_mm": 0.0,
+    "slide_mm": 0.0
+  },
+  "holes": [
+    {
+      "name": "L1",
+      "position_mm": 234.49,
+      "diameter_mm": 7.69
+    },
+    {
+      "name": "L2",
+      "position_mm": 281.72,
+      "diameter_mm": 11.0
+    },
+    {
+      "name": "L3",
+      "position_mm": 320.94,
+      "diameter_mm": 10.5
+    },
+    {
+      "name": "R1",
+      "position_mm": 373.43,
+      "diameter_mm": 11.5
+    },
+    {
+      "name": "R2",
+      "position_mm": 396.34,
+      "diameter_mm": 11.0
+    },
+    {
+      "name": "R3",
+      "position_mm": 446.94,
+      "diameter_mm": 9.5
+    }
+  ],
+  "bellClosesFoot": false,
+  "fingeringChart": "whistle",
+  "referenceA_Hz": 440.0,
+  "chartTranspose": 0,
+  "tuning": {
+    "temperament": "best for the keys",
+    "towardEqual": 0.5,
+    "majorKeys": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "minorKeys": [
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    "fingerings": {
+    },
+    "topHoleFor": "high D",
+    "breathPosition": [
+      0.35,
+      0.1
+    ],
+    "useLearnedBreath": false,
+    "customCents": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "learnedBreath_Pa": {
+    },
+    "weights": {
+    }
+  },
+  "fipple": {
+    "windwayHeight_mm": 1.0,
+    "windwayLength_mm": 28.0,
+    "windowLength_mm": 5.2,
+    "windowWidth_mm": 13.0,
+    "edgeOffset_mm": 0.25
+  },
+  "voicing": {
+    "jetStrouhal": 0.0095,
+    "jetConvection": 0.6,
+    "breathNoise": 0.07,
+    "outputGain_dB": 2.0,
+    "directNoise": 0.0,
+    "windwayMass": 1.0,
+    "windwayFriction": 1.0,
+    "vortexLoss": 0.25,
+    "attackChiff": 0.0,
+    "fingerGapDamping": 0.0,
+    "jetGain": 1.05,
+    "slowJetGrowth": 0.08,
+    "jetStages": 1,
+    "breathScale": 1.0,
+    "breathCurve": 1.0,
+    "jetLowReynolds": 0.0,
+    "jetFlatAbove": 0.0,
+    "jetFlatTop": 0.0,
+    "jetSpreading": 0.0,
+    "jetModel": 0,
+    "jetThinning": 0.0,
+    "jetCutoff": 0.3,
+    "jetBend_Pa": 0.0,
+    "fingerTap": 0.2,
+    "fingerSoftness_ms": 4.0,
+    "bodyKnock": 0.1,
+    "bodyPitch_Hz": 2300.0,
+    "bodyRing": 50.0
+  }
+}

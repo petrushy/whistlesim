@@ -300,19 +300,20 @@ struct Voicing
     float bodyRing = 15.0f;
 };
 
-// Starting points, tuned (see WhistleGeometry.cpp).
+// The built-in instruments: the .whistle files in Presets/ (JSON, the format Export writes), built into the program,
+// in file-name order; each whistle twice, on holes L1-R3 and L2-R4. `WhistleCheck code` retunes them and writes the
+// files back; PlayedTuningTest checks they play in tune.
 const std::vector<Geometry>& presets();
 
-// The lowest note a preset is tuned to (Hz, at its reference A): recorders C5 plus chartTranspose,
-// whistles D5 (low whistles D4),
-// the Härjedalspipa A#4.
 // The Härjedalspipa's tuning goal: its traditional scale (Swedish Wikipedia), the high tonic overblown with every hole
 // covered, no cross-fingered seventh.
 TuningGoal harjedalGoal();
 
+// The lowest note a preset is tuned to (Hz, at its reference A): recorders C5 plus chartTranspose, whistles D5 (low
+// whistles D4) plus chartTranspose (the Härjedalspipa A#4).
 double presetLowestNote (const Geometry&);
 
-// The voicing that goes with each preset (same order as presets()).
+// The voicing that goes with each preset (same order as presets()), from its file.
 Voicing presetVoicing (size_t index);
 
 // Puts the instrument's front holes (in order, keeping each hole's position and size) on WARBL's sensors

@@ -888,6 +888,34 @@ int main (int argc, char* argv[])
         return 0;
     }
 
+    if (mode == "exportpresets")  // exportpresets <dir> [all]: each preset as a .whistle file (all: the L2-R4 copies too)
+    {
+        if (argc < 3)
+        {
+            std::printf ("exportpresets <dir> [all]\n");
+            return 1;
+        }
+        const juce::File dir (juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]));
+        dir.createDirectory();
+        const bool all = argc > 3 && juce::String (argv[3]) == "all";
+        int number = 0;
+        for (size_t i = 0; i < presets().size(); ++i)
+        {
+            Instrument instrument { presets()[i], presetVoicing (i) };
+            auto& name = instrument.geometry.name;
+            if (! all)
+            {
+                if (name.endsWith (", holes L2-R4"))
+                    continue;  // Made from the L1-R3 one when the presets load
+                name = name.upToLastOccurrenceOf (", holes L1-R3", false, false);
+            }
+            const auto file = dir.getChildFile (juce::String (++number).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (name) + ".whistle");
+            file.replaceWithText (toJson (instrument));
+            std::printf ("%s\n", file.getFileName().toRawUTF8());
+        }
+        return 0;
+    }
+
     if (mode == "realpitch")  // realpitch [preset] [wallloss=x] [voicing options]: the model's pitch at the real Goldie's breath, against it
     {
         // Each note at the mouth pressure the player blew the real Golden at in its scale (Golden-pressure-2-notes, the
@@ -4196,7 +4224,7 @@ int main (int argc, char* argv[])
         if (mode == "code" && argc > 2 && presetArg (argv[2]) != presetIndex)
             continue;  // code <index>: one preset only
 
-        if (mode == "code")  // The presets' dimensions as code, for WhistleGeometry.cpp, tuned to the played pitch
+        if (mode == "code")  // Retunes the presets to the played pitch and writes them into their files in Presets/ (rebuild after)
         {
             if (g.name.contains ("(measured)"))
             {
@@ -4204,13 +4232,35 @@ int main (int argc, char* argv[])
                 continue;
             }
             // Whistles also get their head section shaped (the octaves); recorders and the Härjedalspipa keep their bores.
+            if (g.name.endsWith (", holes L2-R4"))
+                continue;  // The same instrument as its L1-R3 copy, which is the one in the file
             std::vector<PlayedNote> notes;
             tuneToPlayed (g, presetVoicing ((size_t) presetIndex), lowestNote (g), true, g.chart == FingeringChart::whistle, 4, &notes);
-            std::printf ("  %s: played %.1f c rms; length %.5f, head %.4f long, %.5f at the window\n    { {", g.name.toRawUTF8(),
+            std::printf ("  %s: played %.1f c rms; length %.5f, head %.4f long, %.5f at the window\n", g.name.toRawUTF8(),
                          playedRms (g, notes), g.boreLength, g.headLength, g.headDiameter);
-            for (const auto& h : g.holes)
-                std::printf (" { %s, %.5f, %.5f },", h.enabled ? "true" : "false", h.position, h.diameter);
-            std::printf (" } }\n");
+
+            // Into its file in Presets/ (found by the name in it): the tuner's dimensions, everything else kept.
+            const auto baseName = g.name.upToLastOccurrenceOf (", holes L1-R3", false, false);
+            bool written = false;
+            for (const auto& file : juce::File (WHISTLESIM_PRESET_DIR).findChildFiles (juce::File::findFiles, false, "*.whistle"))
+            {
+                juce::String error;
+                const Instrument blank;
+                auto instrument = fromJson (file.loadFileAsString(), error, &blank);
+                if (! instrument || instrument->geometry.name != baseName)
+                    continue;
+                auto& out = instrument->geometry;
+                out.boreLength = g.boreLength;
+                out.headLength = g.headLength;
+                out.headDiameter = g.headDiameter;
+                out.headStraightLength = g.headStraightLength;
+                out.holes = g.holes;
+                written = file.replaceWithText (toJson (*instrument));
+                std::printf ("    written to Presets/%s\n", file.getFileName().toRawUTF8());
+                break;
+            }
+            if (! written)
+                std::printf ("    NOT WRITTEN: no file in %s named \"%s\"\n", WHISTLESIM_PRESET_DIR, baseName.toRawUTF8());
             continue;
         }
 
