@@ -76,9 +76,10 @@ struct TuningGoal
     bool topHoleForHighD = false;
 
     // The breath each note is tuned at (PlayedTuning). Without a learned breath: where in the pressures the note
-    // sounds at, 0 = its softest, 1 = its strongest, 0.5 the (geometric) middle; one for the low octave, one for
+    // sounds at, 0 = its softest (where it comes within 15 dB of its loudest), 1 = its strongest, 0.5 the (geometric)
+    // middle; one for the low octave, one for
     // the octaves above.
-    std::array<double, 2> breathPosition { { 0.5, 0.1 } };
+    std::array<double, 2> breathPosition { { 0.35, 0.1 } };
     // The player's own breath, learned by playing (Tuning workshop tab): the model's pressure (Pa) each fingering was
     // held at, by fingeringId. Used, where there is one, when useLearnedBreath is on.
     bool useLearnedBreath = false;
