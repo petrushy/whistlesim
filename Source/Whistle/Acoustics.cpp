@@ -260,7 +260,9 @@ const std::vector<ChartFingering>& chartFor (FingeringChart chart)
         { "C", "xxxxxxxx", 0, 1, bore },          { "D", "xxxxxxxo", 2, 1, 7 },          { "E", "xxxxxxoo", 4, 1, 6 },
         { "F", "xxxxxoxx", 5, 1, 5 },             { "F#", "xxxxoxxo", 6, 1, none, 4 },   { "G", "xxxxoooo", 7, 1, 4 },
         { "A", "xxxooooo", 9, 1, 3 },             { "Bb", "xxoxxooo", 10, 1 },           { "B", "xxoooooo", 11, 1, 2 },
-        { "high C", "xoxooooo", 12, 1, 1 },       { "high D", "ooxooooo", 14, 1, 0 },
+        { "B", "xoxxoooo", 11, 1 },  // The alternative B (thumb, L2, L3), forked
+        { "high C", "xoxooooo", 12, 1, 1 },       { "high C#", "oxxooooo", 13, 1 },  // C# with the thumb open
+        { "high D", "ooxooooo", 14, 1, 0 },
         { "high E", "pxxxxxoo", 16, 2 },          { "high F", "pxxxxoxo", 17, 2 },       { "high F#", "pxxxoxoo", 18, 2 },
         { "high G", "pxxxoooo", 19, 2 },          { "high G#", "pxxoxooo", 20, 2 },      { "high A", "pxxooooo", 21, 2, none, 3 },
         { "high Bb", "pxxooxxo", 22, 2, none, 0 }, { "high B", "pxxoxxoo", 23, 2, none, 6 },
