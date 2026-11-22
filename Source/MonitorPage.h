@@ -62,6 +62,9 @@ public:
 
     // Lines describing the instrument and settings, for the top of a recording's CSV (set by the main window).
     std::function<juce::StringArray()> recordingHeader;
+    // Where recordings go, and the same as the user finds it.
+    static juce::File recordingFolder();
+    static juce::String recordingFolderDescription();
     void startRecording() { if (! audio.recorder.isRecording()) toggleRecording(); }
     void simulateBluetooth() { bluetoothSimButton.setToggleState (true, juce::sendNotificationSync); }
     ~MonitorPage() override;
