@@ -1,6 +1,7 @@
 #include "MonitorPage.h"
 #include "OverlayPanel.h"
 #include "PickedFile.h"
+#include "ReverbFile.h"
 
 namespace
 {
@@ -211,7 +212,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
 
     const auto& rooms = reverb::presets();
     for (size_t i = 0; i < rooms.size(); ++i)
-        roomBox.addItem (rooms[i].name, (int) i + 1);
+        roomBox.addItem (juce::String (rooms[i].name), (int) i + 1);
     roomBox.setSelectedId (audio.reverb.getPresetIndex() + 1, juce::dontSendNotification);  // 0 (none) for an IR file
     roomBox.onChange = [this]
     {
@@ -278,7 +279,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
                                                                .getChildFile ("Impulse responses"));
             if (file == juce::File())
                 return;
-            const auto error = audio.reverb.loadFile (file);
+            const auto error = loadReverbFile (audio.reverb, file);
             if (error.isNotEmpty())
                 reverbStatus.setText (error, juce::dontSendNotification);
             else
@@ -445,7 +446,7 @@ void MonitorPage::timerCallback()
         audioLabel.setText ("No audio output", juce::dontSendNotification);
     }
 
-    reverbStatus.setText ("IR: " + audio.reverb.getCurrentName() + "   added latency " + juce::String (audio.reverb.getLatencySamples()) + " samples",
+    reverbStatus.setText ("IR: " + juce::String (audio.reverb.getCurrentName()) + "   added latency " + juce::String (audio.reverb.getLatencySamples()) + " samples",
                           juce::dontSendNotification);
 
     if (history.empty())

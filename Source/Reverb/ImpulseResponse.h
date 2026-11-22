@@ -10,19 +10,32 @@
 
 #pragma once
 
-#include <juce_audio_basics/juce_audio_basics.h>
-
 #include <array>
+#include <cstdint>
+#include <string>
 #include <vector>
 
 namespace reverb
 {
 
+// Audio as one vector of samples per channel, all the same length.
+struct Buffer
+{
+    std::vector<std::vector<float>> channels;
+
+    Buffer() = default;
+    Buffer (int numChannels, int numSamples) : channels ((size_t) numChannels, std::vector<float> ((size_t) numSamples, 0.0f)) {}
+    int getNumChannels() const noexcept { return (int) channels.size(); }
+    int getNumSamples() const noexcept { return channels.empty() ? 0 : (int) channels.front().size(); }
+    float* getWritePointer (int channel) noexcept { return channels[(size_t) channel].data(); }
+    const float* getReadPointer (int channel) const noexcept { return channels[(size_t) channel].data(); }
+};
+
 constexpr std::array<float, 8> kBandCentres { 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f };
 
 struct RoomSpec
 {
-    juce::String name;
+    std::string name;
     float width, depth, height;   // m
     std::array<float, 8> rt60;    // Reverberation time (s) in the octave bands above.
     float distance;               // Source to listener (m).
@@ -41,10 +54,14 @@ double mixingTimeSeconds (const RoomSpec& room);
 
 // Stereo IR, without the direct sound. `sourceOffset` moves the source sideways (m, + = to the listener's right)
 // from straight ahead of the listener; a different `seed` gives an independent diffuse tail.
-juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint32_t seed = 1, double sourceOffset = 0.0);
+Buffer generate (const RoomSpec& room, double sampleRate, uint32_t seed = 1, double sourceOffset = 0.0);
 
 // A measured impulse response made to match the generated ones: the direct sound removed (the dry signal provides it),
 // starting where it was, and scaled so the direct sound would have amplitude 1. The room's measured balance is kept.
-juce::AudioBuffer<float> removeDirectSound (const juce::AudioBuffer<float>& measured, double sampleRate);
+Buffer removeDirectSound (const Buffer& measured, double sampleRate);
+
+// An impulse response at another sample rate, with the same frequency response (windowed-sinc interpolation,
+// low-passed below the lower Nyquist).
+Buffer resample (const Buffer& input, double fromRate, double toRate);
 
 } // namespace reverb
