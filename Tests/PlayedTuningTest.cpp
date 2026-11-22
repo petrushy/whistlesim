@@ -2,9 +2,12 @@
 // checks they still are: a change to the model or the acoustics that moves the played pitch shows here, and the
 // presets then need retuning. The measured instruments keep a real whistle's bore and holes, however they play.
 
+#include "Whistle/PitchDetect.h"
 #include "Whistle/PlayedTuning.h"
 
+#include <cmath>
 #include <cstdio>
+#include <vector>
 
 using namespace whistle;
 
@@ -14,6 +17,40 @@ int main()
     // recorders 7.7-9.3 and the Härjedalspipa 6.8; the old resonance-tuned presets played 6-32 c.
     constexpr double kLimit = 11.0;
     int failures = 0, checked = 0;
+
+    // The pitch detector (the tuner's, and the scale's): a whistle-like tone (fundamental and weaker harmonics, a little noise) within 1 c,
+    // also when the second harmonic is the strongest; silence gives no pitch.
+    {
+        const double rate = 48000.0;
+        for (const double hz : { 293.66, 587.33, 1108.73, 2349.3 })
+            for (const double h2 : { 0.3, 1.5 })
+            {
+                std::vector<float> x (6000);
+                unsigned noise = 1;
+                for (size_t n = 0; n < x.size(); ++n)
+                {
+                    const double t = 2.0 * M_PI * hz * (double) n / rate;
+                    noise = noise * 1664525u + 1013904223u;
+                    x[n] = (float) (0.3 * std::sin (t) + 0.3 * h2 * std::sin (2.0 * t + 0.4) + 0.05 * std::sin (3.0 * t)
+                                    + 0.01 * ((double) (noise >> 8) / (1 << 24) - 0.5));
+                }
+                double clarity = 0.0;
+                const double found = measurePitch (x, rate, clarity);
+                const double error = found > 0.0 ? 1200.0 * std::log2 (found / hz) : 1.0e9;
+                if (std::abs (error) > 1.0)
+                {
+                    std::printf ("FAILED pitch detector: %.2f Hz (H2 %.1f) read as %.2f Hz\n", hz, h2, found);
+                    ++failures;
+                }
+            }
+        std::vector<float> silence (6000, 0.0f);
+        double clarity = 0.0;
+        if (measurePitch (silence, rate, clarity) > 0.0)
+        {
+            std::printf ("FAILED pitch detector: silence has a pitch\n");
+            ++failures;
+        }
+    }
     for (size_t i = 0; i < presets().size(); ++i)
     {
         const auto& g = presets()[i];

@@ -228,8 +228,11 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     chartBox.onChange = [this]
     {
         const int id = chartBox.getSelectedId();
-        geometry.chart = id == 2 ? whistle::FingeringChart::baroqueRecorder : whistle::FingeringChart::whistle;
+        const auto changed = whistle::setChart (geometry, id == 2 ? whistle::FingeringChart::baroqueRecorder : whistle::FingeringChart::whistle);
+        refreshSliders();
         geometryChanged();
+        if (onChartHolesChanged != nullptr && changed.isNotEmpty())
+            onChartHolesChanged (changed);
     };
     bellButton.setColour (juce::ToggleButton::textColourId, text);
     bellButton.setTooltip ("Covering WARBL's bell sensor closes the instrument's open foot (a recorder technique for some high notes). "
@@ -766,6 +769,8 @@ void InstrumentPage::savePresetNamed (const juce::String& requestedName)
         refreshPresetList();
         selectPresetNamed (name);
         tuneStatus.setText ("Saved preset " + name, juce::dontSendNotification);
+        if (onNameChanged != nullptr)
+            onNameChanged();
     }
     else
     {
@@ -858,6 +863,8 @@ void InstrumentPage::saveToFile()
         {
             presetBox.setText (geometry.name, juce::dontSendNotification);
             tuneStatus.setText ("Saved " + file.getFileName(), juce::dontSendNotification);
+            if (onNameChanged != nullptr)
+                onNameChanged();
         }
         else
         {
@@ -920,6 +927,48 @@ void InstrumentPage::paint (juce::Graphics& g)
     g.fillAll (background);
 }
 
+InstrumentPage::SettingsLayout InstrumentPage::settingsLayout (juce::Rectangle<int> area) const
+{
+    SettingsLayout l;
+    l.width = area.getWidth() - settingsView.getScrollBarThickness() - 2;
+    l.columns = l.width >= 1000 ? 2 : 1;
+    l.columnWidth = l.columns == 2 ? (l.width - 30) / 2 : l.width;
+    l.split = leftColumn.size();
+    if (l.columns == 2)
+        for (size_t i = 0; i < leftColumn.size(); ++i)
+            for (const auto& h : headings)
+                if (h.get() == leftColumn[i] && h->getText().startsWith ("Voicing"))
+                    l.split = std::min (l.split, i);
+
+    // Rows as tall as the space allows (24-38 px), the text in proportion: big screens get big text.
+    auto linesIn = [this] (size_t from, size_t to)
+    {
+        int lines = 0;
+        for (size_t i = from; i < to; ++i)
+        {
+            const auto row = std::find_if (rows.begin(), rows.end(), [&] (const auto& r) { return r.label.get() == leftColumn[i]; });
+            lines += row != rows.end() && row->kind == RowKind::holeDiameter ? 0 : 1;
+        }
+        return lines + 2;  // The bell line, and the gaps before headings
+    };
+    const int mostLines = std::max (linesIn (0, l.split), l.columns == 2 ? linesIn (l.split, leftColumn.size()) : 0);
+    l.rowHeight = juce::jlimit (24, 38, area.getHeight() / std::max (1, mostLines));
+    return l;
+}
+
+juce::Rectangle<int> InstrumentPage::settingsArea (juce::Rectangle<int> page)
+{
+    auto area = page.reduced (10);
+    area.removeFromRight (juce::jlimit (280, 380, area.getWidth() / 4) + 10);
+    area.removeFromTop (28 + 28 + 6);  // The preset row and the material row
+    return area;
+}
+
+float InstrumentPage::textScaleFor (juce::Rectangle<int> page) const
+{
+    return (float) settingsLayout (settingsArea (page)).rowHeight / 24.0f;
+}
+
 void InstrumentPage::resized()
 {
     auto area = getLocalBounds().reduced (10);
@@ -954,29 +1003,9 @@ void InstrumentPage::resized()
     // The settings, in two columns when there is room (Bore, Tone holes and Fipple; then Voicing onwards), else one;
     // inside the scrolling view, as tall as they need to be.
     settingsView.setBounds (area);
-    const int width = settingsView.getWidth() - settingsView.getScrollBarThickness() - 2;
-    const int columns = width >= 1000 ? 2 : 1;
-    const int columnWidth = columns == 2 ? (width - 30) / 2 : width;
-    size_t split = leftColumn.size();
-    if (columns == 2)
-        for (size_t i = 0; i < leftColumn.size(); ++i)
-            for (const auto& h : headings)
-                if (h.get() == leftColumn[i] && h->getText().startsWith ("Voicing"))
-                    split = std::min (split, i);
-
-    // Rows as tall as the space allows (24-38 px), the text in proportion: big screens get big text.
-    auto linesIn = [this] (size_t from, size_t to)
-    {
-        int lines = 0;
-        for (size_t i = from; i < to; ++i)
-        {
-            const auto row = std::find_if (rows.begin(), rows.end(), [&] (const auto& r) { return r.label.get() == leftColumn[i]; });
-            lines += row != rows.end() && row->kind == RowKind::holeDiameter ? 0 : 1;
-        }
-        return lines + 2;  // The bell line, and the gaps before headings
-    };
-    const int mostLines = std::max (linesIn (0, split), columns == 2 ? linesIn (split, leftColumn.size()) : 0);
-    const int rowHeight = juce::jlimit (24, 38, area.getHeight() / std::max (1, mostLines));
+    const auto layout = settingsLayout (area);
+    const int width = layout.width, columns = layout.columns, columnWidth = layout.columnWidth, rowHeight = layout.rowHeight;
+    const size_t split = layout.split;
     const float fontSize = rowHeight * 0.6f;
     for (auto& row : rows)
     {

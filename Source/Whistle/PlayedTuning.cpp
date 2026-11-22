@@ -160,6 +160,27 @@ double playedRms (const Geometry& g, const std::vector<PlayedNote>& notes)
     return total > 0.0 ? std::sqrt (sum / total) : 0.0;
 }
 
+int silentNotes (const Geometry& g, const std::vector<PlayedNote>& notes)
+{
+    int silent = 0;
+    for (const auto& n : notes)
+        silent += ! n.sounds && tuningWeight (g, chartFor (g.chart)[n.chartIndex]) > 0.0 ? 1 : 0;
+    return silent;
+}
+
+namespace
+{
+// Which tuning is better: first the one with fewer counted notes that don't sound (else an instrument on which only a
+// couple of notes sound, and those in tune, would win), then the lower rms.
+bool better (const Geometry& a, const std::vector<PlayedNote>& aNotes, const Geometry& b, const std::vector<PlayedNote>& bNotes)
+{
+    const int silentA = silentNotes (a, aNotes), silentB = silentNotes (b, bNotes);
+    if (silentA != silentB)
+        return silentA < silentB;
+    return playedRms (a, aNotes) < playedRms (b, bNotes);
+}
+} // namespace
+
 bool tuneToPlayed (Geometry& g, const Voicing& v, double lowestHz, bool tuneCrossFingerings, bool shapeHead, int passes,
                    std::vector<PlayedNote>* played)
 {
@@ -187,7 +208,6 @@ bool tuneToPlayed (Geometry& g, const Voicing& v, double lowestHz, bool tuneCros
 
     auto best = g;
     auto bestNotes = measurePlayed (g, v, lowestHz);
-    double bestRms = playedRms (g, bestNotes);
     auto notes = bestNotes;
     std::vector<double> aims (chartFor (g.chart).size(), 0.0);
     for (int pass = 0; pass < passes; ++pass)
@@ -200,15 +220,13 @@ bool tuneToPlayed (Geometry& g, const Voicing& v, double lowestHz, bool tuneCros
                 aims[n.chartIndex] = n.resonance - n.cents;
         fitTuning (g, lowestHz, tuneCrossFingerings, &aims, shapeHead);
         notes = measurePlayed (g, v, lowestHz);
-        const double rms = playedRms (g, notes);
-        if (rms < bestRms)
+        if (better (g, notes, best, bestNotes))
         {
             best = g;
             bestNotes = notes;
-            bestRms = rms;
         }
     }
-    if (playedRms (original, originalNotes) <= bestRms)
+    if (! better (best, bestNotes, original, originalNotes))
     {
         best = original;
         bestNotes = originalNotes;

@@ -38,6 +38,9 @@ std::vector<PlayedNote> measurePlayed (const Geometry&, const Voicing&, double l
 // Weighted as the tuner weights notes (tuningWeight), over the notes that sound.
 double playedRms (const Geometry&, const std::vector<PlayedNote>&);
 
+// How many of the notes the tuner counts don't sound (as their note) at all.
+int silentNotes (const Geometry&, const std::vector<PlayedNote>&);
+
 // The player's breath for a fingering, from the learned breath (Pa, as the model gets it), or 0 if there is none:
 // its own if it was heard; otherwise, with two or more notes heard, interpolated by pitch between the nearest
 // heard below and above (log pressure, linear in semitones: breath rises in proportion up the scale), or beyond

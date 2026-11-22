@@ -83,6 +83,8 @@ struct TuningGoal
     // held at, by fingeringId. Used, where there is one, when useLearnedBreath is on.
     bool useLearnedBreath = false;
     std::map<std::string, double> learnedBreath;
+    // Weights the player typed in (0-1, by fingeringId), in place of the ones the keys give.
+    std::map<std::string, double> weights;
 
     static constexpr int kMinor = 12;
 };

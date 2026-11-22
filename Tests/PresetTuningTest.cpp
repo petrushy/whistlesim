@@ -11,6 +11,29 @@ using namespace whistle;
 int main()
 {
     int failures = 0;
+
+    // Choosing the recorder chart for a six-hole whistle opens the thumb hole and the missing front hole, below the
+    // window and inside the bore; choosing the whistle chart again plugs the thumb and leaves six front holes.
+    for (const auto& preset : presets())
+    {
+        if (preset.chart != FingeringChart::whistle)
+            continue;
+        auto g = preset;
+        setChart (g, FingeringChart::baroqueRecorder);
+        bool ok = true;
+        for (const auto& h : g.holes)
+            ok = ok && h.enabled && h.position > 0.0 && h.position < g.boreLength && h.diameter > 0.001;
+        setChart (g, FingeringChart::whistle);
+        int front = 0;
+        for (int i = 1; i < kNumHoles; ++i)
+            front += g.holes[(size_t) i].enabled ? 1 : 0;
+        if (! ok || g.holes[0].enabled || front != 6)
+        {
+            std::printf ("FAILED %s: switching to the recorder chart and back gave the wrong holes\n", preset.name.toRawUTF8());
+            ++failures;
+        }
+    }
+
     bool foundAlto = false, foundTenor = false;
     for (const auto& g : presets())
     {

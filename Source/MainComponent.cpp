@@ -99,13 +99,15 @@ MainComponent::MainComponent()
         lines.add ("sensors " + juce::JSON::toString (sensorsToVar (audio), true));
         return lines;
     };
-    tabs.addTab ("Monitor", background, monitor, true);
+    // The other tabs scaled to the Instrument tab's text size (it sizes its own text to the window).
+    auto scaled = [this] (juce::Component* page) { return new ScaledPage (page, [this] (juce::Rectangle<int> b) { return instrument->textScaleFor (b); }); };
+    tabs.addTab ("Monitor", background, scaled (monitor), true);
     tabs.addTab ("Instrument", background, instrument, true);
     workshop = new WorkshopPage (audio, *instrument);
-    tabs.addTab ("Tuning workshop", background, workshop, true);
+    tabs.addTab ("Tuning workshop", background, scaled (workshop), true);
     sensors = new SensorsPage (audio);
-    tabs.addTab ("Sensors", background, sensors, true);
-    tabs.addTab ("Model", background, new ModelPage (audio), true);
+    tabs.addTab ("Sensors", background, scaled (sensors), true);
+    tabs.addTab ("Model", background, scaled (new ModelPage (audio)), true);
     tabs.setTabBarDepth (30);
     addAndMakeVisible (tabs);
     aboutButton.onClick = [this] { showAbout(); };

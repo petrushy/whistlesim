@@ -65,6 +65,12 @@ struct ChartFingering
 
 const std::vector<ChartFingering>& chartFor (FingeringChart);
 
+// Changes the chart, opening the holes it needs and plugging the ones it doesn't: the recorder chart uses all eight
+// (a whistle gets a thumb hole and L1, or R4, at starting places for the tuner); the whistle chart six front holes
+// (no thumb; L2-R4 if R4 is open, else L1-R3). Returns the names of the holes opened and plugged, e.g.
+// "opened LT, L1", empty if none changed.
+juce::String setChart (Geometry&, FingeringChart);
+
 // A fingering's name in the tuning goal (TuningGoal::fingerings): note name and pattern, e.g. "high D xxxxxx".
 std::string fingeringId (const ChartFingering&);
 

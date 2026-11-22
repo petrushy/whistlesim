@@ -35,7 +35,7 @@ public:
         // "--snapshot <file.png>" saves a picture of the window after a few seconds, then quits.
         const auto args = juce::StringArray::fromTokens (commandLine, true);
         // "--output <device>" picks the audio output; "--play" plays the test phrase at start.
-        // "--monitor", "--instrument", "--workshop", "--sensors", "--model" open that tab; "--about" the About window (the
+        // "--monitor", "--instrument", "--workshop", "--sensors", "--model" open that tab ("--tuner": the workshop's tuner on); "--about" the About window (the
         // snapshot is then of that window).
         if (auto* main = getMain())
         {
@@ -64,6 +64,8 @@ public:
                 main->showInstrument();
             if (args.contains ("--workshop"))
                 main->showWorkshop();
+            if (args.contains ("--tuner"))  // The Tuning workshop's tuner on
+                main->getWorkshopPage().setTuner (true);
             if (args.contains ("--sensors"))
                 main->showSensors();
             if (args.contains ("--model"))

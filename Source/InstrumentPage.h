@@ -60,11 +60,17 @@ public:
     void applyGeometry (const whistle::Geometry&);  // Takes the whole geometry, as the sliders would
     double lowestNoteHz() const;                    // The key and octave chosen, at the reference A
     std::function<void()> onInstrumentChanged;      // Geometry, voicing, key or reference changed
+    std::function<void()> onNameChanged;            // Saved or exported under a new name (nothing else changed)
+    std::function<void (const juce::String&)> onChartHolesChanged;  // A new chart opened or plugged holes (which)
     void setTuningSummary (const juce::String&);    // One line from the Tuning workshop, shown under the drawing
     // The key, octave, reference A and fingering chart: what the tuner aims for (the sound never uses them), shown on
     // the Tuning workshop tab. They stay this page's (the phone screens and Play scale use them).
     void showTuningControlsIn (juce::Component& parent);
     void layOutTuningControls (juce::Rectangle<int> row, juce::Rectangle<int> chartRow);
+
+    // How much bigger than the smallest (24 px rows) this page draws its settings in a page of this size: the other
+    // tabs are scaled by the same, so all text is the same size.
+    float textScaleFor (juce::Rectangle<int> page) const;
 
 private:
     friend class DesktopControls;  // The iPhone screens drive these controls
@@ -84,6 +90,14 @@ private:
                           std::function<double()> get, std::function<void (double)> set, bool changesGeometry = true,
                           RowKind kind = RowKind::normal);
     void addHeading (juce::String name);
+
+    struct SettingsLayout
+    {
+        int width = 0, columns = 1, columnWidth = 0, rowHeight = 24;
+        size_t split = 0;  // leftColumn index where the second column starts
+    };
+    SettingsLayout settingsLayout (juce::Rectangle<int> settingsArea) const;
+    static juce::Rectangle<int> settingsArea (juce::Rectangle<int> page);
 
     void geometryChanged();
     void voicingChanged();  // The played pitch changes with the voicing too

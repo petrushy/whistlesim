@@ -350,6 +350,18 @@ void AudioEngine::audioDeviceAboutToStart (juce::AudioIODevice* device)
     limiterGain = 1.0f;
 }
 
+int AudioEngine::readTunerSamples (float* dest, int maxSamples)
+{
+    // Older samples than fit are skipped: the tuner wants the latest.
+    const int extra = tunerFifo.getNumReady() - maxSamples;
+    if (extra > 0)
+        tunerFifo.read (extra);  // The scope's destructor marks them read
+    const auto scope = tunerFifo.read (std::min (maxSamples, tunerFifo.getNumReady()));
+    std::copy_n (tunerBuffer.data() + scope.startIndex1, scope.blockSize1, dest);
+    std::copy_n (tunerBuffer.data() + scope.startIndex2, scope.blockSize2, dest + scope.blockSize1);
+    return scope.blockSize1 + scope.blockSize2;
+}
+
 void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, float* const* outputs, int numOutputs,
                                                     int numSamples, const juce::AudioIODeviceCallbackContext&)
 {
@@ -527,6 +539,18 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
         {
             whistleModel.render (windowDry.get(), bodyDry.get(), numSamples);
         }
+    }
+
+    if (tunerListening.load (std::memory_order_relaxed))
+    {
+        const auto scope = tunerFifo.write (std::min (numSamples, tunerFifo.getFreeSpace()));
+        auto copy = [&] (int start, int size, int from)
+        {
+            for (int i = 0; i < size; ++i)
+                tunerBuffer[(size_t) (start + i)] = windowDry[from + i] + bodyDry[from + i];
+        };
+        copy (scope.startIndex1, scope.blockSize1, 0);
+        copy (scope.startIndex2, scope.blockSize2, scope.blockSize1);
     }
 
     // Headroom: 5 dB below the model's own level (Output level 0 dB), before the room and the limiter. Played

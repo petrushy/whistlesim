@@ -116,6 +116,10 @@ juce::var toVar (const Instrument& instrument)
     for (const auto& [id, pressure] : g.tuning.learnedBreath)
         learned.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), pressure);
     tuning.getDynamicObject()->setProperty ("learnedBreath_Pa", learned);
+    auto weights = object();
+    for (const auto& [id, weight] : g.tuning.weights)
+        weights.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), weight);
+    tuning.getDynamicObject()->setProperty ("weights", weights);
     root.getDynamicObject()->setProperty ("tuning", tuning);
 
     auto fipple = object();
@@ -248,6 +252,9 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
         if (auto* learned = tuning["learnedBreath_Pa"].getDynamicObject())
             for (const auto& entry : learned->getProperties())
                 g.tuning.learnedBreath[entry.name.toString().toStdString()] = (double) entry.value;
+        if (auto* weights = tuning["weights"].getDynamicObject())
+            for (const auto& entry : weights->getProperties())
+                g.tuning.weights[entry.name.toString().toStdString()] = juce::jlimit (0.0, 1.0, (double) entry.value);
         if (auto* fingerings = tuning["fingerings"].getDynamicObject())
             for (const auto& entry : fingerings->getProperties())
                 g.tuning.fingerings[entry.name.toString().toStdString()] = (bool) entry.value;
