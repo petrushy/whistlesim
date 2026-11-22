@@ -3,11 +3,16 @@
 // rests when the stream stops, plays low D from the screen, and plans and plays the test scale.
 
 #include "Player/Player.h"
+#include "Player/Recorder.h"
+#include "Player/SensorSettings.h"
 #include "Whistle/PitchDetect.h"
 
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -139,6 +144,69 @@ int main()
         check (rig.rms ((double) before / kRate + 0.5, (double) before / kRate + 2.0) > 0.01, "the scale sounds", rig.rms ((double) before / kRate + 0.5, (double) before / kRate + 2.0));
         rig.player.playScale();  // Stops it
         check (! rig.player.isScaleActive(), "stops", 0.0);
+    }
+
+    std::printf ("Recording (the simulated WARBL, 2 s):\n");
+    {
+        auto rigOnHeap = std::make_unique<Rig>();
+        auto& rig = *rigOnHeap;
+        rig.stream.setSimulating (true);
+        Recorder recorder;
+        const auto folder = std::filesystem::temp_directory_path() / "whistlesim-player-test";
+        std::filesystem::remove_all (folder);
+        const bool started = recorder.start (folder.string(), kRate, { "WhistleSim recording " + Recorder::isoTime(), "sensors " + sensorsToText (rig.player) });
+        check (started, "the files open", 0.0);
+        // As the apps do: the audio from the audio callback, the frames from the UI queue.
+        std::vector<float> l (kBlock), r (kBlock);
+        for (int b = 0; b < (int) (2.0 * kRate / kBlock); ++b)
+        {
+            for (; rig.nextTickMs < rig.nowMs + kBlock * 1000.0 / kRate; rig.nextTickMs += 2.0)
+                rig.stream.simulatorTick (rig.nextTickMs);
+            rig.player.process (l.data(), r.data(), kBlock, rig.nowMs);
+            const float* channels[2] = { l.data(), r.data() };
+            recorder.addAudio (channels, 2, kBlock, rig.nowMs);
+            ReceivedFrame frame;
+            while (rig.stream.uiQueue.pop (frame))
+                recorder.addFrame (frame);
+            rig.nowMs += kBlock * 1000.0 / kRate;
+        }
+        recorder.stop();
+
+        const auto base = folder / recorder.getBaseName();
+        std::ifstream wav (std::filesystem::path (base).concat (".wav"), std::ios::binary);
+        char head[44] = {};
+        wav.read (head, 44);
+        const auto dataBytes = (uint32_t) (uint8_t) head[40] | (uint32_t) (uint8_t) head[41] << 8 | (uint32_t) (uint8_t) head[42] << 16 | (uint32_t) (uint8_t) head[43] << 24;
+        const auto fileBytes = std::filesystem::file_size (std::filesystem::path (base).concat (".wav"));
+        const double seconds = dataBytes / 6.0 / kRate;
+        check (std::string (head, 4) == "RIFF" && std::string (head + 8, 8) == "WAVEfmt " && dataBytes + 44 == fileBytes, "the WAV's header and size agree", (double) fileBytes);
+        check (std::abs (seconds - 2.0) < 0.01, "2 s of audio", seconds);
+
+        std::ifstream csv (std::filesystem::path (base).concat (".csv"));
+        std::string line;
+        int rows = 0, comments = 0;
+        bool sensorsLine = false, audioStart = false;
+        while (std::getline (csv, line))
+        {
+            if (line.rfind ("# ", 0) == 0)
+            {
+                ++comments;
+                sensorsLine = sensorsLine || line.rfind ("# sensors {", 0) == 0;
+                audioStart = audioStart || line.rfind ("# audio started at arrival_ms ", 0) == 0;
+            }
+            else if (line.rfind ("device_ms", 0) != 0)
+                ++rows;
+        }
+        check (rows > 950 && rows < 1050, "a CSV row per frame (500 a second)", rows);
+        check (sensorsLine && audioStart, "the header's sensor settings and the audio's start", comments);
+
+        // The sensor settings survive a round trip as text.
+        auto other = std::make_unique<Rig>();
+        rig.player.breathCurve = 51.0f;
+        rig.player.tiltEnabled = true;
+        check (sensorsFromText (sensorsToText (rig.player), other->player) && other->player.breathCurve.load() == 51.0f && other->player.tiltEnabled.load(),
+               "sensor settings as text, and back", other->player.breathCurve.load());
+        std::filesystem::remove_all (folder);
     }
 
     std::printf (failures == 0 ? "All player tests passed\n" : "%d failures\n", failures);

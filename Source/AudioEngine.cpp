@@ -41,8 +41,9 @@ void AudioEngine::audioDeviceIOCallbackWithContext (const float* const*, int, fl
         return;
     }
 
-    process (outputs[0], outputs[1], numSamples, juce::Time::getMillisecondCounterHiRes());
-    recorder.addAudio (outputs, numOutputs, numSamples);
+    const double nowMs = juce::Time::getMillisecondCounterHiRes();
+    process (outputs[0], outputs[1], numSamples, nowMs);
+    recorder.addAudio (outputs, numOutputs, numSamples, nowMs);
 
     if (silent)
         for (int ch = 0; ch < numOutputs; ++ch)

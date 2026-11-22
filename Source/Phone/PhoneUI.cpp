@@ -2,7 +2,6 @@
 
 #include "../AboutPanel.h"
 #include "../OverlayPanel.h"
-#include "../Recorder.h"
 
 using namespace phone;
 
@@ -1253,7 +1252,7 @@ public:
         pairButton.onClick = [] { DesktopControls::pairBluetooth(); };
         infoButton.onClick = [this] { c.requestInfo(); };
         aboutButton.onClick = [this] { owner.showAbout(); };
-        recordings.setLines ({ { "Recordings (the sound as WAV, and every sensor frame as CSV) are saved in " + Recorder::getFolderDescription() + ".",
+        recordings.setLines ({ { "Recordings (the sound as WAV, and every sensor frame as CSV) are saved in " + MonitorPage::recordingFolderDescription() + ".",
                                  sizes::caption, colours::secondary } });
         for (auto* block : { &warbl, &output })
             block->onHeightChange = [this] { resized(); };

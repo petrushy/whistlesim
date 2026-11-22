@@ -17,6 +17,8 @@ endif()
 
 add_library(WhistlePlayer STATIC
     Player.cpp
+    Recorder.cpp
+    SensorSettings.cpp
     StreamCore.cpp
     Workshop.cpp)
 target_compile_features(WhistlePlayer PUBLIC cxx_std_20)

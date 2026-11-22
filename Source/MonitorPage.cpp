@@ -253,7 +253,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
 
     playButton.onClick = [this] { audio.playScale(); };
     recordButton.setTooltip ("Records what you play: the sound (WAV) and every sensor frame with your settings (CSV), into "
-                             + Recorder::getFolderDescription() + ", so a problem can be replayed and analysed offline.");
+                             + recordingFolderDescription() + ", so a problem can be replayed and analysed offline.");
     recordButton.onClick = [this] { toggleRecording(); };
     playButton.setTooltip ("Plays the instrument (Instrument tab) through a scale of its own fingerings, two octaves up, with the breath each note needs (space bar does the same).");
     simulateButton.setTooltip ("Plays a scripted scale as if from WARBL, through the same path as the real stream.");
@@ -358,6 +358,25 @@ void MonitorPage::showAudioSettings()
    #endif
 }
 
+juce::File MonitorPage::recordingFolder()
+{
+   #if JUCE_IOS
+    // The app's Documents folder is the one the Files app shows.
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Recordings");
+   #else
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads").getChildFile ("WhistleSim recordings");
+   #endif
+}
+
+juce::String MonitorPage::recordingFolderDescription()
+{
+   #if JUCE_IOS
+    return "Files > On My iPhone > WhistleSim > Recordings";
+   #else
+    return "Downloads/WhistleSim recordings";
+   #endif
+}
+
 void MonitorPage::toggleRecording()
 {
     auto& recorder = audio.recorder;
@@ -365,18 +384,21 @@ void MonitorPage::toggleRecording()
     {
         recorder.stop();
         recordButton.setButtonText ("Record");
-        recordingMessage = "Saved " + recorder.getBaseName() + ".wav and .csv in " + Recorder::getFolderDescription();
+        recordingMessage = "Saved " + juce::String (recorder.getBaseName()) + ".wav and .csv in " + recordingFolderDescription();
         recordingMessageUntilMs = juce::Time::getMillisecondCounterHiRes() + 8000.0;
         return;
     }
-    auto header = recordingHeader ? recordingHeader() : juce::StringArray();
-    header.add ("sample_rate " + juce::String (audio.getSampleRate()));
-    header.add (juce::String (audio.calibrationText()));
-    if (recorder.start (audio.getSampleRate(), header))
+    std::vector<std::string> header;
+    if (recordingHeader)
+        for (const auto& line : recordingHeader())
+            header.push_back (line.toStdString());
+    header.push_back (("sample_rate " + juce::String (audio.getSampleRate())).toStdString());
+    header.push_back (audio.calibrationText());
+    if (recorder.start (recordingFolder().getFullPathName().toStdString(), audio.getSampleRate(), header))
         recordButton.setButtonText ("Stop recording");
     else
     {
-        recordingMessage = "Couldn't create files in " + recorder.getFolder().getFullPathName();
+        recordingMessage = "Couldn't create files in " + recordingFolder().getFullPathName();
         recordingMessageUntilMs = juce::Time::getMillisecondCounterHiRes() + 8000.0;
     }
 }
