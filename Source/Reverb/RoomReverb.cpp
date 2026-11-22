@@ -128,8 +128,10 @@ void RoomReverb::process (const float* windowLeft, const float* windowRight, con
             delayWrite = (delayWrite + 1) % lineLength;
         }
 
-        // The old engine, while it fades out, on its own copy of the input.
-        if (fading != nullptr)
+        // The old engine, while it fades out, on its own copy of the input (once faded out, it waits silently to be
+        // handed back, and isn't run).
+        const bool fadingOut = fading != nullptr && fadePosition < fadeLength;
+        if (fadingOut)
             for (size_t ch = 0; ch < 4; ++ch)
                 fading->convolvers[ch]->process (work[ch].data(), faded[ch].data(), n);
 
@@ -152,13 +154,13 @@ void RoomReverb::process (const float* windowLeft, const float* windowRight, con
             }
             float wl = work[0][(size_t) i] + work[2][(size_t) i];
             float wr = work[1][(size_t) i] + work[3][(size_t) i];
-            if (fading != nullptr)
+            if (fadingOut && fadePosition < fadeLength)
             {
                 // Equal-gain crossfade: both responses are of the same room level, and correlated at the start.
                 const float in = (float) fadePosition / (float) fadeLength;
                 wl = in * wl + (1.0f - in) * (faded[0][(size_t) i] + faded[2][(size_t) i]);
                 wr = in * wr + (1.0f - in) * (faded[1][(size_t) i] + faded[3][(size_t) i]);
-                if (++fadePosition >= fadeLength)
+                if (++fadePosition >= fadeLength)  // Stays at fadeLength: the new engine alone from here
                 {
                     // Done: hand the old engine back for deleting off this thread. If the last one hasn't been
                     // collected yet, this one stays silent until the next call tries again.
