@@ -37,6 +37,11 @@ if (WHISTLESIM_IOS)
             UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight)
 endif()
 
+# The built-in presets: .whistle files (JSON, as Export writes them), built into the programs. File-name order is
+# the list's order. WhistleCheck code writes retuned values back into them.
+file(GLOB WHISTLESIM_PRESET_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Presets/*.whistle")
+juce_add_binary_data(WhistlePresets HEADER_NAME PresetData.h NAMESPACE PresetData SOURCES ${WHISTLESIM_PRESET_FILES})
+
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
 # Not a WARBL product, so the company and bundle ID are the project's own.
 juce_add_gui_app(WhistleSim
@@ -76,6 +81,7 @@ target_compile_definitions(WhistleSim PRIVATE
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:WhistleSim,JUCE_VERSION>")
 
 target_link_libraries(WhistleSim
+    PRIVATE WhistlePresets
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_devices
@@ -106,7 +112,7 @@ target_sources(InstrumentFileTest PRIVATE Tests/InstrumentFileTest.cpp Source/Wh
     Source/Whistle/WhistleGeometry.cpp Source/Whistle/Acoustics.cpp)
 target_include_directories(InstrumentFileTest PRIVATE Source)
 target_compile_definitions(InstrumentFileTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-target_link_libraries(InstrumentFileTest PRIVATE juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+target_link_libraries(InstrumentFileTest PRIVATE WhistlePresets juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME InstrumentFileTest COMMAND InstrumentFileTest)
 
 # Virtual WARBL for trying the app or a synth without the instrument.
@@ -132,24 +138,27 @@ juce_add_console_app(WhistleCheck PRODUCT_NAME "Whistle Check")
 target_sources(WhistleCheck PRIVATE tools/WhistleCheck.cpp Source/Whistle/WhistleGeometry.cpp Source/Whistle/Acoustics.cpp Source/Whistle/WhistleModel.cpp Source/Whistle/ScalePlan.cpp
     Source/Whistle/PlayedTuning.cpp Source/Whistle/JetStability.cpp Source/Whistle/InstrumentFile.cpp)
 target_include_directories(WhistleCheck PRIVATE Source)
-target_compile_definitions(WhistleCheck PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_compile_definitions(WhistleCheck PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0
+    WHISTLESIM_PRESET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Presets")  # Where WhistleCheck code writes retuned presets
 target_link_libraries(WhistleCheck
-    PRIVATE juce::juce_audio_formats juce::juce_dsp
+    PRIVATE WhistlePresets juce::juce_audio_formats juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 # The presets' stored tuning still matches the acoustics.
 juce_add_console_app(PresetTuningTest)
-target_sources(PresetTuningTest PRIVATE Tests/PresetTuningTest.cpp Source/Whistle/WhistleGeometry.cpp Source/Whistle/Acoustics.cpp)
+target_sources(PresetTuningTest PRIVATE Tests/PresetTuningTest.cpp Source/Whistle/WhistleGeometry.cpp Source/Whistle/Acoustics.cpp
+    Source/Whistle/InstrumentFile.cpp)
 target_include_directories(PresetTuningTest PRIVATE Source)
 target_compile_definitions(PresetTuningTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-target_link_libraries(PresetTuningTest PRIVATE juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+target_link_libraries(PresetTuningTest PRIVATE WhistlePresets juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME PresetTuningTest COMMAND PresetTuningTest)
 
 # The presets play in tune (plays the model).
 juce_add_console_app(PlayedTuningTest)
 target_sources(PlayedTuningTest PRIVATE Tests/PlayedTuningTest.cpp Source/Whistle/WhistleGeometry.cpp Source/Whistle/Acoustics.cpp
-    Source/Whistle/WhistleModel.cpp Source/Whistle/JetStability.cpp Source/Whistle/ScalePlan.cpp Source/Whistle/PlayedTuning.cpp)
+    Source/Whistle/WhistleModel.cpp Source/Whistle/JetStability.cpp Source/Whistle/ScalePlan.cpp Source/Whistle/PlayedTuning.cpp
+    Source/Whistle/InstrumentFile.cpp)
 target_include_directories(PlayedTuningTest PRIVATE Source)
 target_compile_definitions(PlayedTuningTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-target_link_libraries(PlayedTuningTest PRIVATE juce::juce_audio_basics juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+target_link_libraries(PlayedTuningTest PRIVATE WhistlePresets juce::juce_audio_basics juce::juce_dsp PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME PlayedTuningTest COMMAND PlayedTuningTest)

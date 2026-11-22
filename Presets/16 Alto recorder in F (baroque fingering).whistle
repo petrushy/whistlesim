@@ -1,0 +1,157 @@
+{
+  "format": "warbl-whistle",
+  "version": 1,
+  "name": "Alto recorder in F (baroque fingering)",
+  "bore": {
+    "length_mm": 434.88,
+    "diameterTop_mm": 19.477992,
+    "diameterFoot_mm": 14.233917,
+    "wallThickness_mm": 5.244075,
+    "wallLoss": 1.1,
+    "headLength_mm": 0.0,
+    "headDiameter_mm": 19.477992,
+    "headStraightLength_mm": 0.0,
+    "slide_mm": 0.0
+  },
+  "holes": [
+    {
+      "name": "LT",
+      "position_mm": 151.54,
+      "diameter_mm": 7.64
+    },
+    {
+      "name": "L1",
+      "position_mm": 182.79,
+      "diameter_mm": 8.99
+    },
+    {
+      "name": "L2",
+      "position_mm": 191.96,
+      "diameter_mm": 7.54
+    },
+    {
+      "name": "L3",
+      "position_mm": 221.03,
+      "diameter_mm": 7.31
+    },
+    {
+      "name": "R1",
+      "position_mm": 250.21,
+      "diameter_mm": 5.96
+    },
+    {
+      "name": "R2",
+      "position_mm": 299.46,
+      "diameter_mm": 9.74
+    },
+    {
+      "name": "R3",
+      "position_mm": 321.18,
+      "diameter_mm": 8.12
+    },
+    {
+      "name": "R4",
+      "position_mm": 360.89,
+      "diameter_mm": 6.74
+    }
+  ],
+  "bellClosesFoot": true,
+  "fingeringChart": "recorder (baroque)",
+  "referenceA_Hz": 440.0,
+  "chartTranspose": -7,
+  "tuning": {
+    "temperament": "equal",
+    "towardEqual": 0.0,
+    "majorKeys": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "minorKeys": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "fingerings": {
+    },
+    "topHoleFor": "C natural",
+    "breathPosition": [
+      0.35,
+      0.1
+    ],
+    "useLearnedBreath": false,
+    "customCents": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "learnedBreath_Pa": {
+    },
+    "weights": {
+    }
+  },
+  "fipple": {
+    "windwayHeight_mm": 1.498307,
+    "windwayLength_mm": 44.949212,
+    "windowLength_mm": 5.543736,
+    "windowWidth_mm": 13.185102,
+    "edgeOffset_mm": 0.299661
+  },
+  "voicing": {
+    "jetStrouhal": 0.03,
+    "jetConvection": 0.6,
+    "breathNoise": 0.025,
+    "outputGain_dB": -4.4,
+    "directNoise": 0.0,
+    "windwayMass": 1.0,
+    "windwayFriction": 1.0,
+    "vortexLoss": 0.5,
+    "attackChiff": 0.0,
+    "fingerGapDamping": 0.0,
+    "jetGain": 1.2,
+    "slowJetGrowth": 0.67,
+    "jetStages": 1,
+    "breathScale": 1.0,
+    "breathCurve": 1.45,
+    "jetLowReynolds": 0.0,
+    "jetFlatAbove": 0.0,
+    "jetFlatTop": 0.0,
+    "jetSpreading": 1.0,
+    "jetModel": 0,
+    "jetThinning": 0.0,
+    "jetCutoff": 0.3,
+    "jetBend_Pa": 0.0,
+    "fingerTap": 0.2,
+    "fingerSoftness_ms": 4.0,
+    "bodyKnock": 0.1,
+    "bodyPitch_Hz": 900.0,
+    "bodyRing": 12.0
+  }
+}

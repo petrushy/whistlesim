@@ -144,13 +144,16 @@ juce::var toVar (const Instrument& instrument)
     set (voicing, "fingerGapDamping", v.fingerGapDamping);
     set (voicing, "jetGain", v.jetGain);
     set (voicing, "slowJetGrowth", v.slowJetGrowth);
-    set (voicing, "jetStages", v.jetStages);
+    voicing.getDynamicObject()->setProperty ("jetStages", v.jetStages);
     set (voicing, "breathScale", v.breathScale);
     set (voicing, "breathCurve", v.breathCurve);
     set (voicing, "jetLowReynolds", v.jetLowReynolds);
     set (voicing, "jetFlatAbove", v.jetFlatAbove);
     set (voicing, "jetFlatTop", v.jetFlatTop);
     set (voicing, "jetSpreading", v.jetSpreading);
+    voicing.getDynamicObject()->setProperty ("jetModel", v.jetModel);
+    set (voicing, "jetThinning", v.jetThinning);
+    set (voicing, "jetCutoff", v.jetCutoff);
     set (voicing, "jetBend_Pa", v.jetBend);
     set (voicing, "fingerTap", v.fingerTap);
     set (voicing, "fingerSoftness_ms", v.fingerSoftness);
@@ -162,7 +165,7 @@ juce::var toVar (const Instrument& instrument)
     return root;
 }
 
-std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
+std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, const Instrument* base)
 {
     if (! root.isObject() || root["format"].toString() != kFormat)
     {
@@ -176,8 +179,11 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
     }
 
     Instrument instrument;
+    if (base != nullptr)
+        instrument = *base;
+    else
+        instrument.geometry = presets().front();
     auto& g = instrument.geometry;
-    g = presets().front();
     if (root.hasProperty ("name"))
         g.name = root["name"].toString();
 
@@ -302,6 +308,10 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
     read (voicing, "bodyRing", instrument.voicing.bodyRing);
     if (voicing.hasProperty ("jetStages"))
         instrument.voicing.jetStages = juce::jlimit (1, 2, (int) voicing["jetStages"]);
+    read (voicing, "jetThinning", instrument.voicing.jetThinning);
+    read (voicing, "jetCutoff", instrument.voicing.jetCutoff);
+    if (voicing.hasProperty ("jetModel"))
+        instrument.voicing.jetModel = juce::jlimit (0, 1, (int) voicing["jetModel"]);
 
     // Sanity checks: anything that would make the model meaningless.
     auto bad = [&] (bool condition, const char* message)
@@ -333,10 +343,10 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error)
 
 juce::String toJson (const Instrument& instrument)
 {
-    return juce::JSON::toString (toVar (instrument), false, 3);
+    return juce::JSON::toString (toVar (instrument), false, 6);  // Lengths to 1 nm: presets keep their exact values
 }
 
-std::optional<Instrument> fromJson (const juce::String& text, juce::String& error)
+std::optional<Instrument> fromJson (const juce::String& text, juce::String& error, const Instrument* base)
 {
     juce::var parsed;
     const auto result = juce::JSON::parse (text, parsed);
@@ -345,7 +355,7 @@ std::optional<Instrument> fromJson (const juce::String& text, juce::String& erro
         error = "Not valid JSON: " + result.getErrorMessage();
         return std::nullopt;
     }
-    return fromVar (parsed, error);
+    return fromVar (parsed, error, base);
 }
 
 } // namespace whistle
