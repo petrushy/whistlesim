@@ -30,7 +30,7 @@ int main()
                 unsigned noise = 1;
                 for (size_t n = 0; n < x.size(); ++n)
                 {
-                    const double t = 2.0 * M_PI * hz * (double) n / rate;
+                    const double t = 2.0 * juce::MathConstants<double>::pi * hz * (double) n / rate;
                     noise = noise * 1664525u + 1013904223u;
                     x[n] = (float) (0.3 * std::sin (t) + 0.3 * h2 * std::sin (2.0 * t + 0.4) + 0.05 * std::sin (3.0 * t)
                                     + 0.01 * ((double) (noise >> 8) / (1 << 24) - 0.5));
