@@ -13,8 +13,9 @@ using namespace whistle;
 
 int main()
 {
-    // Cents rms, weighted as the tuner weights notes. After tuning (2026-11-22) the whistles played 2.7-10.8 c, the
-    // recorders 7.7-9.3 and the Härjedalspipa 6.8; the old resonance-tuned presets played 6-32 c.
+    // Cents rms, weighted as the tuner weights notes. After tuning (2026-11-22: notes judged from where they speak,
+    // the low octave at 35 % of its breath, the upper at 10 %) the whistles played 2.4-5.2 c, the low D 1.9-2.3, the
+    // recorders 7.3-9.9 and the Härjedalspipa 4.0; the old resonance-tuned presets played 6-32 c.
     constexpr double kLimit = 11.0;
     int failures = 0, checked = 0;
 

@@ -24,7 +24,8 @@ struct ScaleStep
 // Plays one fingering at one pressure (blown up over 40 ms, like a player) and returns the pitch once it has
 // settled, or 0 if it doesn't sound clearly as a note: periodic, and at least -40 dBFS (~60 dB SPL at the
 // listener), not a whisper right at the threshold that may not start at all when played. About 0.35 s of sound.
-double playNote (const Geometry&, const Voicing&, const Openness&, double pressure);
+// levelDb (if given): the settled note's level, dB re full scale (rms).
+double playNote (const Geometry&, const Voicing&, const Openness&, double pressure, double* levelDb = nullptr);
 
 // The scale's timing: each note sounds for kScaleNoteSeconds, tongued (attack, hold, release) with a short
 // gap in which the fingers move to the next note.

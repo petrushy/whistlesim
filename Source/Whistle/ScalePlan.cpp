@@ -21,7 +21,7 @@ std::string noteName (double hz)
 
 } // namespace
 
-double playNote (const Geometry& g, const Voicing& v, const Openness& open, double pressure)
+double playNote (const Geometry& g, const Voicing& v, const Openness& open, double pressure, double* levelDb)
 {
     constexpr double rate = 48000.0;
     WhistleModel model;
@@ -47,7 +47,9 @@ double playNote (const Geometry& g, const Voicing& v, const Openness& open, doub
     const auto tail = (size_t) (0.1 * rate);
     for (size_t i = out.size() - tail; i < out.size(); ++i)
         sum += (double) out[i] * out[i];
-    if (sum / (double) tail < 1.0e-8)  // -40 dBFS
+    if (levelDb != nullptr)
+        *levelDb = 10.0 * std::log10 (sum / (double) tail + 1.0e-20);
+    if (sum / (double) tail < 1.0e-8)  // -80 dBFS
         return 0.0;
 
     // The pitch once the note has settled (the last 0.2 s): a note that starts with some breath noise before the

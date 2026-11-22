@@ -25,9 +25,9 @@ PlayedNote measureOne (const Geometry& g, const Voicing& v, double lowestHz, siz
 
     const double target = targetHz (g, c, lowestHz);
     const auto open = c.openness (g);
-    auto centsAt = [&] (double pressure, double& cents)
+    auto centsAt = [&] (double pressure, double& cents, double* level = nullptr)
     {
-        const double f = playNote (g, v, open, pressure);
+        const double f = playNote (g, v, open, pressure, level);
         cents = f > 0.0 ? 1200.0 * std::log2 (f / target) : 1.0e9;
         return std::abs (cents) < kInRegisterCents;
     };
@@ -36,14 +36,16 @@ PlayedNote measureOne (const Geometry& g, const Voicing& v, double lowestHz, siz
     // threshold a note may come and go, and a fingering can return to it after another register).
     constexpr double kStep = 1.18;
     double runStart = 0.0, runEnd = 0.0;
+    std::vector<std::pair<double, double>> levels;  // (pressure, dB) where it plays as this note
     for (double pressure = 60.0; pressure < 12000.0; pressure *= kStep)
     {
-        double cents = 0.0;
-        if (! centsAt (pressure, cents))
+        double cents = 0.0, level = -200.0;
+        if (! centsAt (pressure, cents, &level))
         {
             runStart = 0.0;
             continue;
         }
+        levels.push_back ({ pressure, level });
         if (runStart == 0.0)
             runStart = pressure;
         runEnd = pressure;
@@ -55,6 +57,22 @@ PlayedNote measureOne (const Geometry& g, const Voicing& v, double lowestHz, siz
     }
     if (note.lowPa == 0.0)
         return note;
+
+    // The soft end is where it has a tone, not the first faint pitch: a note can whisper in tune far below where
+    // it speaks (the Golden style's bottom D from 60 Pa, 30 dB down, while it comes within 15 dB of its full level
+    // only at ~165 Pa). Real whistles speak more suddenly (the measured Golden's D5 is 5-8 dB below its loudest at
+    // its softest), so a whisper would put the note's soft end, and its middle, too low.
+    constexpr double kSpeaksWithinDb = 15.0;
+    double loudest = -200.0;
+    for (const auto& [pressure, level] : levels)
+        if (pressure >= note.lowPa && pressure <= note.highPa)
+            loudest = std::max (loudest, level);
+    for (const auto& [pressure, level] : levels)
+        if (pressure >= note.lowPa && pressure <= note.highPa && level >= loudest - kSpeaksWithinDb)
+        {
+            note.lowPa = pressure;
+            break;
+        }
 
     const double position = juce::jlimit (0.0, 1.0, g.tuning.breathPosition[c.reg >= 2 ? 1 : 0]);
     note.pressure = std::pow (note.lowPa, 1.0 - position) * std::pow (note.highPa, position);
