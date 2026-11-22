@@ -29,7 +29,23 @@ if (WHISTLESIM_IOS)
         BLUETOOTH_PERMISSION_ENABLED TRUE
         BLUETOOTH_PERMISSION_TEXT "WhistleSim connects to WARBL over Bluetooth MIDI."
         FILE_SHARING_ENABLED TRUE
-        PLIST_TO_MERGE "<plist><dict><key>LSSupportsOpeningDocumentsInPlace</key><true/></dict></plist>"
+        # .whistle files as a declared document type (JSON). Without a declared type iOS gives the extension a
+        # made-up one, and the file picker then offered only "On My iPhone", not iCloud Drive or other providers.
+        PLIST_TO_MERGE "<plist><dict>
+<key>LSSupportsOpeningDocumentsInPlace</key><true/>
+<key>UTExportedTypeDeclarations</key><array><dict>
+<key>UTTypeIdentifier</key><string>io.github.petrushy.whistlesim.whistle</string>
+<key>UTTypeDescription</key><string>WhistleSim instrument</string>
+<key>UTTypeConformsTo</key><array><string>public.json</string><string>public.text</string><string>public.data</string><string>public.content</string></array>
+<key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>whistle</string></array><key>public.mime-type</key><array><string>application/json</string></array></dict>
+</dict></array>
+<key>CFBundleDocumentTypes</key><array><dict>
+<key>CFBundleTypeName</key><string>WhistleSim instrument</string>
+<key>CFBundleTypeRole</key><string>Editor</string>
+<key>LSHandlerRank</key><string>Owner</string>
+<key>LSItemContentTypes</key><array><string>io.github.petrushy.whistlesim.whistle</string></array>
+</dict></array>
+</dict></plist>"
         STATUS_BAR_HIDDEN TRUE
         REQUIRES_FULL_SCREEN TRUE
         IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
