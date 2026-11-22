@@ -3,79 +3,8 @@
 #include "AboutPanel.h"
 #include "OverlayPanel.h"
 #include "ReverbFile.h"
+#include "Player/SensorSettings.h"
 
-namespace
-{
-juce::var sensorsToVar (const AudioEngine& a)
-{
-    auto o = juce::var (new juce::DynamicObject());
-    auto* d = o.getDynamicObject();
-    d->setProperty ("breathInputMin_Pa", a.breathInputMin.load());
-    d->setProperty ("breathInputMax_Pa", a.breathInputMax.load());
-    d->setProperty ("breathCurve", a.breathCurve.load());
-    d->setProperty ("breathOutputMax_Pa", a.breathOutputMax.load());
-    d->setProperty ("holeOpenBelow", a.holeOpenBelow.load());
-    d->setProperty ("holeClosedAt", a.holeClosedAt.load());
-    d->setProperty ("holeCurve", a.holeCurve.load());
-    d->setProperty ("holeSCurve", a.holeSCurve.load());
-    d->setProperty ("holeCentre", a.holeCentre.load());
-    d->setProperty ("holeFingerHeight", a.holeFingerHeight.load());
-    d->setProperty ("holeFingerRange_mm", a.holeFingerRange.load());
-    d->setProperty ("thumbOwn", a.thumbOwn.load());
-    d->setProperty ("holdHoleJumps", a.holdHoleJumps.load());
-    d->setProperty ("thumbOpenBelow", a.thumbOpenBelow.load());
-    d->setProperty ("thumbClosedAt", a.thumbClosedAt.load());
-    d->setProperty ("thumbCurve", a.thumbCurve.load());
-    d->setProperty ("tiltEnabled", a.tiltEnabled.load());
-    d->setProperty ("tiltInvert", a.tiltInvert.load());
-    d->setProperty ("tiltZero_deg", a.tiltZero.load());
-    d->setProperty ("tiltDeadZone_deg", a.tiltDeadZone.load());
-    d->setProperty ("tiltRange_deg", a.tiltRange.load());
-    d->setProperty ("tiltMaxShift_mm", a.tiltMaxShift.load());
-    d->setProperty ("tiltMaxSpreading", a.tiltMaxSpreading.load());
-    d->setProperty ("tiltMaxNoise_dB", a.tiltMaxNoiseDb.load());
-    return o;
-}
-
-void sensorsFromVar (const juce::var& o, AudioEngine& a)
-{
-    auto read = [&] (const char* key, std::atomic<float>& value)
-    {
-        if (o.hasProperty (key))
-            value = (float) (double) o[key];
-    };
-    read ("breathInputMin_Pa", a.breathInputMin);
-    read ("breathInputMax_Pa", a.breathInputMax);
-    read ("breathCurve", a.breathCurve);
-    read ("breathOutputMax_Pa", a.breathOutputMax);
-    read ("holeOpenBelow", a.holeOpenBelow);
-    read ("holeClosedAt", a.holeClosedAt);
-    read ("holeCurve", a.holeCurve);
-    read ("holeCentre", a.holeCentre);
-    read ("holeFingerRange_mm", a.holeFingerRange);
-    read ("thumbOpenBelow", a.thumbOpenBelow);
-    read ("thumbClosedAt", a.thumbClosedAt);
-    read ("thumbCurve", a.thumbCurve);
-    if (o.hasProperty ("thumbOwn"))
-        a.thumbOwn = (bool) o["thumbOwn"];
-    if (o.hasProperty ("holdHoleJumps"))
-        a.holdHoleJumps = (bool) o["holdHoleJumps"];
-    read ("tiltZero_deg", a.tiltZero);
-    read ("tiltDeadZone_deg", a.tiltDeadZone);
-    read ("tiltRange_deg", a.tiltRange);
-    read ("tiltMaxShift_mm", a.tiltMaxShift);
-    read ("tiltMaxSpreading", a.tiltMaxSpreading);
-    read ("tiltMaxNoise_dB", a.tiltMaxNoiseDb);
-    if (o.hasProperty ("tiltEnabled"))
-        a.tiltEnabled = (bool) o["tiltEnabled"];
-    if (o.hasProperty ("tiltInvert"))
-        a.tiltInvert = (bool) o["tiltInvert"];
-    if (o.hasProperty ("holeFingerHeight"))
-        a.holeFingerHeight = (bool) o["holeFingerHeight"];
-    if (o.hasProperty ("holeSCurve"))
-        a.holeSCurve = (bool) o["holeSCurve"];
-}
-} // namespace
 
 MainComponent::MainComponent()
 {
@@ -97,7 +26,7 @@ MainComponent::MainComponent()
         juce::StringArray lines;
         lines.add ("WhistleSim recording " + juce::Time::getCurrentTime().toISO8601 (true));
         lines.add ("instrument " + juce::String (whistle::toJson (instrument->getInstrument(), true)));
-        lines.add ("sensors " + juce::JSON::toString (sensorsToVar (audio), true));
+        lines.add ("sensors " + juce::String (sensorsToText (audio)));
         return lines;
     };
     // The other tabs scaled to the Instrument tab's text size (it sizes its own text to the window).
@@ -143,7 +72,7 @@ void MainComponent::restoreState()
     if (auto device = settings->getXmlValue ("audioDevice"))
         audio.deviceManager.initialise (0, 2, device.get(), true);
 
-    sensorsFromVar (juce::JSON::parse (settings->getValue ("sensors")), audio);
+    sensorsFromText (settings->getValue ("sensors").toStdString(), audio);
 
     if (settings->containsKey ("smoothBluetooth"))
         audio.smoothBluetooth = settings->getBoolValue ("smoothBluetooth");
@@ -168,7 +97,7 @@ void MainComponent::saveState()
 
     if (instrument != nullptr)
         settings->setValue ("instrument", juce::String (whistle::toJson (instrument->getInstrument())));
-    settings->setValue ("sensors", juce::JSON::toString (sensorsToVar (audio), true));
+    settings->setValue ("sensors", juce::String (sensorsToText (audio)));
     settings->setValue ("reverbRoom", audio.reverb.getPresetIndex());
     settings->setValue ("reverbFile", juce::String (audio.reverb.getCurrentFile()));
     settings->setValue ("reverbLevel_dB", audio.reverb.wetDb.load());

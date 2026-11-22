@@ -6,7 +6,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "Player/Player.h"
-#include "Recorder.h"
+#include "Player/Recorder.h"
 #include "StreamReceiver.h"
 
 class AudioEngine : public Player, private juce::AudioIODeviceCallback
