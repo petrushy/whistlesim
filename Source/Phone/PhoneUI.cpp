@@ -133,7 +133,7 @@ public:
         g.fillAll (colours::card);
         g.setColour (colours::separator);
         g.fillRect (0, 0, getWidth(), 1);
-        static const char* names[] = { "Play", "Instrument", "Room", "Sensors", "Setup" };
+        static const char* names[] = { "Play", "Instrument", "Tuning", "Room", "Sensors", "Setup" };
         const float slot = (float) getWidth() / (float) numTabs;
         for (int i = 0; i < numTabs; ++i)
         {
@@ -168,6 +168,19 @@ private:
                 g.strokePath (p, stroke);
                 for (int i = 0; i < 3; ++i)
                     g.fillEllipse (juce::Rectangle<float> (3.4f, 3.4f).withCentre ({ body.getX() + body.getWidth() * (0.45f + 0.17f * (float) i), body.getCentreY() }));
+                break;
+            }
+            case tuning:  // A tuning fork
+            {
+                const float cx = r.getCentreX(), top = r.getY() + 1.0f, split = r.getY() + r.getHeight() * 0.62f;
+                p.startNewSubPath (cx - 5.0f, top);
+                p.lineTo (cx - 5.0f, split - 3.0f);
+                p.quadraticTo (cx - 5.0f, split + 2.0f, cx, split + 2.0f);
+                p.quadraticTo (cx + 5.0f, split + 2.0f, cx + 5.0f, split - 3.0f);
+                p.lineTo (cx + 5.0f, top);
+                p.startNewSubPath (cx, split + 2.0f);
+                p.lineTo (cx, r.getBottom());
+                g.strokePath (p, stroke);
                 break;
             }
             case room:  // Sound spreading into a room
@@ -527,14 +540,25 @@ private:
 
 // The tuning the geometry predicts, one fingering a line: the note, the fingering (filled, open and half circles;
 // plugged holes left out) and how far the resonance is from the note.
-class TuningList : public juce::Component
+// The Tuning workshop's table for a phone: per fingering, the note, the fingering and where the model plays it (cents
+// from its target, highlighted beyond 10), and under it the target, weight and breath it is tuned at. Fingerings left
+// out of the tuning are dimmed. Tapping a row offers its actions (onTapRow).
+class TuningRows : public juce::Component
 {
 public:
+    std::function<void (size_t)> onTapRow;
+    std::function<void()> onHeightChange;
+
     void set (const std::vector<TuningTable::Entry>& newEntries)
     {
+        auto key = [] (const TuningTable::Entry& e)
+        {
+            return e.note + e.pattern + juce::String (std::isfinite (e.played) ? std::lround (e.played) : 9999) + juce::String (std::lround (e.breath))
+                   + juce::String (std::lround (e.weight * 100.0)) + juce::String (std::lround (e.target)) + (e.counts ? "u" : "-")
+                   + (e.measuring ? "m" : "") + (e.learnedBreath ? "l" : "") + (e.estimatedBreath ? "e" : "") + (e.weightSet ? "w" : "");
+        };
         const bool same = newEntries.size() == entries.size()
-                          && std::equal (newEntries.begin(), newEntries.end(), entries.begin(), [] (const auto& a, const auto& b)
-                                         { return a.note == b.note && a.pattern == b.pattern && std::lround (a.cents) == std::lround (b.cents); });
+                          && std::equal (newEntries.begin(), newEntries.end(), entries.begin(), [&] (const auto& x, const auto& y) { return key (x) == key (y); });
         if (same)
             return;
         const bool resize = newEntries.size() != entries.size();
@@ -544,45 +568,90 @@ public:
             onHeightChange();
     }
 
-    std::function<void()> onHeightChange;
-    int preferredHeight() const { return 24 + 28 * (int) entries.size(); }
+    const std::vector<TuningTable::Entry>& getEntries() const { return entries; }
+    int preferredHeight() const { return kHeader + kRow * (int) entries.size(); }
+
+    static juce::String symbols (const juce::String& pattern)
+    {
+        juce::String out;
+        for (auto ch : pattern)
+        {
+            if (ch == 'x')
+                out += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f"));
+            else if (ch == 'o')
+                out += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8b"));
+            else if (ch == 'h' || ch == 'p')
+                out += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x90"));
+            else if (ch == '|')
+                out += " ";
+        }
+        return out;
+    }
+
+    static juce::String cents (double c)
+    {
+        const int v = (int) std::lround (c);
+        return (v > 0 ? "+" : "") + juce::String (v) + " c";
+    }
 
     void paint (juce::Graphics& g) override
     {
         auto area = getLocalBounds();
-        auto header = area.removeFromTop (24);
+        auto header = area.removeFromTop (kHeader);
         g.setColour (colours::secondary);
         g.setFont (font (sizes::caption));
-        g.drawText ("Note", header.removeFromLeft (64), juce::Justification::centredLeft);
-        g.drawText ("Off by", header.removeFromRight (70), juce::Justification::centredRight);
+        g.drawText ("Note", header.removeFromLeft (52), juce::Justification::centredLeft);
+        g.drawText ("Played", header.removeFromRight (96), juce::Justification::centredRight);
         g.drawText ("Fingering", header, juce::Justification::centredLeft);
         for (const auto& e : entries)
         {
-            auto line = area.removeFromTop (28);
-            juce::String pattern;
-            for (auto ch : e.pattern)
-            {
-                if (ch == 'x')
-                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f"));
-                else if (ch == 'o')
-                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8b"));
-                else if (ch == 'h' || ch == 'p')
-                    pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x90"));
-                else if (ch == '|')
-                    pattern += "  ";
-            }
-            const int cents = (int) std::lround (e.cents);
+            auto row = area.removeFromTop (kRow);
+            const float alpha = e.counts ? 1.0f : 0.4f;
+            auto top = row.removeFromTop (26);
             g.setFont (font (sizes::body));
-            g.setColour (colours::text);
-            g.drawText (e.note, line.removeFromLeft (64), juce::Justification::centredLeft);
-            g.setColour (std::abs (cents) > 10 ? colours::finger : colours::text);
-            g.drawText ((cents > 0 ? "+" : "") + juce::String (cents) + " c", line.removeFromRight (70), juce::Justification::centredRight);
-            g.setColour (colours::text);
-            g.drawText (pattern, line, juce::Justification::centredLeft);
+            g.setColour (colours::text.withMultipliedAlpha (alpha));
+            g.drawText (e.note, top.removeFromLeft (52), juce::Justification::centredLeft);
+            auto playedArea = top.removeFromRight (96);
+            g.drawText (symbols (e.pattern), top, juce::Justification::centredLeft);
+            if (std::isfinite (e.played))
+            {
+                g.setColour ((e.counts && std::abs (e.played) > 10.0 ? colours::finger : colours::text).withMultipliedAlpha (alpha));
+                g.drawText (cents (e.played), playedArea, juce::Justification::centredRight);
+            }
+            else
+            {
+                g.setColour (colours::secondary.withMultipliedAlpha (alpha));
+                g.setFont (font (sizes::caption));
+                g.drawText (e.measuring ? "measuring" : "doesn't sound", playedArea, juce::Justification::centredRight);
+            }
+            juce::String detail;
+            if (! e.counts)
+                detail = "not in the tuning";
+            else
+            {
+                detail << "target " << (std::abs (e.target) < 0.5 ? juce::String ("0") : cents (e.target)) << "   weight "
+                       << juce::String (e.weight, 2) << (e.weightSet ? " (yours)" : "");
+                if (e.breath > 0.0)
+                    detail << "   " << juce::String (juce::roundToInt (e.breath)) << " Pa"
+                           << (e.learnedBreath ? " (learned)" : e.estimatedBreath ? " (estimated)" : "");
+            }
+            g.setFont (font (sizes::caption));
+            g.setColour (colours::secondary.withMultipliedAlpha (alpha));
+            g.drawText (detail, row.withTrimmedLeft (52), juce::Justification::topLeft);
         }
     }
 
+    void mouseUp (const juce::MouseEvent& e) override
+    {
+        if (! isTap (e, *this) || onTapRow == nullptr || e.y < kHeader)
+            return;
+        const auto row = (size_t) ((e.y - kHeader) / kRow);
+        if (row < entries.size())
+            onTapRow (row);
+    }
+
 private:
+    static constexpr int kHeader = 24, kRow = 46;
     std::vector<TuningTable::Entry> entries;
 };
 
@@ -733,22 +802,6 @@ public:
         content.add (status, [this] (int w) { return status.preferredHeight (w); });
         status.onHeightChange = [this] { resized(); };
 
-        // Key and tuning
-        addSection ("Key and tuning", "What the tuning table, the scale and Tune holes aim for. The sound never uses a chart: it comes "
-                                      "from the instrument's shape.", true);
-        addPicker ("Key", c.keyBox());
-        addPicker ("Octave", c.octaveBox());
-        addPicker ("Fingering chart", c.chartBox());
-        addSlider ("Pitch standard (A4)", c.pitchStandard(), c.pitchStandard().getTooltip());
-        tuneButton.onClick = [this] { c.tuneHoles(); };
-        addMember (tuneButton, [] (int) { return 46; }, 4);
-        addSwitch ("Tune C natural with L1's size", c.crossFingerings(), c.crossFingerings().getTooltip());
-
-        addSection ("Predicted tuning", "Each fingering's resonance against its note, from the instrument's shape: a design aid, more "
-                                        "than 10 cents off is highlighted.", false);
-        tuningList.onHeightChange = [this] { resized(); };
-        addMember (tuningList, [this] (int) { return tuningList.preferredHeight(); });
-
         // The dimension and voicing settings, in the desktop's groups.
         for (const auto& group : c.instrumentSettings())
         {
@@ -787,8 +840,6 @@ public:
         deleteButton.setEnabled (c.canDeletePreset());
         status.setLines ({ { c.instrumentStatus(), sizes::caption, colours::secondary } });
         refreshSettings();
-        if (tuningList.isShowing())
-            tuningList.set (c.tuningTable());
     }
 
 private:
@@ -796,9 +847,159 @@ private:
     TapCard presetCard { "Preset" };
     ButtonGrid fileButtons { 2 };
     juce::TextButton saveButton { "Save as preset..." }, deleteButton { "Delete preset" }, exportButton { "Export file..." },
-        importButton { "Import file..." }, tuneButton { "Tune holes" };
+        importButton { "Import file..." };
     InfoBlock status;
-    TuningList tuningList;
+};
+
+//==============================================================================
+// The Tuning workshop: the desktop tab's controls and table. The workshop measures the played pitch (and listens, for
+// the tuner) while this screen is shown.
+class PhoneUI::TuningScreen : public SettingsScreen
+{
+public:
+    explicit TuningScreen (PhoneUI& ownerToUse) : SettingsScreen (ownerToUse)
+    {
+        content.add (title, [] (int) { return 36; });
+        content.add (header, [this] (int w) { return header.preferredHeight (w); });
+        header.onHeightChange = [this] { resized(); };
+
+        addSection ("Tuning table", "Where the model plays each fingering, in cents from its target pitch, blown at the breath "
+                                    "below it. Tap a fingering to take it in or out of the tuning, or to set its weight or breath.", true);
+        rows.onHeightChange = [this] { resized(); };
+        rows.onTapRow = [this] (size_t row) { showRowActions (row); };
+        addMember (rows, [this] (int) { return rows.preferredHeight(); });
+
+        addSection ("Tuner", "Tune holes places the holes and sets the bore length so the notes play at their targets "
+                             "(a few seconds). Tune slide moves the tuning slide to where the notes are in tune on the whole.", true);
+        tuneButton.onClick = [this] { c.tuneHoles(); };
+        slideButton.onClick = [this] { c.tuneSlide(); };
+        tunerButtons.addAndMakeVisible (tuneButton);
+        tunerButtons.addAndMakeVisible (slideButton);
+        addMember (tunerButtons, [this] (int) { return tunerButtons.preferredHeight(); }, 4);
+        addMember (tunerStatus, [this] (int w) { return tunerStatus.preferredHeight (w); }, 4);
+        tunerStatus.onHeightChange = [this] { resized(); };
+        addSwitch ("Also tune hole sizes", c.crossFingerings(), c.crossFingerings().getTooltip());
+        addPicker ("L1's size (whistles)", c.topHoleBox());
+        addSwitch ("Also shape the head section", c.headShaping(), c.headShaping().getTooltip());
+
+        addSection ("Breath the notes are tuned at", "Learn my breath listens while you play WARBL: hold each note steady for a "
+                                                     "moment, both octaves, then stop. Without it, the positions below say where in "
+                                                     "each note's breath range it is tuned (0 % where it speaks).", false);
+        learnButton.onClick = [this] { c.toggleLearning(); };
+        forgetButton.onClick = [this] { c.forgetBreath(); };
+        breathButtons.addAndMakeVisible (learnButton);
+        breathButtons.addAndMakeVisible (forgetButton);
+        addMember (breathButtons, [this] (int) { return breathButtons.preferredHeight(); }, 4);
+        addMember (learnStatus, [this] (int w) { return learnStatus.preferredHeight (w); }, 4);
+        learnStatus.onHeightChange = [this] { resized(); };
+        addSwitch ("Tune at my learned breath", c.useLearnedBreath(), c.useLearnedBreath().getTooltip());
+        addSlider ("Low octave", c.lowOctaveBreath(), c.lowOctaveBreath().getTooltip());
+        addSlider ("Upper octaves", c.upperOctaveBreath(), {});
+
+        addSection ("Target pitches and keys", "The pitches the tuner aims at, and how much each key counts: a key's scale notes "
+                                               "count more, and with Best for the keys its chords set the targets.", false);
+        addPicker ("Target pitches", c.temperamentBox());
+        addSlider ("Toward equal temperament", c.towardEqual(), c.towardEqual().getTooltip());
+        for (const auto& key : c.keyWeights())
+            addSlider (key.name, *key.slider, {});
+        addMember (chords, [this] (int w) { return chords.preferredHeight (w); }, 8);
+        chords.onHeightChange = [this] { resized(); };
+
+        addSection ("Key and pitch standard", "What the table, the scale and Tune holes aim for. The sound never uses a chart: it "
+                                              "comes from the instrument's shape.", false);
+        addPicker ("Key", c.keyBox());
+        addPicker ("Octave", c.octaveBox());
+        addPicker ("Fingering chart", c.chartBox());
+        addSlider ("Pitch standard (A4)", c.pitchStandard(), c.pitchStandard().getTooltip());
+
+        addSection ("Tuner needle", "An old-fashioned tuner on the sound the model plays: the nearest note, the needle at its "
+                                    "cents from equal temperament, the green zone at the tuning's target.", false);
+        addSwitch ("Tuner on", c.tuner(), {});
+        addMember (needle, [] (int w) { return juce::jlimit (150, 240, w / 2); }, 4);
+
+        finishSections();
+
+        c.onTunerReading() = [safe = juce::Component::SafePointer<TuningScreen> (this)] (double hz, const juce::String& note, double cents, double target)
+        {
+            if (safe != nullptr)
+                safe->needle.setReading (hz, note, cents, target);
+        };
+    }
+
+    ~TuningScreen() override
+    {
+        c.onTunerReading() = nullptr;
+        c.setTuningShown (false);
+    }
+
+    void visibilityChanged() override { c.setTuningShown (isVisible()); }
+
+    void refresh() override
+    {
+        header.setLines ({ { c.tuningTitle(), sizes::body, colours::text, true }, { c.tuningSummary(), sizes::caption, colours::secondary } });
+        tunerStatus.setLines ({ { c.tunerStatus(), sizes::caption, colours::secondary } });
+        learnStatus.setLines ({ { c.learnStatus(), sizes::caption, colours::secondary } });
+        juce::StringArray chordLines;
+        chordLines.addLines (c.chords());
+        std::vector<InfoBlock::Line> lines { { "Chords as played: third and fifth from pure", sizes::caption, colours::secondary } };
+        for (const auto& line : chordLines)
+            if (line.isNotEmpty())
+                lines.push_back ({ line, sizes::body, colours::text });
+        chords.setLines (lines);
+        learnButton.setButtonText (c.isLearning() ? "Stop learning" : "Learn my breath");
+        forgetButton.setEnabled (c.hasLearnedBreath());
+        tuneButton.setEnabled (! c.isTuning());
+        slideButton.setEnabled (! c.isTuning());
+        needle.setActive (c.tuner().getToggleState());
+        refreshSettings();
+        if (rows.isShowing())
+            rows.set (c.tuningTable());
+    }
+
+private:
+    // A fingering's actions: in or out of the tuning, its weight, its breath.
+    void showRowActions (size_t row)
+    {
+        const auto& entries = rows.getEntries();
+        if (row >= entries.size())
+            return;
+        const auto e = entries[row];
+        enum { toggle = 1, weight, autoWeight, breath, autoBreath };
+        std::vector<ChoiceSheet::Item> items { { e.counts ? "Leave it out of the tuning" : "Use it in the tuning", toggle } };
+        if (e.counts)
+        {
+            items.push_back ({ "Set its weight... (now " + juce::String (e.weight, 2) + ")", weight });
+            if (e.weightSet)
+                items.push_back ({ "Weight from the keys again", autoWeight });
+        }
+        items.push_back ({ "Set its breath... (now " + (e.breath > 0.0 ? juce::String (juce::roundToInt (e.breath)) + " Pa" : juce::String ("none")) + ")", breath });
+        if (e.learnedBreath)
+            items.push_back ({ "Forget its breath (estimate it)", autoBreath });
+        owner.present (std::make_unique<ChoiceSheet> (e.note + "   " + TuningRows::symbols (e.pattern), items, 0, [this, row, e] (int id)
+        {
+            if (id == toggle)
+                c.toggleFingering (row);
+            else if (id == autoWeight)
+                c.setWeight (row, std::nan (""));
+            else if (id == autoBreath)
+                c.setBreath (row, 0.0);
+            else if (id == weight)
+                owner.present (std::make_unique<NameSheet> ("Weight", "How much the tuner counts " + e.note + ", from 0 (not at all) to 1 (as a "
+                                                            "note in every key you play).", juce::String (e.weight, 2),
+                                                            [this, row] (const juce::String& text) { c.setWeight (row, juce::jlimit (0.0, 1.0, text.getDoubleValue())); }));
+            else if (id == breath)
+                owner.present (std::make_unique<NameSheet> ("Breath", "The breath " + e.note + " is tuned at, in Pa (as the model gets it). It then "
+                                                            "counts as learned, and the tuning uses learned breaths.", e.breath > 0.0 ? juce::String (juce::roundToInt (e.breath)) : juce::String(),
+                                                            [this, row] (const juce::String& text) { if (text.getDoubleValue() > 0.0) c.setBreath (row, text.getDoubleValue()); }));
+        }));
+    }
+
+    Heading title { "Tuning", sizes::title };
+    InfoBlock header, tunerStatus, learnStatus, chords;
+    TuningRows rows;
+    ButtonGrid tunerButtons { 2 }, breathButtons { 2 };
+    juce::TextButton tuneButton { "Tune holes" }, slideButton { "Tune slide" }, learnButton { "Learn my breath" }, forgetButton { "Forget" };
+    TunerView needle;
 };
 
 //==============================================================================
@@ -1244,6 +1445,7 @@ PhoneUI::PhoneUI (std::unique_ptr<MainComponent> mainToShow) : main (std::move (
 
     screens[play] = std::make_unique<PlayScreen> (*this);
     screens[instrument] = std::make_unique<InstrumentScreen> (*this);
+    screens[tuning] = std::make_unique<TuningScreen> (*this);
     screens[room] = std::make_unique<RoomScreen> (*this);
     screens[sensors] = std::make_unique<SensorsScreen> (*this);
     screens[setup] = std::make_unique<SetupScreen> (*this);
@@ -1283,11 +1485,12 @@ void PhoneUI::showTab (int tab)
 
 void PhoneUI::present (std::unique_ptr<Sheet> newSheet)
 {
-    newSheet->dismiss = [this]
+    // Removes this sheet only: a choice can open the next sheet (e.g. a value to type) before this one goes.
+    newSheet->dismiss = [this, which = newSheet.get()]
     {
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<PhoneUI> (this)]
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<PhoneUI> (this), which]
         {
-            if (safe != nullptr)
+            if (safe != nullptr && safe->sheet.get() == which)
                 safe->sheet.reset();
         });
     };

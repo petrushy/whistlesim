@@ -93,6 +93,11 @@ public:
     {
         tunerButton.setToggleState (on, juce::sendNotification);
     }
+    // The iPhone's Tuning screen shows this page's controls while the page itself is hidden: measure and listen as if
+    // it were shown.
+    void setShownElsewhere (bool);
+    // Each tuner reading (as TunerView::setReading), for a tuner shown elsewhere.
+    std::function<void (double hz, const juce::String& note, double centsFromEqual, double targetCents)> onTunerReading;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -102,6 +107,8 @@ private:
     friend class DesktopControls;  // The iPhone screens use the tuner and the table
 
     void timerCallback() override;
+    bool active() const { return isShowing() || shownElsewhere; }  // Shown here or on the phone
+    bool shownElsewhere = false;
     void rebuildTable();
     void measurePlayedInBackground();
     void tuneHoles();

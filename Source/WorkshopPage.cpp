@@ -322,9 +322,9 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
 
     // The tuner.
     tuneButton.setTooltip ("Places the holes and sets the bore length so the notes play in tune (at the target pitches, for the key "
-                           "and reference A on the Instrument tab): it plays every note through the model, each at the middle "
-                           "of the breath it sounds at, aims the resonances to make up for how far the jet pulls each note, "
-                           "and repeats. Takes a few seconds.");
+                           "and reference A above): it plays every note through the model, each at the breath set below (or "
+                           "your learned breath), aims the resonances to make up for how far the jet pulls each note, and "
+                           "repeats. Takes a few seconds.");
     tuneButton.onClick = [this] { tuneHoles(); };
     bestSlideButton.setTooltip ("Moves the tuning slide (Instrument tab, Bore) to where the table's Slide tuned column has it");
     bestSlideButton.onClick = [this]
@@ -400,9 +400,10 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
         slider->setTextValueSuffix (" %");
         slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 20);
         slider->setScrollWheelEnabled (false);
-        slider->setTooltip ("Where in the pressures each note sounds at it is tuned: 0 % its softest breath, 100 % its strongest, 50 % "
-                            "the middle (a real whistle is blown about there). Lower: the notes play in tune at a softer breath "
-                            "(and go sharp blown harder). For notes without a learned breath.");
+        slider->setTooltip ("Where in the pressures each note sounds at it is tuned: 0 % where it speaks (within 15 dB of its "
+                            "loudest), 100 % its strongest. The defaults, 35 % and 10 %, are where a player blew the real Golden "
+                            "(its upper notes near the soft end). Lower: the notes play in tune at a softer breath (and go sharp "
+                            "blown harder). For notes without a learned breath.");
         slider->onValueChange = [this, slider]
         {
             auto goal = instrument.getGeometry().tuning;
@@ -480,7 +481,7 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
 
 void WorkshopPage::listen()
 {
-    const bool tunerOn = tunerButton.getToggleState() && isShowing();
+    const bool tunerOn = tunerButton.getToggleState() && active();
     audio.tunerListening = tunerOn || learning;
     heardHz = 0.0;
     if (! tunerOn && ! learning)
@@ -507,6 +508,8 @@ void WorkshopPage::listen()
     if (heardHz <= 0.0)
     {
         tunerView.setReading (0.0, {}, 0.0, 0.0);
+        if (onTunerReading != nullptr)
+            onTunerReading (0.0, {}, 0.0, 0.0);
         return;
     }
     const auto& g = instrument.getGeometry();
@@ -515,6 +518,15 @@ void WorkshopPage::listen()
     const int key = midiOf (instrument.lowestNoteHz(), g.referenceA);
     const double target = whistle::temperamentCents (g.tuning)[(size_t) (((midi - key) % 12 + 12) % 12)];
     tunerView.setReading (heardHz, noteName (heardHz, g.referenceA), (exact - midi) * 100.0, target);
+    if (onTunerReading != nullptr)
+        onTunerReading (heardHz, noteName (heardHz, g.referenceA), (exact - midi) * 100.0, target);
+}
+
+void WorkshopPage::setShownElsewhere (bool on)
+{
+    shownElsewhere = on;
+    if (on && ! playedValid && ! tuning)
+        countdown = 0;
 }
 
 void TunerView::setActive (bool on)
@@ -688,7 +700,7 @@ void WorkshopPage::instrumentChanged()
 
 void WorkshopPage::visibilityChanged()
 {
-    if (isShowing() && ! playedValid && ! tuning)
+    if (active() && ! playedValid && ! tuning)
         countdown = 0;
 }
 
@@ -699,7 +711,7 @@ void WorkshopPage::timerCallback()
         sampleBreath();
     // Only while the tab is shown: the table is costly to build, and the measurement keeps every core busy for about a
     // second. While hidden it stays dirty, and visibilityChanged builds it when the tab is shown.
-    if (! dirty || tuning || ! isShowing() || --countdown > 0)
+    if (! dirty || tuning || ! active() || --countdown > 0)
         return;
     dirty = false;
     rebuildTable();
