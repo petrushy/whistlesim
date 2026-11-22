@@ -120,6 +120,10 @@ public:
     std::atomic<uint64_t> blocksProcessed { 0 };  // Shows whether audio is running.
     std::atomic<bool> resting { false };          // Nothing to play: the model and the room are skipped (see the callback)
 
+    // The tuner (Tuning workshop): while listening, the model's own sound (before the room) is copied here.
+    std::atomic<bool> tunerListening { false };
+    int readTunerSamples (float* dest, int maxSamples);  // Message thread: the samples since the last call (up to max)
+
 private:
     void audioDeviceIOCallbackWithContext (const float* const*, int, float* const*, int, int,
                                            const juce::AudioIODeviceCallbackContext&) override;
@@ -170,6 +174,9 @@ private:
     int earDelayWrite = 0;
     void placeAtEars (int numSamples);
     double sampleRate = 48000.0;
+    static constexpr int kTunerFifoSize = 32768;
+    juce::AbstractFifo tunerFifo { kTunerFifoSize };
+    std::vector<float> tunerBuffer = std::vector<float> (kTunerFifoSize);
     int samplesSinceControls = 0;
     int quietSamples = 0;  // How long the output has stayed below the rest threshold
     uint32_t lastFrameTime = 0;  // Device timestamp of the last frame

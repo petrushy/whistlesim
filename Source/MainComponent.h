@@ -8,6 +8,30 @@
 #include "MonitorPage.h"
 #include "SensorsPage.h"
 
+// A tab page drawn bigger by a factor: laid out in a correspondingly smaller area, then scaled up. Owns the page.
+class ScaledPage : public juce::Component
+{
+public:
+    ScaledPage (juce::Component* p, std::function<float (juce::Rectangle<int>)> scaleFor) : page (p), scale (std::move (scaleFor))
+    {
+        addAndMakeVisible (*page);
+    }
+
+    void resized() override
+    {
+        const float s = juce::jmax (1.0f, scale (getLocalBounds()));
+        page->setTransform (juce::AffineTransform::scale (s));
+        page->setBounds (0, 0, juce::roundToInt (getWidth() / s), juce::roundToInt (getHeight() / s));
+    }
+
+    // The page sees the tab shown and hidden (it measures only while shown).
+    void visibilityChanged() override { page->setVisible (isVisible()); }
+
+private:
+    std::unique_ptr<juce::Component> page;
+    std::function<float (juce::Rectangle<int>)> scale;
+};
+
 class MainComponent : public juce::Component
 {
 public:

@@ -493,11 +493,25 @@ int main (int argc, char* argv[])
 
     if (mode == "played" || mode == "playtune")  // played [preset]: each note's pitch at the middle of its pressures; playtune: tune to that
     {
-        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
-        auto g = presets()[index];
-        const auto voicing = presetVoicing (index);
+        // A preset, or a .whistle file (e.g. one of the player's presets).
+        const juce::File file (juce::File::getCurrentWorkingDirectory().getChildFile (argc > 2 ? argv[2] : ""));
+        std::optional<Instrument> loaded;
+        if (argc > 2 && juce::String (argv[2]).endsWith (".whistle"))
+        {
+            juce::String error;
+            loaded = fromJson (file.loadFileAsString(), error);
+            if (! loaded)
+            {
+                std::printf ("Can't load %s: %s\n", argv[2], error.toRawUTF8());
+                return 1;
+            }
+        }
+        const auto index = (size_t) (argc > 2 && ! loaded ? presetArg (argv[2]) : 0);
+        auto g = loaded ? loaded->geometry : presets()[index];
+        const auto voicing = loaded ? loaded->voicing : presetVoicing (index);
         int passes = 3;
         bool shapeHead = true;  // head=0: holes and bore length only
+        bool cross = true;      // cross=0: hole sizes left (as the app's hole-size option off)
         for (int i = 3; i < argc; ++i)
         {
             const juce::String arg (argv[i]);
@@ -505,8 +519,16 @@ int main (int argc, char* argv[])
                 passes = arg.fromFirstOccurrenceOf ("=", false, false).getIntValue();
             if (arg == "head=0")
                 shapeHead = false;
+            if (arg == "cross=0")
+                cross = false;
+            if (arg == "chart=recorder" || arg == "chart=whistle")  // As choosing the chart in the app
+                std::printf ("Chart changed: %s\n", setChart (g, arg.endsWith ("recorder") ? FingeringChart::baroqueRecorder
+                                                                                            : FingeringChart::whistle).toRawUTF8());
         }
-        const double lowest = lowestNote (g);
+        double lowest = lowestNote (g);
+        for (int i = 3; i < argc; ++i)  // lowest=<Hz>: another key
+            if (juce::String (argv[i]).startsWith ("lowest="))
+                lowest = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         auto report = [&] (const Geometry& geometry, const std::vector<PlayedNote>& notes, const char* title)
         {
             std::printf ("\n%s, %s: played at the middle of each note's pressures\n  note      fingering  resonance   sounds at      played at     played   pull\n",
@@ -528,7 +550,7 @@ int main (int argc, char* argv[])
         if (mode == "playtune")
         {
             std::vector<PlayedNote> notes;
-            if (! tuneToPlayed (g, voicing, lowest, true, shapeHead, passes, &notes))
+            if (! tuneToPlayed (g, voicing, lowest, cross, shapeHead, passes, &notes))
             {
                 std::printf ("The tuner didn't converge\n");
                 return 1;

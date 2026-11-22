@@ -172,6 +172,54 @@ Openness ChartFingering::openness (const Geometry& g) const
     return open;
 }
 
+juce::String setChart (Geometry& g, FingeringChart chart)
+{
+    g.chart = chart;
+    auto& h = g.holes;
+    juce::StringArray opened, plugged;
+    auto open = [&] (int i, double position, double diameter)
+    {
+        if (h[(size_t) i].enabled)
+            return;
+        h[(size_t) i] = { true, std::max (0.25 * h[2].position, position), diameter };
+        opened.add (kHoleNames[(size_t) i]);
+    };
+    auto plug = [&] (int i)
+    {
+        if (! h[(size_t) i].enabled)
+            return;
+        h[(size_t) i].enabled = false;
+        plugged.add (kHoleNames[(size_t) i]);
+    };
+
+    if (chart == FingeringChart::baroqueRecorder)
+    {
+        // Starting places, kept from the holes there are: L1 a hole spacing above L2, the thumb a little above L1 on
+        // the back, R4 a spacing below R3. Tune holes then places them all.
+        if (! h[1].enabled)
+            open (1, h[2].position - (h[3].position - h[2].position), h[2].diameter);
+        open (0, h[1].position - 0.25 * (h[2].position - h[1].position), 0.8 * h[1].diameter);
+        if (! h[7].enabled)
+            open (7, std::min (h[6].position + (h[6].position - h[5].position), g.boreLength - 0.02), 0.85 * h[6].diameter);
+    }
+    else
+    {
+        plug (0);
+        int front = 0;
+        for (int i = 1; i < kNumHoles; ++i)
+            front += h[(size_t) i].enabled ? 1 : 0;
+        if (front > 6)
+            plug (h[7].enabled ? 1 : 7);
+    }
+
+    juce::String out;
+    if (! opened.isEmpty())
+        out << "opened " << opened.joinIntoString (", ");
+    if (! plugged.isEmpty())
+        out << (out.isEmpty() ? "" : "; ") << "plugged " << plugged.joinIntoString (", ");
+    return out;
+}
+
 std::string ChartFingering::holePattern (const Geometry& g) const
 {
     std::string out (kNumHoles, '-');
@@ -547,6 +595,8 @@ double tuningWeight (const Geometry& g, const ChartFingering& c)
 {
     if (! fingeringCounts (g, c))
         return 0.0;
+    if (const auto set = g.tuning.weights.find (fingeringId (c)); set != g.tuning.weights.end())
+        return set->second;  // The player's own
     double weight = 1.0;
     // A note in none of the keys that count (a fork or cross-fingering in another key) 0.3, one in all of them 1:
     // a player leans on the others anyway, and they shouldn't pull the keys' notes out of tune. The third octave

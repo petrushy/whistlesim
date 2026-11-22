@@ -40,6 +40,7 @@ int main()
         in.geometry.tuning.breathPosition = { { 0.4, 0.3 } };
         in.geometry.tuning.useLearnedBreath = true;
         in.geometry.tuning.learnedBreath["high A xxoooo"] = 1234.5;
+        in.geometry.tuning.weights["B xooooo"] = 0.25;
         in.voicing = { 0.031f, 0.55f, 0.4f, -3.5f, 0.7f, 0.3f, 0.6f, 0.45f, 2.5f, 0.8f };
         in.voicing.jetBend = 7.5f;
         in.voicing.breathCurve = 1.45f;
@@ -77,6 +78,7 @@ int main()
         CHECK (near (a.tuning.breathPosition[0], b.tuning.breathPosition[0]) && near (a.tuning.breathPosition[1], b.tuning.breathPosition[1]));
         CHECK (a.tuning.useLearnedBreath == b.tuning.useLearnedBreath && b.tuning.learnedBreath.size() == 1
                && near (b.tuning.learnedBreath.at ("high A xxoooo"), 1234.5));
+        CHECK (b.tuning.weights.size() == 1 && near (b.tuning.weights.at ("B xooooo"), 0.25));
         CHECK (near (a.windwayHeight, b.windwayHeight) && near (a.windwayLength, b.windwayLength) && near (a.windowLength, b.windowLength) && near (a.windowWidth, b.windowWidth)
                && near (a.edgeOffset, b.edgeOffset));
         CHECK (near (out->voicing.jetStrouhal, 0.031f) && near (out->voicing.jetConvection, 0.55f) && near (out->voicing.breathNoise, 0.4f)
