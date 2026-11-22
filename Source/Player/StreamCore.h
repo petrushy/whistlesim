@@ -25,6 +25,7 @@ struct ReceivedFrame
     bool batched = false;    // Came in a Bluetooth batch (several frames per message, arriving together)
 };
 
+// About 0.7 MB (the queues): keep it on the heap, or in an object that is (a Windows thread's stack is 1 MB).
 class StreamCore
 {
 public:

@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -77,7 +78,8 @@ int main()
 {
     std::printf ("Simulated WARBL through the stream and the player:\n");
     {
-        Rig rig;
+        auto rigOnHeap = std::make_unique<Rig>();  // ~1 MB: more than a Windows thread's stack
+        auto& rig = *rigOnHeap;
         rig.player.whistleModel.setGeometry (whistle::presets().front());
         rig.player.whistleModel.setVoicing (whistle::presetVoicing (0));
         rig.stream.setSimulating (true);
@@ -97,7 +99,8 @@ int main()
 
     std::printf ("Played from the screen, all holes closed (the reverb off):\n");
     {
-        Rig rig;
+        auto rigOnHeap = std::make_unique<Rig>();  // ~1 MB: more than a Windows thread's stack
+        auto& rig = *rigOnHeap;
         rig.player.reverb.wetDb = -100.0f;
         rig.player.whistleModel.setGeometry (whistle::presets().front());
         rig.player.whistleModel.setVoicing (whistle::presetVoicing (0));
@@ -115,7 +118,8 @@ int main()
 
     std::printf ("Test scale:\n");
     {
-        Rig rig;
+        auto rigOnHeap = std::make_unique<Rig>();  // ~1 MB: more than a Windows thread's stack
+        auto& rig = *rigOnHeap;
         const auto& g = whistle::presets().front();
         rig.player.whistleModel.setGeometry (g);
         rig.player.whistleModel.setVoicing (whistle::presetVoicing (0));
