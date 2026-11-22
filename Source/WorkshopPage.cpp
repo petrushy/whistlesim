@@ -334,6 +334,12 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
         instrument.applyGeometry (g);
     };
     crossButton.setToggleState (true, juce::dontSendNotification);
+    crossButton.onClick = [this]
+    {
+        auto goal = instrument.getGeometry().tuning;
+        goal.tuneHoleSizes = crossButton.getToggleState();  // Saved with the instrument
+        setGoal (goal);
+    };
     crossButton.setTooltip ("Lets the tuner set the sizes the chart marks: on a whistle L1's (below: for C natural or high D), with C# "
                             "still set by L1's position; on a recorder the thumb hole's, L3's, R1's and R3's (the forks and upper notes).");
     topHoleBox.addItem ("L1's size tunes C natural (oxxooo)", 1);
@@ -349,6 +355,12 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
     };
     addAndMakeVisible (topHoleBox);
     headButton.setToggleState (true, juce::dontSendNotification);
+    headButton.onClick = [this]
+    {
+        auto goal = instrument.getGeometry().tuning;
+        goal.shapeHead = headButton.getToggleState();
+        setGoal (goal);
+    };
     headButton.setTooltip ("The holes can't move a fingering's second octave against its first: the bore near the window does. "
                            "This lets the tuner widen or narrow the head section (Instrument tab, Bore) so both octaves play in "
                            "tune; an instrument without one gets a 30 mm head section. Off: holes and bore length only.");
@@ -531,6 +543,8 @@ void WorkshopPage::setShownElsewhere (bool on)
 
 void TunerView::setActive (bool on)
 {
+    if (on == active)
+        return;  // Callers may repeat it (the phone screen does, at every refresh): only a change resets the needle
     active = on;
     silentTicks = 1000;
     repaint();
@@ -671,6 +685,8 @@ void WorkshopPage::refreshGoalControls()
     lowPosition.setValue (g.tuning.breathPosition[0] * 100.0, juce::dontSendNotification);
     highPosition.setValue (g.tuning.breathPosition[1] * 100.0, juce::dontSendNotification);
     useLearnedButton.setToggleState (g.tuning.useLearnedBreath, juce::dontSendNotification);
+    crossButton.setToggleState (g.tuning.tuneHoleSizes, juce::dontSendNotification);
+    headButton.setToggleState (g.tuning.shapeHead, juce::dontSendNotification);
     useLearnedButton.setEnabled (! g.tuning.learnedBreath.empty());
     forgetButton.setEnabled (! g.tuning.learnedBreath.empty());
     if (! learning)
