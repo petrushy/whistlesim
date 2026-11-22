@@ -4,6 +4,7 @@
 #include "WhistleModel.h"
 
 #include <algorithm>
+#include <cmath>
 #include <set>
 
 namespace whistle

@@ -6,7 +6,9 @@
 
 #include "Common.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <string>
 #include <vector>
