@@ -701,7 +701,7 @@ void WorkshopPage::refreshGoalControls()
         keyRows[k].name.setText (keyName (kKeys[k]) + (kKeys[k] >= whistle::TuningGoal::kMinor ? " (minor)" : " (major)"), juce::dontSendNotification);
         keyRows[k].weight.setValue (g.tuning.keys[(size_t) kKeys[k]], juce::dontSendNotification);
     }
-    title.setText (g.name + ", in " + noteName (instrument.lowestNoteHz(), g.referenceA) + ", A = " + juce::String (g.referenceA, 1) + " Hz",
+    title.setText (juce::String (g.name) + ", in " + noteName (instrument.lowestNoteHz(), g.referenceA) + ", A = " + juce::String (g.referenceA, 1) + " Hz",
                    juce::dontSendNotification);
     resized();  // The custom boxes come and go
 }

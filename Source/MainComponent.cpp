@@ -95,7 +95,7 @@ MainComponent::MainComponent()
     {
         juce::StringArray lines;
         lines.add ("WhistleSim recording " + juce::Time::getCurrentTime().toISO8601 (true));
-        lines.add ("instrument " + juce::JSON::toString (whistle::toVar (instrument->getInstrument()), true));
+        lines.add ("instrument " + juce::String (whistle::toJson (instrument->getInstrument(), true)));
         lines.add ("sensors " + juce::JSON::toString (sensorsToVar (audio), true));
         return lines;
     };
@@ -115,8 +115,8 @@ MainComponent::MainComponent()
 
     if (auto* settings = properties.getUserSettings())
     {
-        juce::String error;
-        if (auto saved = whistle::fromJson (settings->getValue ("instrument"), error))
+        std::string error;
+        if (auto saved = whistle::fromJson (settings->getValue ("instrument").toStdString(), error))
             instrument->setInstrument (*saved);
         tabs.setCurrentTabIndex (settings->getIntValue ("tab", 0));
     }
@@ -166,7 +166,7 @@ void MainComponent::saveState()
         return;
 
     if (instrument != nullptr)
-        settings->setValue ("instrument", whistle::toJson (instrument->getInstrument()));
+        settings->setValue ("instrument", juce::String (whistle::toJson (instrument->getInstrument())));
     settings->setValue ("sensors", juce::JSON::toString (sensorsToVar (audio), true));
     settings->setValue ("reverbRoom", audio.reverb.getPresetIndex());
     settings->setValue ("reverbFile", audio.reverb.getCurrentFile().getFullPathName());

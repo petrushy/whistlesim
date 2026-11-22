@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <juce_core/juce_core.h>
+#include "Common.h"
 
 #include <array>
 #include <map>
@@ -99,7 +99,7 @@ struct TuningGoal
 
 struct Geometry
 {
-    juce::String name;
+    std::string name;
 
     // Bore: from the window to the open foot. The diameter changes linearly from top to foot.
     double boreLength = 0.27;
@@ -147,15 +147,15 @@ struct Geometry
             // bore at the joint.
             const double joint = slideJoint();
             const double made = at <= joint ? at : std::max (joint, at - slide);
-            const double t = juce::jlimit (0.0, 1.0, made / madeLength);
+            const double t = limit (0.0, 1.0, made / madeLength);
             return 0.5 * (boreDiameterTop + t * (boreDiameterFoot - boreDiameterTop));
         };
         if (headLength > 0.0 && x < headLength)
         {
-            const double straight = juce::jlimit (0.0, headLength, headStraightLength);
+            const double straight = limit (0.0, headLength, headStraightLength);
             if (x <= straight)
                 return 0.5 * headDiameter;
-            const double t = juce::jlimit (0.0, 1.0, (x - straight) / (headLength - straight));
+            const double t = limit (0.0, 1.0, (x - straight) / (headLength - straight));
             return 0.5 * headDiameter + t * (body (headLength) - 0.5 * headDiameter);
         }
         return body (x);
@@ -166,7 +166,7 @@ struct Geometry
     // Effective acoustic length of the window opening (its "plug" of air plus end corrections on both sides).
     double windowEffectiveLength() const
     {
-        const double equivalentRadius = std::sqrt (windowArea() / juce::MathConstants<double>::pi);
+        const double equivalentRadius = std::sqrt (windowArea() / kPi);
         return 0.001 + 1.7 * equivalentRadius;
     }
 
@@ -201,7 +201,7 @@ struct Geometry
 
 struct Material
 {
-    juce::String name;
+    std::string name;
     double wallThickness;
     double wallLoss;
 };
