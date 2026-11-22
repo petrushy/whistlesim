@@ -57,10 +57,11 @@ endif()
 # builds on its own. It embeds the built-in presets, the .whistle files in Presets/ (JSON, as Export writes them;
 # file-name order is the list's order; WhistleCheck code writes retuned values back into them).
 add_subdirectory(Source/Whistle)
-# The room reverb (Source/Reverb), also without JUCE.
+# The room reverb (Source/Reverb) and what plays (Source/Player: the stream and the audio path), also without JUCE.
 add_subdirectory(Source/Reverb)
+add_subdirectory(Source/Player)
 # The same optimisation and warnings as the JUCE targets (flags only: these add no JUCE code or include paths).
-foreach(LIBRARY WhistleEngine WhistleReverb)
+foreach(LIBRARY WhistleEngine WhistleReverb WhistlePlayer)
     target_link_libraries(${LIBRARY} PRIVATE juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 endforeach()
 
@@ -102,7 +103,7 @@ target_compile_definitions(WhistleSim PRIVATE
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:WhistleSim,JUCE_VERSION>")
 
 target_link_libraries(WhistleSim
-    PRIVATE WhistleEngine WhistleReverb
+    PRIVATE WhistlePlayer
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_devices
@@ -146,6 +147,11 @@ add_test(NAME JsonTest COMMAND JsonTest)
 add_executable(ReverbTest Tests/ReverbTest.cpp)
 target_link_libraries(ReverbTest PRIVATE WhistleReverb juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME ReverbTest COMMAND ReverbTest)
+
+# What plays, without JUCE: the simulated stream through the stream core and the player.
+add_executable(PlayerTest Tests/PlayerTest.cpp)
+target_link_libraries(PlayerTest PRIVATE WhistlePlayer juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+add_test(NAME PlayerTest COMMAND PlayerTest)
 
 # Virtual WARBL for trying the app or a synth without the instrument.
 juce_add_console_app(WarblSimulator PRODUCT_NAME "WARBL Simulator")

@@ -1,0 +1,628 @@
+#include "Player.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+
+namespace
+{
+float decibelsToGain (float db)  // -100 dB and below: silent (as JUCE's Decibels)
+{
+    return db > -100.0f ? std::pow (10.0f, db * 0.05f) : 0.0f;
+}
+} // namespace
+
+Player::Player (SpscQueue<ReceivedFrame, 1024>& frames) : frameQueue (frames)
+{
+    // Until WARBL reports its calibration, assume typical values.
+    for (int i = 0; i < warbl::kNumHoles; ++i)
+    {
+        baseline[(size_t) i] = 40;
+        covered[(size_t) i] = 700;
+    }
+    for (auto& o : manualOpenness)
+        o = 1.0f;
+
+    reverb.loadPreset (2);  // Chamber music hall
+}
+
+Player::~Player()
+{
+    if (scalePlanner.joinable())
+        scalePlanner.join();
+}
+
+void Player::setScaleInstrument (const whistle::Geometry& g, double lowestHz)
+{
+    for (int i = 0; i < whistle::kNumHoles; ++i)
+    {
+        const bool used = g.holes[(size_t) i].enabled;
+        holeRadius[(size_t) i] = used ? (float) (0.5 * g.holes[(size_t) i].diameter) : 0.0f;
+        holeEffectiveLength[(size_t) i] = used ? (float) g.holeEffectiveLength (i) : 0.0f;
+    }
+
+    const std::lock_guard<std::mutex> lock (scaleLock);
+    scaleGeometry = g;
+    scaleLowestHz = lowestHz;
+    scaleCacheValid = false;
+}
+
+void Player::playScale()
+{
+    if (scalePlaying)
+    {
+        scalePlaying = false;
+        return;
+    }
+    if (scalePlanning)
+        return;
+
+    const auto voicing = whistleModel.getVoicing();
+    whistle::Geometry g;
+    double lowest;
+    {
+        const std::lock_guard<std::mutex> lock (scaleLock);
+        // Voicing is set from sliders: compare to within a tiny tolerance.
+        auto same = [] (float a, float b) { return std::abs (a - b) < 1.0e-6f; };
+        const bool sameVoicing = same (voicing.jetStrouhal, scaleVoicing.jetStrouhal) && same (voicing.jetConvection, scaleVoicing.jetConvection)
+                                 && same (voicing.breathNoise, scaleVoicing.breathNoise) && same (voicing.windwayMass, scaleVoicing.windwayMass)
+                                 && same (voicing.windwayFriction, scaleVoicing.windwayFriction)
+                                 && same (voicing.vortexLoss, scaleVoicing.vortexLoss)
+                                 && same (voicing.attackChiff, scaleVoicing.attackChiff)
+                                 && same (voicing.fingerGapDamping, scaleVoicing.fingerGapDamping)
+                                 && same (voicing.jetGain, scaleVoicing.jetGain) && same (voicing.slowJetGrowth, scaleVoicing.slowJetGrowth)
+                                 && voicing.jetStages == scaleVoicing.jetStages && same (voicing.jetSpreading, scaleVoicing.jetSpreading)
+                                 && same (voicing.jetBend, scaleVoicing.jetBend);
+        if (scaleCacheValid && sameVoicing)
+        {
+            startScale (scaleCache);
+            return;
+        }
+        g = scaleGeometry;
+        lowest = scaleLowestHz;
+        scaleVoicing = voicing;
+    }
+
+    // Finding each note's pressure plays the model offline for a few seconds: do it in the background. The scale
+    // starts from that thread when it's ready (the steps reach the audio thread under scaleAudioLock).
+    scalePlanning = true;
+    if (scalePlanner.joinable())
+        scalePlanner.join();  // The last plan has finished (scalePlanning was false)
+    scalePlanner = std::thread ([this, g, voicing, lowest]
+    {
+        auto steps = whistle::planScale (g, voicing, lowest);
+        {
+            const std::lock_guard<std::mutex> lock (scaleLock);
+            scaleCache = steps;
+            scaleCacheValid = true;
+        }
+        startScale (std::move (steps));
+        scalePlanning = false;
+    });
+}
+
+void Player::startScale (std::vector<whistle::ScaleStep> steps)
+{
+    if (steps.empty())
+        return;
+    {
+        const whistle::SpinLock::ScopedLock lock (scaleAudioLock);
+        scaleSteps = std::move (steps);
+    }
+    scaleSample = 0;
+    scaleStepIndex = 0;
+    scalePlaying = true;
+}
+
+std::string Player::getScaleStatus() const
+{
+    if (scalePlanning)
+        return "Preparing the scale (finding each note's breath pressure)...";
+    if (! scalePlaying)
+        return {};
+    const std::lock_guard<std::mutex> lock (scaleLock);
+    const int i = scaleStepIndex.load();
+    if (i < 0 || i >= (int) scaleCache.size())
+        return {};
+    const auto& s = scaleCache[(size_t) i];
+    return "Scale: " + std::string (s.name) + " at " + std::to_string ((int) std::lround (s.pressure)) + " Pa (" + std::to_string (i + 1) + " of "
+           + std::to_string ((int) scaleCache.size()) + ")";
+}
+
+bool Player::scaleControls (whistle::Controls& controls, int numSamples)
+{
+    if (! scalePlaying)
+        return false;
+
+    const whistle::SpinLock::ScopedTryLock lock (scaleAudioLock);
+    if (! lock.isLocked())
+        return false;
+
+    const int position = scaleSample.load();
+    const int step = whistle::scaleControlsAt (scaleSteps, position / sampleRate, controls);
+    if (step < 0)
+    {
+        scalePlaying = false;
+        scaleStepIndex = -1;
+        return true;  // Breath off
+    }
+
+    scaleStepIndex = step;
+    scaleSample = position + numSamples;
+    return true;
+}
+
+void Player::setCalibration (const warbl::DeviceInfo& info)
+{
+    for (int i = 0; i < warbl::kNumHoles; ++i)
+    {
+        baseline[(size_t) i] = info.baseline[(size_t) i];
+        covered[(size_t) i] = info.covered[(size_t) i];
+    }
+    ambient14 = info.ambientPressure;
+    resetHoleJumpFilter = true;
+}
+
+std::string Player::calibrationText() const
+{
+    std::string text ("calibration baseline");
+    for (const auto& b : baseline)
+        text += " " + std::to_string (b.load());
+    text += " covered";
+    for (const auto& c : covered)
+        text += " " + std::to_string (c.load());
+    char perCount[32];
+    std::snprintf (perCount, sizeof (perCount), "%.6f", (double) kPascalPerCount);
+    text += " ambient14 " + std::to_string (ambient14.load()) + " pascal_per_count " + perCount;
+    return text;
+}
+
+response::Breath Player::breathResponse() const
+{
+    return { breathInputMin.load(), breathInputMax.load(), breathCurve.load(), breathOutputMax.load() };
+}
+
+response::Hole Player::holeResponse() const
+{
+    return { holeOpenBelow.load(), holeClosedAt.load(), holeCurve.load(), holeSCurve.load(), holeCentre.load(),
+             holeFingerHeight.load(), holeFingerRange.load() };
+}
+
+whistle::Controls Player::controlsFromFrame (const warbl::SensorFrame& frame)
+{
+    const auto holes = holeResponse();
+    const auto thumb = thumbResponse();
+    whistle::Controls c;
+
+    // The hole jump filter (see holdHoleJumps), on fresh hole readings only: a frame without new readings repeats
+    // the last ones and can neither confirm nor refute a jump.
+    auto frameHoles = frame.holes;
+    if (resetHoleJumpFilter.exchange (false))
+    {
+        for (int s = 0; s < warbl::kNumHoles; ++s)
+            acceptedHole[(size_t) s] = frame.holes[(size_t) s];
+        holeJumpPending.fill (false);
+    }
+    else if (holdHoleJumps.load())
+    {
+        for (int s = 0; s < warbl::kNumHoles; ++s)
+        {
+            auto& accepted = acceptedHole[(size_t) s];
+            auto& pending = holeJumpPending[(size_t) s];
+            if (frame.holesUpdated())
+            {
+                if (std::abs ((int) frame.holes[(size_t) s] - accepted) > kHoleJumpCounts && ! pending)
+                {
+                    pending = true;  // Hold it this once
+                    heldHoleJumps.fetch_add (1, std::memory_order_relaxed);
+                }
+                else
+                {
+                    pending = false;
+                    accepted = frame.holes[(size_t) s];
+                }
+            }
+            frameHoles[(size_t) s] = (uint16_t) accepted;
+        }
+    }
+    else
+    {
+        for (int s = 0; s < warbl::kNumHoles; ++s)
+            acceptedHole[(size_t) s] = frame.holes[(size_t) s];
+    }
+    for (int hole = 0; hole < whistle::kNumHoles; ++hole)
+    {
+        const auto sensor = (size_t) whistle::kSensorForHole[(size_t) hole];
+        const float span = (float) std::max (1, covered[sensor].load() - baseline[sensor].load());
+        const float coverage = ((float) frameHoles[sensor] - (float) baseline[sensor].load()) / span;
+        measuredCoverage[(size_t) hole] = coverage;
+
+        // A finger landing: its height above the hole from the same infrared law as the finger-height response
+        // (d = range x (1 / sqrt(coverage) - 1)), its speed over the last three fresh readings, once per landing: it
+        // must lift (coverage under 0.7) before it can land again, so a resting finger's sensor noise can't.
+        if (frame.holesUpdated() && holeRadius[(size_t) hole].load() > 0.0f)
+        {
+            const float closedAt = hole == 0 && thumb.own ? thumb.closedAt : holes.closedAt;
+            const float x = std::clamp (coverage / std::max (0.1f, closedAt), 0.02f, 1.0f);
+            const float height = holeFingerRange.load() * 0.001f * (1.0f / std::sqrt (x) - 1.0f);
+            auto& past = fingerHeights[(size_t) hole];
+            if (x < 0.7f)
+                fingerArmed[(size_t) hole] = true;
+            else if (x >= 0.95f && fingerArmed[(size_t) hole])
+            {
+                fingerArmed[(size_t) hole] = false;
+                whistleModel.fingerLands (hole, std::min (2.0f, (past[2] - height) / (3.0f * (float) frameInterval)));
+            }
+            past = { height, past[0], past[1], past[2] };
+        }
+        c.openness[(size_t) hole] = 1.0f - (hole == 0 && thumb.own ? thumb.closedness (coverage) : holes.closedness (coverage, fingerHole (hole)));
+    }
+
+    // The bell sensor; the model only uses it if the instrument lets it close the foot.
+    {
+        const auto sensor = (size_t) whistle::kBellSensor;
+        const float span = (float) std::max (1, covered[sensor].load() - baseline[sensor].load());
+        const float coverage = ((float) frameHoles[sensor] - (float) baseline[sensor].load()) / span;
+        measuredBellCoverage = coverage;
+        c.footOpenness = 1.0f - holes.closedness (coverage);
+    }
+
+    // Elevation: the angle of WARBL's long axis to the horizontal (see SensorFrame::elevationDegrees), unaffected
+    // by rolling the instrument about its axis. Smoothed over ~100 ms so shaking or bumping doesn't wobble the tone.
+    if (const auto measuredElevation = frame.elevationDegrees())
+    {
+        const float elevation = *measuredElevation;
+        const float share = (float) std::clamp (frameInterval / 0.1, 0.001, 1.0);
+        smoothedTilt = haveTilt ? smoothedTilt + share * (elevation - smoothedTilt) : elevation;
+        haveTilt = true;
+        measuredTilt = smoothedTilt;
+    }
+    const auto tilt = tiltResponse();
+    c.edgeShift = tilt.edgeShiftMm (smoothedTilt) * 0.001f;
+    c.spreadingShift = tilt.spreadingShift (smoothedTilt);
+    c.noiseGain = decibelsToGain (tilt.noiseDb (smoothedTilt));
+
+    const float measured = std::max (0.0f, (float) ((int) frame.pressure - ambient14.load()) * kPascalPerCount);
+    measuredPressure = measured;
+    const auto breath = breathResponse();
+    c.mouthPressure = response::instrumentBreath (breath.map (measured), breath.outputMax, whistleModel.breathScale.load(), whistleModel.breathCurve.load());
+    return c;
+}
+
+void Player::placeAtEars (int numSamples)
+{
+    // Each source as heard from its direction (azimuth, from the reverb's spread): the far ear hears it later
+    // (spherical head, Woodworth: a/c (theta + sin theta), a = 8.75 cm) and a little quieter (head shadow,
+    // about 6 dB at the side). The room responses start at each ear's direct sound, so they get the same signals.
+    constexpr double headRadius = 0.0875, speedOfSound = 343.0;
+    const float* sources[2] = { windowDry.data(), bodyDry.data() };
+    float delay[2][2], gain[2][2];  // [source][ear], samples
+    for (int s = 0; s < 2; ++s)
+    {
+        const double azimuth = reverb.sourceAzimuth (s), side = std::abs (azimuth);
+        const int far = azimuth < 0.0 ? 1 : 0;  // Source on the left: the right ear is the far one
+        delay[s][far] = (float) (headRadius / speedOfSound * (side + std::sin (side)) * sampleRate);
+        delay[s][1 - far] = 0.0f;
+        gain[s][far] = (float) std::pow (10.0, -6.0 * std::sin (side) / 20.0);
+        gain[s][1 - far] = 1.0f;
+    }
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        for (int s = 0; s < 2; ++s)
+            earDelay[(size_t) s][(size_t) earDelayWrite] = sources[s][i];
+        for (int s = 0; s < 2; ++s)
+            for (int e = 0; e < 2; ++e)
+            {
+                const float d = std::min (delay[s][e], (float) kEarDelaySize - 2.0f);
+                const int whole = (int) d;
+                const float frac = d - (float) whole;
+                const auto& line = earDelay[(size_t) s];
+                const float a = line[(size_t) ((earDelayWrite - whole + kEarDelaySize) % kEarDelaySize)];
+                const float b = line[(size_t) ((earDelayWrite - whole - 1 + kEarDelaySize) % kEarDelaySize)];
+                ears[(size_t) (2 * s + e)][(size_t) i] = gain[s][e] * (a + frac * (b - a));
+            }
+        earDelayWrite = (earDelayWrite + 1) % kEarDelaySize;
+    }
+}
+
+void Player::prepare (double rate, int bufferSize)
+{
+    sampleRate = rate;
+    const int maxBlock = std::max (bufferSize, 4096);
+    windowDry.assign ((size_t) maxBlock, 0.0f);
+    bodyDry.assign ((size_t) maxBlock, 0.0f);
+    for (auto& e : ears)
+        e.assign ((size_t) maxBlock, 0.0f);
+    dryCapacity = maxBlock;
+
+    reverb.prepare (rate, maxBlock);
+    whistleModel.prepare (rate);
+
+    // The limiter looks 1.5 ms ahead (that much more output latency).
+    limiterDelayLength = std::max (1, (int) std::lround (0.0015 * rate));
+    for (auto& d : limiterDelay)
+        d.assign ((size_t) limiterDelayLength, 0.0f);
+    limiterWrite = 0;
+    limiterEnvelope = 0.0f;
+    limiterPeakHold = 0;
+    limiterGain = 1.0f;
+}
+
+int Player::readTunerSamples (float* dest, int maxSamples)
+{
+    // Older samples than fit are skipped: the tuner wants the latest.
+    const int write = tunerWrite.load (std::memory_order_acquire);
+    int read = tunerRead.load (std::memory_order_relaxed);
+    read = std::max (read, write - maxSamples);
+    const int count = write - read;
+    for (int i = 0; i < count; ++i)
+        dest[i] = tunerBuffer[(size_t) ((read + i) % kTunerFifoSize)];
+    tunerRead.store (write, std::memory_order_release);
+    return count;
+}
+
+void Player::process (float* left, float* right, int numSamples, double nowMs)
+{
+    blocksProcessed++;
+
+    float* const outputs[2] = { left, right };
+    std::fill (left, left + numSamples, 0.0f);
+    std::fill (right, right + numSamples, 0.0f);
+
+    // Apply every frame that has arrived as soon as possible: no de-jitter buffer, lowest latency. Frames that
+    // arrive together (USB and MIDI can deliver them in bunches) are spread over this block, each reached within
+    // its share of it, so a short finger lift or breath gap isn't lost by jumping straight to the last frame.
+    constexpr int kMaxBunch = 16;
+    std::array<whistle::Controls, kMaxBunch> bunch;
+    ReceivedFrame received;
+    int count = 0;
+    whistle::Controls controls;
+    bool haveControls = false;
+    while (frameQueue.pop (received))
+    {
+        controls = controlsFromFrame (received.frame);
+        // WARBL's frame interval (2 ms, or 1 ms with the 1 kHz stream loop), from its own timestamps: each frame's
+        // controls are reached over that time, so the model follows the sensors without steps or extra lag.
+        if (haveFrameTime)
+        {
+            const auto ticks = (received.frame.timestamp - lastFrameTime) & ((1u << warbl::kTimestampBits) - 1);
+            const double interval = ticks / warbl::kDeviceTicksPerSecond;
+            if (interval > 0.0003 && interval < 0.01)
+                frameInterval += 0.1 * (interval - frameInterval);
+        }
+        lastFrameTime = received.frame.timestamp;
+        haveFrameTime = true;
+
+        if (received.batched && smoothBluetooth)
+        {
+            // Playout time: the frame's device time plus the smallest arrival lag seen (the clocks' offset plus the
+            // fastest delivery), plus the spread of lags (how late a frame in a burst can be), plus a margin.
+            const double lag = received.arrivalMs - received.deviceMs;
+            minArrivalLag = std::min (minArrivalLag, lag);
+            arrivalLagSpread = std::max (arrivalLagSpread, lag - minArrivalLag);
+            const double delay = std::min (40.0, arrivalLagSpread + 1.0);
+            bluetoothDelayMs = (float) delay;
+            if (pendingCount == (int) pendingFrames.size())  // Full: drop the oldest
+            {
+                pendingHead = (pendingHead + 1) % (int) pendingFrames.size();
+                --pendingCount;
+            }
+            pendingFrames[(size_t) ((pendingHead + pendingCount) % (int) pendingFrames.size())] = { received.deviceMs + minArrivalLag + delay, controls };
+            ++pendingCount;
+            continue;
+        }
+
+        bunch[(size_t) (count % kMaxBunch)] = controls;  // Beyond kMaxBunch, the oldest are dropped (stale anyway)
+        haveControls = true;
+        ++count;
+    }
+    int bunchSize = std::min (count, kMaxBunch);
+
+    // Bluetooth frames due in this block, at their place in it.
+    const double blockStartMs = nowMs;
+    const double blockMs = numSamples * 1000.0 / sampleRate;
+    minArrivalLag += 0.001 * blockMs;                        // Follows a slowly drifting clock offset upwards too
+    arrivalLagSpread *= std::exp (-blockMs / 5000.0);        // Forgets a past burst over a few seconds
+    constexpr int kMaxDue = 32;
+    std::array<std::pair<int, whistle::Controls>, kMaxDue> due;
+    int dueCount = 0;
+    while (pendingCount > 0 && pendingFrames[(size_t) pendingHead].playoutMs <= blockStartMs + blockMs)
+    {
+        const auto& p = pendingFrames[(size_t) pendingHead];
+        const int offset = whistle::limit (0, numSamples - 1, (int) ((p.playoutMs - blockStartMs) * sampleRate / 1000.0));
+        if (dueCount < kMaxDue)
+            due[(size_t) dueCount++] = { offset, p.controls };
+        controls = p.controls;
+        haveControls = true;
+        pendingHead = (pendingHead + 1) % (int) pendingFrames.size();
+        --pendingCount;
+    }
+
+    if (scaleControls (controls, numSamples))
+    {
+        haveControls = true;
+        bunchSize = 0;
+        dueCount = 0;
+    }
+    else if (manualPlay)
+    {
+        for (int i = 0; i < whistle::kNumHoles; ++i)
+            controls.openness[(size_t) i] = manualOpenness[(size_t) i].load();
+        controls.mouthPressure = manualPressure.load();
+        controls.footOpenness = manualFootOpenness.load();
+        haveControls = true;
+        bunchSize = 0;
+        dueCount = 0;
+    }
+
+    // If frames stop arriving (stream off, cable pulled), stop blowing rather than hold the last breath.
+    if (! haveControls)
+    {
+        samplesSinceControls += numSamples;
+        if (samplesSinceControls > (int) (0.05 * sampleRate) && lastControls.mouthPressure > 0.0f)
+        {
+            controls = lastControls;
+            controls.mouthPressure = 0.0f;
+            haveControls = true;
+        }
+    }
+
+    if (haveControls)
+    {
+        samplesSinceControls = 0;
+        lastControls = controls;
+        if (bunchSize < 2 && dueCount == 0)
+            whistleModel.setControls (controls, frameInterval);
+        for (int i = 0; i < whistle::kNumHoles; ++i)
+            shownOpenness[(size_t) i] = controls.openness[(size_t) i];
+        shownFootOpenness = controls.footOpenness;
+        shownPressure = controls.mouthPressure;
+    }
+
+    if (count > maxFramesPerBlock.load())
+        maxFramesPerBlock = count;
+
+    if (numSamples > dryCapacity)
+        return;
+
+    // Rest: with no breath, no finger landing, and the sound (reverb tail included) below -100 dBFS for half a
+    // second, skip the model and the room and play silence. They otherwise cost as much computing silence as
+    // playing (on an iPhone that was a lot of battery for an app left open). Breath, the scale or manual play (all
+    // give a mouth pressure) or a finger landing on a hole (it sounds without breath) wake it within the block:
+    // the model and the room carry on from the silent state they rested in. The landing is detected above, from
+    // the frames, so its tap starts in this block rather than playing late at the next breath.
+    const bool breathing = haveControls ? controls.mouthPressure > 0.0f : lastControls.mouthPressure > 0.0f;
+    if (breathing || (whistleEnabled && whistleModel.isTapping()))  // A tap only advances while the model runs
+        quietSamples = 0;
+    const bool rest = quietSamples > (int) (0.5 * sampleRate);
+    resting.store (rest, std::memory_order_relaxed);
+    if (rest)
+        return;  // Silence (a recording of the output keeps its timing)
+
+    // Instrument as two sources -> placed at the two ears (dry) + room reverb for each.
+    std::fill (windowDry.begin(), windowDry.begin() + numSamples, 0.0f);
+    std::fill (bodyDry.begin(), bodyDry.begin() + numSamples, 0.0f);
+    if (whistleEnabled)
+    {
+        if (dueCount > 0)
+        {
+            // Bluetooth frames at their own times: each takes over at its offset, reached over one frame interval.
+            int from = 0;
+            for (int i = 0; i < dueCount; ++i)
+            {
+                const int at = std::max (from, due[(size_t) i].first);
+                if (at > from)
+                    whistleModel.render (windowDry.data() + from, bodyDry.data() + from, at - from);
+                whistleModel.setControls (due[(size_t) i].second, frameInterval);
+                from = at;
+            }
+            if (from < numSamples)
+                whistleModel.render (windowDry.data() + from, bodyDry.data() + from, numSamples - from);
+        }
+        else if (bunchSize >= 2)
+        {
+            // Oldest first: frame i takes over at i/n of the block and is reached by the end of its share.
+            const int oldest = count - bunchSize;
+            for (int i = 0; i < bunchSize; ++i)
+            {
+                const int from = i * numSamples / bunchSize, to = (i + 1) * numSamples / bunchSize;
+                whistleModel.setControls (bunch[(size_t) ((oldest + i) % kMaxBunch)], (to - from) / sampleRate);
+                whistleModel.render (windowDry.data() + from, bodyDry.data() + from, to - from);
+            }
+        }
+        else
+        {
+            whistleModel.render (windowDry.data(), bodyDry.data(), numSamples);
+        }
+    }
+
+    if (tunerListening.load (std::memory_order_relaxed))
+    {
+        // Only as much as there's room for (the reader hasn't taken the rest yet), as a FIFO.
+        const int write = tunerWrite.load (std::memory_order_relaxed);
+        const int space = kTunerFifoSize - (write - tunerRead.load (std::memory_order_acquire));
+        const int toCopy = std::min (numSamples, space);
+        for (int i = 0; i < toCopy; ++i)
+            tunerBuffer[(size_t) ((write + i) % kTunerFifoSize)] = windowDry[(size_t) i] + bodyDry[(size_t) i];
+        tunerWrite.store (write + toCopy, std::memory_order_release);
+    }
+
+    // Headroom: 5 dB below the model's own level (Output level 0 dB), before the room and the limiter. Played
+    // loudly, with the reverb on top, the output otherwise sat at the limiter's ceiling 70-98 % of the time.
+    constexpr float headroom = 0.5623f;  // -5 dB
+    for (int i = 0; i < numSamples; ++i)
+    {
+        windowDry[(size_t) i] *= headroom;
+        bodyDry[(size_t) i] *= headroom;
+    }
+
+    placeAtEars (numSamples);
+    for (int i = 0; i < numSamples; ++i)
+    {
+        outputs[0][i] = ears[0][(size_t) i] + ears[2][(size_t) i];
+        outputs[1][i] = ears[1][(size_t) i] + ears[3][(size_t) i];
+    }
+    reverb.process (ears[0].data(), ears[1].data(), ears[2].data(), ears[3].data(), outputs[0], outputs[1], numSamples);
+
+    // Output limiter: the model can get louder than full scale (a hard-blown upper register, plus the reverb), and
+    // the device would cut the peaks off, which sounds broken. Instead the level is turned down when a peak would
+    // pass -1 dBFS and comes back over ~150 ms. The gain must not jump: turned down at once on every new peak (as
+    // before 2026-11-10), a held note at the ceiling had its gain stepped ~175 times a second, up to 0.7 dB within a
+    // sample, as the breath noise's peaks poked above the last: a metallic "trrrr". So the peak is held for 250 ms
+    // and falls back over ~0.5 s (through a held note the gain hardly moves: ~4 small changes a second, against
+    // ~175 steps), and the output is delayed 1.5 ms so the gain can come down smoothly before a peak arrives (time
+    // constant a sixth of that: within 0.3 % in time). Once the peak has fallen, the gain recovers over ~50 ms.
+    {
+        constexpr float ceiling = 0.89f;  // -1 dBFS
+        const float fs = (float) sampleRate;
+        const float release = 1.0f - std::exp (-1.0f / (0.5f * fs));
+        const float attack = 1.0f - std::exp (-6.0f / (float) limiterDelayLength);
+        const float recover = 1.0f - std::exp (-1.0f / (0.05f * fs));
+        const int holdSamples = (int) (0.25f * fs);
+        float leastGain = 1.0f;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float peak = std::max (std::abs (left[i]), right != nullptr ? std::abs (right[i]) : 0.0f);
+            if (peak >= limiterEnvelope)
+            {
+                limiterEnvelope = peak;
+                limiterPeakHold = holdSamples;
+            }
+            else if (limiterPeakHold > 0)
+                --limiterPeakHold;
+            else
+                limiterEnvelope += release * (peak - limiterEnvelope);
+            const float target = limiterEnvelope > ceiling ? ceiling / limiterEnvelope : 1.0f;
+            limiterGain += (target < limiterGain ? attack : recover) * (target - limiterGain);
+
+            // Out: the sample from 1.5 ms ago, at the gain that has had that long to come down for it.
+            const float delayedLeft = limiterDelay[0][(size_t) limiterWrite];
+            limiterDelay[0][(size_t) limiterWrite] = left[i];
+            left[i] = delayedLeft * limiterGain;
+            if (right != nullptr)
+            {
+                const float delayedRight = limiterDelay[1][(size_t) limiterWrite];
+                limiterDelay[1][(size_t) limiterWrite] = right[i];
+                right[i] = delayedRight * limiterGain;
+            }
+            limiterWrite = limiterWrite + 1 < limiterDelayLength ? limiterWrite + 1 : 0;
+            leastGain = std::min (leastGain, limiterGain);
+        }
+        const float reductionDb = -20.0f * std::log10 (leastGain);
+        limiterHoldSamples -= numSamples;
+        if (reductionDb >= limiterHeldDb || limiterHoldSamples <= 0)
+        {
+            limiterHeldDb = reductionDb;
+            limiterHoldSamples = (int) (2.0 * sampleRate);
+        }
+        limiterReductionDb.store (limiterHeldDb, std::memory_order_relaxed);
+    }
+
+    float outputPeak = 0.0f;
+    for (int ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < numSamples; ++i)
+            outputPeak = std::max (outputPeak, std::abs (outputs[ch][i]));
+    constexpr float restThreshold = 1.0e-5f;  // -100 dBFS
+    quietSamples = outputPeak < restThreshold ? quietSamples + numSamples : 0;
+}

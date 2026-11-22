@@ -352,7 +352,7 @@ public:
         reverb.refresh();
 
         const auto scaleStatus = audio.getScaleStatus();
-        scaleButton.setButtonText (audio.isScaleActive() ? "Stop scale" : (scaleStatus.isNotEmpty() ? "Preparing..." : "Play scale"));
+        scaleButton.setButtonText (audio.isScaleActive() ? "Stop scale" : (! scaleStatus.empty() ? "Preparing..." : "Play scale"));
         if (c.isRecording())
         {
             recordButton.setButtonText ("Stop  " + juce::String (c.recordingSeconds(), 0) + " s");
