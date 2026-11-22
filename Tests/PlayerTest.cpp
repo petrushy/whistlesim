@@ -153,7 +153,8 @@ int main()
         rig.stream.setSimulating (true);
         Recorder recorder;
         const auto folder = std::filesystem::temp_directory_path() / "whistlesim-player-test";
-        std::filesystem::remove_all (folder);
+        std::error_code ignored;
+        std::filesystem::remove_all (folder, ignored);
         const bool started = recorder.start (folder.string(), kRate, { "WhistleSim recording " + Recorder::isoTime(), "sensors " + sensorsToText (rig.player) });
         check (started, "the files open", 0.0);
         // As the apps do: the audio from the audio callback, the frames from the UI queue.
@@ -197,6 +198,8 @@ int main()
             else if (line.rfind ("device_ms", 0) != 0)
                 ++rows;
         }
+        wav.close();
+        csv.close();  // Before removing the folder: Windows won't delete open files
         check (rows > 950 && rows < 1050, "a CSV row per frame (500 a second)", rows);
         check (sensorsLine && audioStart, "the header's sensor settings and the audio's start", comments);
 
@@ -206,7 +209,8 @@ int main()
         rig.player.tiltEnabled = true;
         check (sensorsFromText (sensorsToText (rig.player), other->player) && other->player.breathCurve.load() == 51.0f && other->player.tiltEnabled.load(),
                "sensor settings as text, and back", other->player.breathCurve.load());
-        std::filesystem::remove_all (folder);
+        std::error_code ignored;
+        std::filesystem::remove_all (folder, ignored);
     }
 
     std::printf (failures == 0 ? "All player tests passed\n" : "%d failures\n", failures);
