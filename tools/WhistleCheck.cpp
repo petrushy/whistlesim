@@ -242,6 +242,7 @@ static void windwayArgs (int argc, char* argv[], int from, Geometry& g)
         if (arg.startsWith ("friction=")) windwayFriction = (float) value;
         if (arg.startsWith ("windway=")) g.windwayLength = value * 0.001;
         if (arg.startsWith ("edge=")) g.edgeOffset = value * 0.001;
+        if (arg.startsWith ("wallloss=")) g.wallLoss = value;  // The bore's wall losses (1 = smooth)
         if (arg.startsWith ("vortex=")) vortexArg = (float) value;
         if (arg.startsWith ("windowloss=")) windowLossArg = value > 0.5;
         if (arg.startsWith ("q=")) jetQ = (float) value;
@@ -3757,10 +3758,13 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "passive")  // passive [preset]: the time-domain bore against the frequency-domain calculation, jet off
+    if (mode == "passive")  // passive [preset] [wallloss=x]: the time-domain bore against the frequency-domain calculation, jet off
     {
         const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
-        const auto& g = presets()[index];
+        auto g = presets()[index];
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("wallloss="))
+                g.wallLoss = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         std::printf ("%s: passive resonances (jet off). An impulse at the window; the model's admittance U/p there\n"
                      "against Acoustics' 1/Z. Per resonance: frequency (Acoustics), the model's offset in cents,\n"
                      "Q (Acoustics / model) and the model's peak height relative to Acoustics (dB).\n\n", g.name.toRawUTF8());
