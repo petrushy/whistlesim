@@ -60,10 +60,18 @@ juce_add_binary_data(WhistlePresets HEADER_NAME PresetData.h NAMESPACE PresetDat
 
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
 # Not a WARBL product, so the company and bundle ID are the project's own.
+# The icon (Icons/WhistleSim.svg): a whistle standing upright, brass on navy. iOS rounds the corners itself and wants
+# no transparency; the Mac's is drawn in a rounded square with a margin, as Mac icons are.
+if (WHISTLESIM_IOS)
+    set(WHISTLESIM_ICON "${CMAKE_CURRENT_SOURCE_DIR}/Icons/WhistleSim-ios.png")
+else()
+    set(WHISTLESIM_ICON "${CMAKE_CURRENT_SOURCE_DIR}/Icons/WhistleSim-mac.png")
+endif()
 juce_add_gui_app(WhistleSim
     PRODUCT_NAME "WhistleSim"
     COMPANY_NAME "WhistleSim"
     BUNDLE_ID "io.github.petrushy.whistlesim"
+    ICON_BIG "${WHISTLESIM_ICON}"
     ${WHISTLESIM_IOS_OPTIONS})
 
 target_sources(WhistleSim PRIVATE
