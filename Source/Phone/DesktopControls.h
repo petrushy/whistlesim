@@ -89,6 +89,44 @@ public:
         return groups;
     }
 
+    // The Tuning workshop (the desktop's tab): its controls, its texts, and the table's row actions.
+    void setTuningShown (bool shown) { workshop().setShownElsewhere (shown); }
+    juce::ComboBox& temperamentBox() { return workshop().temperamentBox; }
+    juce::Slider& towardEqual() { return workshop().towardEqual; }
+    std::vector<Setting> keyWeights()
+    {
+        std::vector<Setting> keys;
+        for (auto& row : workshop().keyRows)
+            keys.push_back ({ row.name.getText(), &row.weight });
+        return keys;
+    }
+    juce::ComboBox& topHoleBox() { return workshop().topHoleBox; }
+    juce::ToggleButton& headShaping() { return workshop().headButton; }
+    void tuneSlide() { workshop().bestSlideButton.triggerClick(); }
+    bool isTuning() { return workshop().tuning; }
+    void toggleLearning() { workshop().learnButton.triggerClick(); }
+    bool isLearning() { return workshop().learning; }
+    void forgetBreath() { workshop().forgetButton.triggerClick(); }
+    bool hasLearnedBreath() { return ! geometry().tuning.learnedBreath.empty(); }
+    juce::ToggleButton& useLearnedBreath() { return workshop().useLearnedButton; }
+    juce::Slider& lowOctaveBreath() { return workshop().lowPosition; }
+    juce::Slider& upperOctaveBreath() { return workshop().highPosition; }
+    juce::ToggleButton& tuner() { return workshop().tunerButton; }
+    juce::String tuningTitle() { return workshop().title.getText(); }
+    juce::String tuningSummary() { return workshop().tableTitle.getText(); }
+    juce::String tunerStatus() { return workshop().status.getText(); }
+    juce::String learnStatus() { return workshop().learnStatus.getText(); }
+    juce::String chords() { return workshop().chords.getText(); }
+    juce::String tooltipOf (juce::Component& c)
+    {
+        auto* t = dynamic_cast<juce::TooltipClient*> (&c);
+        return t != nullptr ? t->getTooltip() : juce::String();
+    }
+    void toggleFingering (size_t row) { if (workshop().table.onToggle) workshop().table.onToggle (row); }
+    void setWeight (size_t row, double weight) { if (workshop().table.onWeightEdited) workshop().table.onWeightEdited (row, weight); }
+    void setBreath (size_t row, double pa) { if (workshop().table.onBreathEdited) workshop().table.onBreathEdited (row, pa); }
+    std::function<void (double, const juce::String&, double, double)>& onTunerReading() { return workshop().onTunerReading; }
+
     // Sensors (the desktop's Sensors tab): how breath pressure and tone-hole coverage become the model's breath and
     // hole openings. Each list in the tab's order, with its labels.
     std::vector<Setting> breathSettings() { return settingsOf (sensors().breathRows); }

@@ -1,7 +1,8 @@
 // The iPhone app's screens, with a tab bar at the bottom:
 //   Play     the front page: connection, instrument (preset), the live whistle, room and reverb, scale, record
-//   Instrument  presets (save, export, import), key and tuning, the tuning table, and every dimension and voicing
-//            setting in folding sections
+//   Instrument  presets (save, export, import) and every dimension and voicing setting in folding sections
+//   Tuning   the Tuning workshop: the tuning table (played pitch), the tuner, the breath tuned at, target pitches and
+//            keys, key and pitch standard, and the needle tuner
 //   Room     the room (reverb) and its settings
 //   Setup    WARBL (connection, Bluetooth, simulator), sound output (latency, buffer), About
 // The desktop window (MainComponent) lives on behind them, not shown: it owns the engine, runs the connection and keeps the
@@ -22,6 +23,7 @@ public:
     {
         play,
         instrument,
+        tuning,
         room,
         sensors,
         setup,
@@ -47,6 +49,7 @@ private:
     class PlayScreen;
     class SettingsScreen;
     class InstrumentScreen;
+    class TuningScreen;
     class RoomScreen;
     class SensorsScreen;
     class SetupScreen;
