@@ -644,7 +644,7 @@ void InstrumentPage::timerCallback()
     const float level = audio.whistleModel.level.load();
     liveLabel.setText ("Breath " + juce::String (juce::roundToInt (pressure)) + " Pa   jet " + juce::String (jet, 1) + " m/s   level "
                            + juce::String (juce::roundToInt (juce::Decibels::gainToDecibels (level, -90.0f))) + " dBFS   "
-                           + audio.getScaleStatus(),
+                           + juce::String (audio.getScaleStatus()),
                        juce::dontSendNotification);
     scaleButton.setButtonText (audio.isScaleActive() ? "Stop scale" : "Play scale");
     whistleView.repaint();
