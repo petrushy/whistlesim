@@ -2,6 +2,7 @@
 
 #include "AboutPanel.h"
 #include "OverlayPanel.h"
+#include "ReverbFile.h"
 
 namespace
 {
@@ -150,7 +151,7 @@ void MainComponent::restoreState()
         audio.reverb.setSpread ((float) settings->getDoubleValue ("sourceSpread_deg"));
     const auto irFile = juce::File (settings->getValue ("reverbFile"));
     if (irFile.existsAsFile())
-        audio.reverb.loadFile (irFile);
+        loadReverbFile (audio.reverb, irFile);
     else if (settings->containsKey ("reverbRoom"))
         audio.reverb.loadPreset (settings->getIntValue ("reverbRoom"));
     if (settings->containsKey ("reverbLevel_dB"))
@@ -169,7 +170,7 @@ void MainComponent::saveState()
         settings->setValue ("instrument", juce::String (whistle::toJson (instrument->getInstrument())));
     settings->setValue ("sensors", juce::JSON::toString (sensorsToVar (audio), true));
     settings->setValue ("reverbRoom", audio.reverb.getPresetIndex());
-    settings->setValue ("reverbFile", audio.reverb.getCurrentFile().getFullPathName());
+    settings->setValue ("reverbFile", juce::String (audio.reverb.getCurrentFile()));
     settings->setValue ("reverbLevel_dB", audio.reverb.wetDb.load());
     settings->setValue ("reverbPreDelay_ms", audio.reverb.preDelayMs.load());
     settings->setValue ("sourceSpread_deg", audio.reverb.getSpread());

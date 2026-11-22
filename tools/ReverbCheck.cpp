@@ -12,7 +12,7 @@
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_dsp/juce_dsp.h>
 
-#include "ImpulseResponse.h"
+#include "Reverb/ImpulseResponse.h"
 #include "TestPhrase.h"
 
 #include <cmath>
@@ -103,6 +103,14 @@ std::vector<float> convolve (const std::vector<float>& signal, const float* ir, 
     return a;
 }
 
+juce::AudioBuffer<float> toJuce (const reverb::Buffer& in)
+{
+    juce::AudioBuffer<float> out (in.getNumChannels(), in.getNumSamples());
+    for (int ch = 0; ch < in.getNumChannels(); ++ch)
+        out.copyFrom (ch, 0, in.getReadPointer (ch), in.getNumSamples());
+    return out;
+}
+
 bool writeWav (const juce::File& file, const juce::AudioBuffer<float>& buffer)
 {
     file.deleteFile();
@@ -150,14 +158,13 @@ int main (int argc, char* argv[])
 
     // A measured IR, made up: silence, a direct sound of amplitude 0.5 at 50 ms, a reflection of 0.25 at 70 ms.
     {
-        juce::AudioBuffer<float> measured (2, (int) kSampleRate);
-        measured.clear();
+        reverb::Buffer measured (2, (int) kSampleRate);
         for (int ch = 0; ch < 2; ++ch)
         {
-            measured.setSample (ch, 2400, 0.5f);
-            measured.setSample (ch, 3360, 0.25f);
+            measured.getWritePointer (ch)[2400] = 0.5f;
+            measured.getWritePointer (ch)[3360] = 0.25f;
         }
-        const auto wet = reverb::removeDirectSound (measured, kSampleRate);
+        const auto wet = toJuce (reverb::removeDirectSound (measured, kSampleRate));
         const float reflection = wet.getSample (0, 3360 - 2400 + 24), rest = wet.getMagnitude (0, 0, 960 + 24 - 8);
         const bool good = std::abs (reflection - 0.5f) < 1.0e-3f && rest < 1.0e-6f;
         ok &= good;
@@ -171,7 +178,7 @@ int main (int argc, char* argv[])
         const auto ms = juce::Time::getMillisecondCounterHiRes() - start;
 
         std::printf ("\n%s  (%.0f x %.0f x %.0f m, listener at %.1f m, IR %.1f s, generated in %.0f ms)\n",
-                     room.name.toRawUTF8(), room.width, room.depth, room.height, room.distance,
+                     room.name.c_str(), room.width, room.depth, room.height, room.distance,
                      ir.getNumSamples() / kSampleRate, ms);
 
         std::printf ("  band     target   measured L/R\n");
@@ -218,7 +225,7 @@ int main (int argc, char* argv[])
         double lr = 0, ll = 0, rr = 0;
         for (int n = (int) (0.1 * kSampleRate); n < ir.getNumSamples(); ++n)
         {
-            const double l = ir.getSample (0, n), r = ir.getSample (1, n);
+            const double l = ir.getReadPointer (0)[n], r = ir.getReadPointer (1)[n];
             lr += l * r; ll += l * l; rr += r * r;
         }
         std::printf ("  left/right correlation of tail  %.2f\n", lr / std::sqrt (ll * rr + 1e-30));
@@ -277,8 +284,8 @@ int main (int argc, char* argv[])
         }
 
         // Files.
-        const auto name = room.name.replaceCharacter (' ', '_').toLowerCase();
-        writeWav (outDir.getChildFile ("ir_" + name + ".wav"), ir);
+        const auto name = juce::String (room.name).replaceCharacter (' ', '_').toLowerCase();
+        writeWav (outDir.getChildFile ("ir_" + name + ".wav"), toJuce (ir));
 
         const float wet = juce::Decibels::decibelsToGain (kDefaultWetDb);
         const auto left = convolve (dry, ir.getReadPointer (0), ir.getNumSamples());
