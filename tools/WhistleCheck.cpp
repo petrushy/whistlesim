@@ -508,7 +508,17 @@ int main (int argc, char* argv[])
         }
         const auto index = (size_t) (argc > 2 && ! loaded ? presetArg (argv[2]) : 0);
         auto g = loaded ? loaded->geometry : presets()[index];
-        const auto voicing = loaded ? loaded->voicing : presetVoicing (index);
+        auto voicing = loaded ? loaded->voicing : presetVoicing (index);
+        windwayArgs (argc, argv, 3, g);
+        jetVoicingArgs (argc, argv, 3, voicing);
+        for (int i = 3; i < argc; ++i)
+        {
+            const juce::String arg (argv[i]);
+            const double value = arg.fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
+            if (arg.startsWith ("wallloss=")) g.wallLoss = value;
+            if (arg.startsWith ("lowpos=")) g.tuning.breathPosition[0] = value;   // Where in each note's breath range (0-1)
+            if (arg.startsWith ("highpos=")) g.tuning.breathPosition[1] = value;  // ...for the upper octaves
+        }
         int passes = 3;
         bool shapeHead = true;  // head=0: holes and bore length only
         bool cross = true;      // cross=0: hole sizes left (as the app's hole-size option off)
@@ -875,6 +885,65 @@ int main (int argc, char* argv[])
             }
             saveWavArg (argc, argv, "chiff" + juce::String (chiffAmount, 0), phrase, rate);
         }
+        return 0;
+    }
+
+    if (mode == "realpitch")  // realpitch [preset] [wallloss=x] [voicing options]: the model's pitch at the real Goldie's breath, against it
+    {
+        // Each note at the mouth pressure the player blew the real Golden at in its scale (Golden-pressure-2-notes, the
+        // medians of each note's runs), and the pitch it played there, in cents from the tube resonance (which the
+        // finger taps confirm). And the pitch's rise from 0.7 x to 1.4 x that breath (real whistle: about 12-37 c over
+        // a note's whole range).
+        struct Real { const char* note; double pa, cents; };
+        static constexpr Real real[] = { { "D", 236, -1 },  { "E", 328, -3 },  { "F#", 398, 2 },   { "G", 407, -13 },
+                                         { "A", 507, -17 }, { "B", 606, -14 }, { "C#", 644, -17 }, { "high D", 722, -8 },
+                                         { "high E", 880, 2 }, { "high F#", 975, -4 } };
+        const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
+        auto g = presets()[index];
+        auto voicing = presetVoicing (index);
+        windwayArgs (argc, argv, 3, g);
+        jetVoicingArgs (argc, argv, 3, voicing);
+        for (int i = 3; i < argc; ++i)
+            if (juce::String (argv[i]).startsWith ("wallloss="))
+                g.wallLoss = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
+        auto pitchAt = [&] (const ChartFingering& c, double pa)
+        {
+            const double rate = 48000.0;
+            const auto out = playGesture (g, voicing, c.openness (g), [pa] (double t) { return pa * std::min (1.0, t / 0.04); }, 0.4, rate);
+            double clarity = 0.0;
+            const double hz = measurePitch (out, rate, clarity);
+            return clarity > 0.8 ? hz : 0.0;
+        };
+        std::printf ("%s\n  note      Pa   real  model  model-real   rise 0.7-1.4x\n", g.name.toRawUTF8());
+        double sum = 0.0, riseSum = 0.0;
+        int n = 0, silent = 0, rises = 0;
+        for (const auto& r : real)
+        {
+            const ChartFingering* c = nullptr;
+            for (const auto& f : chartFor (g.chart))
+                if (std::string (f.name) == r.note && f.counts) { c = &f; break; }
+            if (c == nullptr) continue;
+            const auto res = resonances (g, c->openness (g), 100.0, 6000.0);
+            const double tube = res.size() >= (size_t) c->reg ? res[(size_t) c->reg - 1] : 0.0;
+            const double hz = pitchAt (*c, r.pa), lo = pitchAt (*c, 0.7 * r.pa), hi = pitchAt (*c, 1.4 * r.pa);
+            auto cents = [&] (double f) { return f > 0.0 ? 1200.0 * std::log2 (f / tube) : std::nan (""); };
+            const double m = cents (hz);
+            // Only the right register counts (within 300 c of the tube resonance).
+            if (! std::isfinite (m) || std::abs (m) > 300.0)
+            {
+                std::printf ("  %-8s %4.0f  %+4.0f   (wrong register or silent)\n", r.note, r.pa, r.cents);
+                ++silent;
+                continue;
+            }
+            const double rise = std::isfinite (cents (lo)) && std::isfinite (cents (hi)) && std::abs (cents (lo)) < 300 && std::abs (cents (hi)) < 300
+                                  ? cents (hi) - cents (lo) : std::nan ("");
+            std::printf ("  %-8s %4.0f  %+4.0f  %+5.0f   %+5.0f        %5.0f\n", r.note, r.pa, r.cents, m, m - r.cents, rise);
+            sum += (m - r.cents) * (m - r.cents);
+            if (std::isfinite (rise)) { riseSum += rise; ++rises; }
+            ++n;
+        }
+        std::printf ("  rms model-real %.1f c over %d notes; %d silent or in the wrong register; mean rise %.0f c\n",
+                     std::sqrt (sum / std::max (1, n)), n, silent, riseSum / std::max (1, rises));
         return 0;
     }
 
