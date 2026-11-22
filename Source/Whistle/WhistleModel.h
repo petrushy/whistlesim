@@ -141,7 +141,7 @@ public:
     Scope scope;
 
     // The geometry last set (message thread).
-    Geometry getGeometry() const { const juce::SpinLock::ScopedLockType lock (pendingLock); return geometry; }
+    Geometry getGeometry() const { const SpinLock::ScopedLock lock (pendingLock); return geometry; }
 
 private:
     static constexpr int kMaxSegments = 64;
@@ -216,7 +216,7 @@ private:
     int oversampling = 2;  // Internal samples per host sample: 2 below 88.2 kHz, 1 at 88.2 kHz and above
     Geometry geometry;
 
-    mutable juce::SpinLock pendingLock;
+    mutable SpinLock pendingLock;
     Config pending;
     std::atomic<bool> hasPending { false };
     Config config;

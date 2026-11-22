@@ -51,10 +51,10 @@ int main()
         in.voicing.jetFlatAbove = 0.9f;
         in.voicing.jetFlatTop = 2.75f;
 
-        juce::String error;
+        std::string error;
         const auto out = fromJson (toJson (in), error);
         CHECK (out.has_value());
-        CHECK (error.isEmpty());
+        CHECK (error.empty());
         if (! out)
             continue;
 
@@ -97,7 +97,7 @@ int main()
     // An older Härjedalspipa file, with the chart of its own on A#: now the whistle chart a major third down, tuned to
     // its traditional scale.
     {
-        juce::String error;
+        std::string error;
         const auto old = fromJson (R"({ "format": "warbl-whistle", "version": 1, "name": "Old pipa", "fingeringChart": "harjedalspipa", "chartTranspose": 0 })", error);
         CHECK (old.has_value());
         if (old)
@@ -110,7 +110,7 @@ int main()
 
     // A file with only some fields: the rest come from the first preset.
     {
-        juce::String error;
+        std::string error;
         const auto partial = fromJson (R"({ "format": "warbl-whistle", "version": 1, "name": "Short", "bore": { "length_mm": 250 } })", error);
         CHECK (partial.has_value());
         if (partial)
@@ -127,7 +127,7 @@ int main()
 
     // A file from before the thumb and R4 holes: six named holes, the others plugged.
     {
-        juce::String error;
+        std::string error;
         const auto old = fromJson (R"({ "format": "warbl-whistle", "version": 1, "holes": [
             { "name": "L1", "position_mm": 120, "diameter_mm": 6 }, { "name": "L2", "position_mm": 140, "diameter_mm": 7 },
             { "name": "L3", "position_mm": 160, "diameter_mm": 6.5 }, { "name": "R1", "position_mm": 190, "diameter_mm": 7 },
@@ -144,9 +144,9 @@ int main()
     // Broken or meaningless files are rejected with a reason.
     auto rejected = [] (const char* json)
     {
-        juce::String error;
+        std::string error;
         const auto result = fromJson (json, error);
-        return ! result.has_value() && error.isNotEmpty();
+        return ! result.has_value() && ! error.empty();
     };
     CHECK (rejected ("{ not json"));
     CHECK (rejected (R"({ "format": "something else" })"));

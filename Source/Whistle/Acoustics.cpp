@@ -9,7 +9,7 @@ namespace whistle
 namespace
 {
 using Complex = std::complex<double>;
-constexpr double kPi = juce::MathConstants<double>::pi;
+
 const Complex j (0.0, 1.0);
 
 // Wavenumber in a tube of radius a, with viscous and thermal wall losses (Keefe's large-tube approximation).
@@ -68,7 +68,7 @@ Complex windowImpedance (const Geometry& g, const Openness& open, double hz)
     const double aFoot = g.radiusAt (g.boreLength);
     const double z0Foot = kAirDensity * kSpeedOfSound / (kPi * aFoot * aFoot);
     const double kaFoot = omega / kSpeedOfSound * aFoot;
-    const double footOpen = g.bellClosesFoot ? juce::jlimit (1.0e-4, 1.0, open.foot) : 1.0;
+    const double footOpen = g.bellClosesFoot ? limit (1.0e-4, 1.0, open.foot) : 1.0;
     Complex z = z0Foot * (0.25 * kaFoot * kaFoot + j * 0.6133 * kaFoot) / footOpen;
 
     // Points where something happens, from the foot up: the enabled holes, then the window at x = 0.
@@ -94,9 +94,9 @@ Complex windowImpedance (const Geometry& g, const Openness& open, double hz)
 
     for (int hole : order)
     {
-        const double position = juce::jlimit (0.0, g.boreLength, g.holes[(size_t) hole].position);
+        const double position = limit (0.0, g.boreLength, g.holes[(size_t) hole].position);
         travelTo (position);
-        const double openness = juce::jlimit (0.0, 1.0, open.holes[(size_t) hole]);
+        const double openness = limit (0.0, 1.0, open.holes[(size_t) hole]);
         const double aHole = g.radiusAt (position);
         const Complex halfSeries = j * omega * kAirDensity * 0.5 * g.holeSeriesLength (hole, openness) / (kPi * aHole * aHole);
         z = halfSeries + 1.0 / (1.0 / (z + halfSeries) + holeAdmittance (g, hole, openness, omega));
@@ -172,24 +172,24 @@ Openness ChartFingering::openness (const Geometry& g) const
     return open;
 }
 
-juce::String setChart (Geometry& g, FingeringChart chart)
+std::string setChart (Geometry& g, FingeringChart chart)
 {
     g.chart = chart;
     auto& h = g.holes;
-    juce::StringArray opened, plugged;
+    std::string opened, plugged;  // Hole names, comma-separated
     auto open = [&] (int i, double position, double diameter)
     {
         if (h[(size_t) i].enabled)
             return;
         h[(size_t) i] = { true, std::max (0.25 * h[2].position, position), diameter };
-        opened.add (kHoleNames[(size_t) i]);
+        opened += (opened.empty() ? "" : ", ") + std::string (kHoleNames[(size_t) i]);
     };
     auto plug = [&] (int i)
     {
         if (! h[(size_t) i].enabled)
             return;
         h[(size_t) i].enabled = false;
-        plugged.add (kHoleNames[(size_t) i]);
+        plugged += (plugged.empty() ? "" : ", ") + std::string (kHoleNames[(size_t) i]);
     };
 
     if (chart == FingeringChart::baroqueRecorder)
@@ -212,11 +212,11 @@ juce::String setChart (Geometry& g, FingeringChart chart)
             plug (h[7].enabled ? 1 : 7);
     }
 
-    juce::String out;
-    if (! opened.isEmpty())
-        out << "opened " << opened.joinIntoString (", ");
-    if (! plugged.isEmpty())
-        out << (out.isEmpty() ? "" : "; ") << "plugged " << plugged.joinIntoString (", ");
+    std::string out;
+    if (! opened.empty())
+        out += "opened " + opened;
+    if (! plugged.empty())
+        out += (out.empty() ? "" : "; ") + std::string ("plugged ") + plugged;
     return out;
 }
 
@@ -426,7 +426,7 @@ std::array<double, 12> temperamentCents (const TuningGoal& goal)
             offsets[0] = 0.0;  // The slide sets the overall pitch
             break;
     }
-    const double keep = 1.0 - juce::jlimit (0.0, 1.0, goal.towardEqual);
+    const double keep = 1.0 - limit (0.0, 1.0, goal.towardEqual);
     for (auto& o : offsets)
         o *= keep;
     return offsets;
@@ -466,7 +466,7 @@ double firstResonance (const Geometry& g, const Openness& open, double guessHz)
 bool solveLength (Geometry& g, double& value, double lo, double hi, const Openness& open, double target)
 {
     double x0 = value, f0 = firstResonance (g, open, target);
-    double x1 = juce::jlimit (lo, hi, value * (f0 > 0.0 ? f0 / target : 1.0));
+    double x1 = limit (lo, hi, value * (f0 > 0.0 ? f0 / target : 1.0));
     double bestValue = value, bestError = 1.0e9;
     for (int iteration = 0; iteration < 30; ++iteration)
     {
@@ -486,7 +486,7 @@ bool solveLength (Geometry& g, double& value, double lo, double hi, const Openne
         const double next = std::abs (slope) > 1.0e-12 ? x1 - std::log2 (f1 / target) / slope : x1 * (f1 / target);
         x0 = x1;
         f0 = f1;
-        x1 = juce::jlimit (lo, hi, next);
+        x1 = limit (lo, hi, next);
     }
     value = bestValue;
     return std::abs (bestError) < 2.0;
@@ -533,7 +533,7 @@ bool tunePositions (Geometry& g, double lowestHz, bool resize = false)
                 {
                     const bool wantsLower = hole.position > upperLimit() - 0.0005;  // Stopped at the hole below
                     const double widest = 0.85 * 2.0 * g.radiusAt (hole.position);
-                    const double resized = juce::jlimit (0.0025, widest, hole.diameter * (wantsLower ? 0.9 : 1.1));
+                    const double resized = limit (0.0025, widest, hole.diameter * (wantsLower ? 0.9 : 1.1));
                     if (std::abs (resized - hole.diameter) < 1.0e-6)
                         break;  // At the size limit
                     hole.diameter = resized;
@@ -699,7 +699,7 @@ double bestSlide (const Geometry& g, double lowestHz, const std::vector<double>*
         }
         if (curvature <= 0.0)
             break;
-        const double next = juce::jlimit (kSlideMin, kSlideMax, slide - gradient / curvature);
+        const double next = limit (kSlideMin, kSlideMax, slide - gradient / curvature);
         const bool settled = std::abs (next - slide) < 0.00002;
         slide = next;
         if (settled)
@@ -784,14 +784,14 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes, const std::vector<d
         {
             const auto u = unknowns[k];
             if (u.hole == kBore)
-                trial.boreLength = juce::jlimit (0.05, 2.0, trial.boreLength + step[k]);
+                trial.boreLength = limit (0.05, 2.0, trial.boreLength + step[k]);
             else if (u.hole == kHead)  // Within 60-140 % of the bore below it
-                trial.headDiameter = juce::jlimit (0.6 * trial.boreDiameterTop, 1.4 * trial.boreDiameterTop, trial.headDiameter * std::exp (step[k]));
+                trial.headDiameter = limit (0.6 * trial.boreDiameterTop, 1.4 * trial.boreDiameterTop, trial.headDiameter * std::exp (step[k]));
             else if (u.isSize)
             {
                 auto& hole = trial.holes[(size_t) u.hole];
                 const double widest = 0.85 * 2.0 * trial.radiusAt (hole.position);
-                hole.diameter = juce::jlimit (0.0025, widest, hole.diameter * std::exp (step[k]));
+                hole.diameter = limit (0.0025, widest, hole.diameter * std::exp (step[k]));
             }
             else
                 trial.holes[(size_t) u.hole].position += step[k];
@@ -802,7 +802,7 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes, const std::vector<d
             auto& hole = trial.holes[(size_t) i];
             if (! hole.enabled)
                 continue;
-            hole.position = juce::jlimit (0.01, std::max (0.01, below - hole.diameter), hole.position);
+            hole.position = limit (0.01, std::max (0.01, below - hole.diameter), hole.position);
             if (i != 0)
                 below = hole.position;
         }
@@ -850,7 +850,7 @@ void fitTuning (Geometry& g, double lowestHz, bool fitSizes, const std::vector<d
                 break;
 
             for (size_t k = 0; k < m; ++k)  // Linear predictions are only good for small changes
-                step[k] = unknowns[k].isSize ? juce::jlimit (-0.2, 0.2, step[k]) : juce::jlimit (-0.003, 0.003, step[k]);
+                step[k] = unknowns[k].isSize ? limit (-0.2, 0.2, step[k]) : limit (-0.003, 0.003, step[k]);
             auto trial = g;
             apply (trial, step);
             auto trialError = errors (trial);

@@ -10,7 +10,7 @@ namespace whistle
 
 namespace
 {
-constexpr double kPi = juce::MathConstants<double>::pi;
+
 constexpr float rho = (float) kAirDensity;
 constexpr float c = (float) kSpeedOfSound;
 constexpr double kMaxSectionLength = 0.03;
@@ -193,7 +193,7 @@ void WhistleModel::setVoicing (const Voicing& v)
     fingerGapDamping = v.fingerGapDamping;
     jetGain = v.jetGain;
     slowJetGrowth = v.slowJetGrowth;
-    jetStages = juce::jlimit (1, 2, v.jetStages);
+    jetStages = limit (1, 2, v.jetStages);
     breathScale = v.breathScale;
     breathCurve = v.breathCurve;
     jetSpreading = v.jetSpreading;
@@ -252,7 +252,7 @@ void WhistleModel::setGeometry (const Geometry& g)
 {
     Config built;
     buildConfig (g, built);
-    const juce::SpinLock::ScopedLockType lock (pendingLock);
+    const SpinLock::ScopedLock lock (pendingLock);
     geometry = g;
     pending = built;
     hasPending = true;
@@ -276,7 +276,7 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
         points.push_back ({ g.headStraightLength, -1 });  // Where the straight part ends and the blend begins
     for (int i = 0; i < kNumHoles; ++i)
         if (g.holes[(size_t) i].enabled)
-            points.push_back ({ juce::jlimit (0.005, g.boreLength - 0.005, g.holes[(size_t) i].position), i });
+            points.push_back ({ limit (0.005, g.boreLength - 0.005, g.holes[(size_t) i].position), i });
     std::sort (points.begin(), points.end());
     points.push_back ({ g.boreLength, -1 });
 
@@ -435,7 +435,7 @@ void WhistleModel::fingerLands (int hole, float speed)
     // The push builds up over the finger's approach (a faster finger takes less time) and ends in a third of that as
     // the soft fingertip stops against the rim: a smooth swell of air, not a click.
     const double radius = 0.5 * geometry.holes[(size_t) hole].diameter;
-    const double riseSeconds = 0.001 * fingerSoftness.load (std::memory_order_relaxed) * juce::jlimit (0.5, 2.0, 0.3 / (double) speed);
+    const double riseSeconds = 0.001 * fingerSoftness.load (std::memory_order_relaxed) * limit (0.5, 2.0, 0.3 / (double) speed);
     tapPeakFlow[(size_t) hole] = (float) (kPi * radius * radius * speed);
     tapSpeed[(size_t) hole] = speed;
     tapRise[(size_t) hole] = std::max (2, (int) (riseSeconds * rate));
@@ -553,7 +553,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     jetLine[(size_t) jetWrite] = windowVelocity;
     jetWrite = (jetWrite + 1) & (kJetLineSize - 1);
     const float convection = jetConvection.load (std::memory_order_relaxed);
-    const float travel = juce::jlimit (2.0f, (float) kJetLineSize - 4.0f, cfg.windowLength / (convection * speed) * (float) rate);
+    const float travel = limit (2.0f, (float) kJetLineSize - 4.0f, cfg.windowLength / (convection * speed) * (float) rate);
     const int whole = (int) travel;
     const float frac = travel - (float) whole;
     const float delayed = (1.0f - frac) * jetLine[(size_t) ((jetWrite - whole) & (kJetLineSize - 1))]
@@ -568,7 +568,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     if ((noiseFilterCountdown--) <= 0)
     {
         noiseFilterCountdown = 8;
-        const float centre = juce::jlimit (300.0f, 0.3f * (float) rate, noiseStrouhal.load (std::memory_order_relaxed) * speed / h);
+        const float centre = limit (300.0f, 0.3f * (float) rate, noiseStrouhal.load (std::memory_order_relaxed) * speed / h);
         noiseLowA = 1.0f - std::exp (-2.0f * (float) kPi * 1.5f * centre / (float) rate);  // Lowpass above the centre (2 poles)
         noiseHighA = 1.0f - std::exp (-2.0f * (float) kPi * 0.5f * centre / (float) rate);  // Highpass an octave below
         noiseNorm = 1.0f / std::sqrt (noiseLowA / (2.0f - noiseLowA));  // Keeps the band's level independent of its centre
@@ -590,7 +590,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     slowJetSpeed += slowCoeff * (jetSpeed - slowJetSpeed);
     const float starting = jetSpeed > 1.0f ? std::max (0.0f, 1.0f - slowJetSpeed / jetSpeed) : 0.0f;
     const float reynolds = jetSpeed * h / kKinematicViscosity;
-    const float turbulent = juce::jlimit (0.0f, 1.0f, (reynolds - 1000.0f) / 2000.0f);
+    const float turbulent = limit (0.0f, 1.0f, (reynolds - 1000.0f) / 2000.0f);
     const float chiff = 1.0f + attackChiff.load (std::memory_order_relaxed) * turbulent * starting * (1.0f - jetLock);
 
     // Edge noise as the dynamic pressure, rho U^2 (kept at its earlier level for a low note at ~400 Pa, where it was
@@ -608,7 +608,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     {
         jetFilterCountdown = 8;
         const double thinning = std::pow (std::max (0.2, (double) speed / cfg.referenceJetSpeed), (double) jetThinning.load (std::memory_order_relaxed));
-        const double centre = juce::jlimit (50.0, 0.4 * rate, (double) jetStrouhal.load (std::memory_order_relaxed) * speed / h * thinning);
+        const double centre = limit (50.0, 0.4 * rate, (double) jetStrouhal.load (std::memory_order_relaxed) * speed / h * thinning);
         const double w0 = 2.0 * kPi * centre / rate;
         const double alpha = std::sin (w0) / (2.0 * jetQ.load (std::memory_order_relaxed));
         const double a0 = 1.0 + alpha;
@@ -775,7 +775,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         const int hole = cfg.holeAt[(size_t) jn];
         if (hole >= 0)
         {
-            const double open = juce::jlimit (0.0, 1.0, (double) current.openness[(size_t) hole]);
+            const double open = limit (0.0, 1.0, (double) current.openness[(size_t) hole]);
             const double mi = cfg.holeInnerMass[(size_t) hole], mr = cfg.holeOuterMass[(size_t) hole];
             const double r = cfg.holeRadiationResistance[(size_t) hole];
             // A fully open hole keeps a trace of compliance: avoids a pole-zero pair exactly at the Nyquist frequency.
@@ -828,7 +828,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     const float lowpassed = cfg.footB * (arrivingFoot + footX1) + cfg.footA * footY1;
     footX1 = arrivingFoot;
     footY1 = lowpassed;
-    const float footOpen = cfg.bellClosesFoot ? juce::jlimit (0.0f, 1.0f, current.footOpenness) : 1.0f;
+    const float footOpen = cfg.bellClosesFoot ? limit (0.0f, 1.0f, current.footOpenness) : 1.0f;
     const float reflectedFoot = -footOpen * lowpassed + (1.0f - footOpen) * arrivingFoot;
     sendLeft[(size_t) n - 1] = reflectedFoot;
     junctionPressure[(size_t) n] = arrivingFoot + reflectedFoot;
@@ -855,7 +855,7 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     // an everyday 0.3 m/s is about -46 dBFS at Body knock 1.
     {
         const float pitch = bodyPitch.load (std::memory_order_relaxed), ring = bodyRing.load (std::memory_order_relaxed);
-        if (! juce::exactlyEqual (pitch, bodyCoeffPitch) || ! juce::exactlyEqual (ring, bodyCoeffRing))
+        if (! exactlyEqual (pitch, bodyCoeffPitch) || ! exactlyEqual (ring, bodyCoeffRing))
         {
             bodyCoeffPitch = pitch;
             bodyCoeffRing = ring;
@@ -954,7 +954,7 @@ void WhistleModel::render (float* windowOut, float* bodyOut, int numSamples)
 {
     if (hasPending.load())
     {
-        const juce::SpinLock::ScopedTryLockType lock (pendingLock);
+        const SpinLock::ScopedTryLock lock (pendingLock);
         if (lock.isLocked())
         {
             const bool sameShape = pending.numSegments == config.numSegments;

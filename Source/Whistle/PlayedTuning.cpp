@@ -74,7 +74,7 @@ PlayedNote measureOne (const Geometry& g, const Voicing& v, double lowestHz, siz
             break;
         }
 
-    const double position = juce::jlimit (0.0, 1.0, g.tuning.breathPosition[c.reg >= 2 ? 1 : 0]);
+    const double position = limit (0.0, 1.0, g.tuning.breathPosition[c.reg >= 2 ? 1 : 0]);
     note.pressure = std::pow (note.lowPa, 1.0 - position) * std::pow (note.highPa, position);
     if (g.tuning.useLearnedBreath)
     {
@@ -82,7 +82,7 @@ PlayedNote measureOne (const Geometry& g, const Voicing& v, double lowestHz, siz
         if (const double breath = playerBreath (g, c, estimated); breath > 0.0)
         {
             // Within the pressures it sounds at: blown softer or harder the model plays another register (or nothing).
-            note.pressure = juce::jlimit (note.lowPa, note.highPa, breath);
+            note.pressure = limit (note.lowPa, note.highPa, breath);
             note.learned = ! estimated;
             note.estimated = estimated;
         }
@@ -147,7 +147,7 @@ double playerBreath (const Geometry& g, const ChartFingering& c, bool& estimated
         sxy += (px - meanX) * (py - meanY);
         sxx += (px - meanX) * (px - meanX);
     }
-    const double slope = juce::jlimit (0.0, std::log (2.0) / 3.5, sxx > 0.0 ? sxy / sxx : 0.0);  // ln Pa per semitone
+    const double slope = limit (0.0, std::log (2.0) / 3.5, sxx > 0.0 ? sxy / sxx : 0.0);  // ln Pa per semitone
     const auto& nearest = x < points.front().first ? points.front() : points.back();
     return std::exp (nearest.second + slope * (x - nearest.first));
 }

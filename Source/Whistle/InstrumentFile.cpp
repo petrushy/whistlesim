@@ -1,6 +1,10 @@
 #include "InstrumentFile.h"
 #include "Acoustics.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+
 namespace whistle
 {
 
@@ -24,37 +28,61 @@ const char* temperamentName (Temperament t)
     return "equal";
 }
 
-juce::var object()
+json::Value object()
 {
-    return juce::var (new juce::DynamicObject());
+    return json::Value::object();
 }
 
-void set (juce::var& o, const char* key, double value)
+void set (json::Value& o, const char* key, double value)
 {
-    o.getDynamicObject()->setProperty (key, value);
+    o.set (key, value);
 }
 
 // Reads o[key] into value if it's there; lengths are stored in mm.
-void read (const juce::var& o, const char* key, double& value, double scale = 1.0)
+void read (const json::Value& o, const char* key, double& value, double scale = 1.0)
 {
-    if (o.hasProperty (key))
-        value = (double) o[key] * scale;
+    if (o.has (key))
+        value = o[key].toDouble() * scale;
 }
 
-void read (const juce::var& o, const char* key, float& value)
+void read (const json::Value& o, const char* key, float& value)
 {
-    if (o.hasProperty (key))
-        value = (float) (double) o[key];
+    if (o.has (key))
+        value = (float) o[key].toDouble();
+}
+
+bool startsWith (const std::string& s, std::string_view prefix)
+{
+    return s.compare (0, prefix.size(), prefix) == 0;
+}
+
+std::string trimmed (const std::string& s)
+{
+    const auto first = s.find_first_not_of (" \t\r\n");
+    if (first == std::string::npos)
+        return {};
+    return s.substr (first, s.find_last_not_of (" \t\r\n") - first + 1);
+}
+
+bool equalsIgnoringCase (const std::string& a, const char* b)
+{
+    const std::string_view other (b);
+    if (a.size() != other.size())
+        return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::tolower ((unsigned char) a[i]) != std::tolower ((unsigned char) other[i]))
+            return false;
+    return true;
 }
 } // namespace
 
-juce::var toVar (const Instrument& instrument)
+json::Value toValue (const Instrument& instrument)
 {
     const auto& g = instrument.geometry;
     auto root = object();
-    root.getDynamicObject()->setProperty ("format", kFormat);
-    root.getDynamicObject()->setProperty ("version", kVersion);
-    root.getDynamicObject()->setProperty ("name", g.name);
+    root.set ("format", kFormat);
+    root.set ("version", kVersion);
+    root.set ("name", g.name);
 
     auto bore = object();
     set (bore, "length_mm", g.boreLength * 1000.0);
@@ -66,68 +94,68 @@ juce::var toVar (const Instrument& instrument)
     set (bore, "headDiameter_mm", g.headDiameter * 1000.0);
     set (bore, "headStraightLength_mm", g.headStraightLength * 1000.0);
     set (bore, "slide_mm", g.slide * 1000.0);  // How far the tuning slide is out; length and holes include it
-    root.getDynamicObject()->setProperty ("bore", bore);
+    root.set ("bore", bore);
 
     // Only the holes that are used; the others are plugged.
-    juce::Array<juce::var> holes;
+    auto holes = json::Value::array();
     for (int i = 0; i < kNumHoles; ++i)
     {
         if (! g.holes[(size_t) i].enabled)
             continue;
         auto hole = object();
-        hole.getDynamicObject()->setProperty ("name", kHoleNames[(size_t) i]);
+        hole.set ("name", kHoleNames[(size_t) i]);
         set (hole, "position_mm", g.holes[(size_t) i].position * 1000.0);
         set (hole, "diameter_mm", g.holes[(size_t) i].diameter * 1000.0);
-        holes.add (hole);
+        holes.add (std::move (hole));
     }
-    root.getDynamicObject()->setProperty ("holes", holes);
-    root.getDynamicObject()->setProperty ("bellClosesFoot", g.bellClosesFoot);
-    root.getDynamicObject()->setProperty ("fingeringChart", g.chart == FingeringChart::baroqueRecorder ? "recorder (baroque)" : "whistle");
-    root.getDynamicObject()->setProperty ("referenceA_Hz", g.referenceA);
-    root.getDynamicObject()->setProperty ("chartTranspose", g.chartTranspose);
+    root.set ("holes", holes);
+    root.set ("bellClosesFoot", g.bellClosesFoot);
+    root.set ("fingeringChart", g.chart == FingeringChart::baroqueRecorder ? "recorder (baroque)" : "whistle");
+    root.set ("referenceA_Hz", g.referenceA);
+    root.set ("chartTranspose", g.chartTranspose);
 
     // What the tuner aims for (the Tuning workshop tab): keys by their tonic's semitones above the lowest note.
     auto tuning = object();
-    tuning.getDynamicObject()->setProperty ("temperament", temperamentName (g.tuning.temperament));
+    tuning.set ("temperament", temperamentName (g.tuning.temperament));
     set (tuning, "towardEqual", g.tuning.towardEqual);
-    juce::Array<juce::var> major, minor;
+    auto major = json::Value::array(), minor = json::Value::array();
     for (int k = 0; k < 12; ++k)
     {
         major.add (g.tuning.keys[(size_t) k]);
         minor.add (g.tuning.keys[(size_t) (k + TuningGoal::kMinor)]);
     }
-    tuning.getDynamicObject()->setProperty ("majorKeys", major);
-    tuning.getDynamicObject()->setProperty ("minorKeys", minor);
+    tuning.set ("majorKeys", major);
+    tuning.set ("minorKeys", minor);
     auto fingerings = object();
     for (const auto& [id, counts] : g.tuning.fingerings)
-        fingerings.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), counts);
-    tuning.getDynamicObject()->setProperty ("fingerings", fingerings);
-    tuning.getDynamicObject()->setProperty ("topHoleFor", g.tuning.topHoleForHighD ? "high D" : "C natural");
+        fingerings.set (id, counts);
+    tuning.set ("fingerings", fingerings);
+    tuning.set ("topHoleFor", g.tuning.topHoleForHighD ? "high D" : "C natural");
     if (g.tuning.lowestNote >= 0)  // As a note name, e.g. "D5"
     {
         static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        tuning.getDynamicObject()->setProperty ("lowestNote", juce::String (names[g.tuning.lowestNote % 12]) + juce::String (g.tuning.lowestNote / 12 - 1));
+        tuning.set ("lowestNote", std::string (names[g.tuning.lowestNote % 12]) + std::to_string (g.tuning.lowestNote / 12 - 1));
     }
-    tuning.getDynamicObject()->setProperty ("tuneHoleSizes", g.tuning.tuneHoleSizes);
-    tuning.getDynamicObject()->setProperty ("shapeHead", g.tuning.shapeHead);
-    juce::Array<juce::var> position;
+    tuning.set ("tuneHoleSizes", g.tuning.tuneHoleSizes);
+    tuning.set ("shapeHead", g.tuning.shapeHead);
+    auto position = json::Value::array();
     for (double p : g.tuning.breathPosition)
         position.add (p);
-    tuning.getDynamicObject()->setProperty ("breathPosition", position);
-    tuning.getDynamicObject()->setProperty ("useLearnedBreath", g.tuning.useLearnedBreath);
-    juce::Array<juce::var> custom;
+    tuning.set ("breathPosition", position);
+    tuning.set ("useLearnedBreath", g.tuning.useLearnedBreath);
+    auto custom = json::Value::array();
     for (double c : g.tuning.custom)
         custom.add (c);
-    tuning.getDynamicObject()->setProperty ("customCents", custom);
+    tuning.set ("customCents", custom);
     auto learned = object();
     for (const auto& [id, pressure] : g.tuning.learnedBreath)
-        learned.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), pressure);
-    tuning.getDynamicObject()->setProperty ("learnedBreath_Pa", learned);
+        learned.set (id, pressure);
+    tuning.set ("learnedBreath_Pa", learned);
     auto weights = object();
     for (const auto& [id, weight] : g.tuning.weights)
-        weights.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), weight);
-    tuning.getDynamicObject()->setProperty ("weights", weights);
-    root.getDynamicObject()->setProperty ("tuning", tuning);
+        weights.set (id, weight);
+    tuning.set ("weights", weights);
+    root.set ("tuning", tuning);
 
     auto fipple = object();
     set (fipple, "windwayHeight_mm", g.windwayHeight * 1000.0);
@@ -135,7 +163,7 @@ juce::var toVar (const Instrument& instrument)
     set (fipple, "windowLength_mm", g.windowLength * 1000.0);
     set (fipple, "windowWidth_mm", g.windowWidth * 1000.0);
     set (fipple, "edgeOffset_mm", g.edgeOffset * 1000.0);
-    root.getDynamicObject()->setProperty ("fipple", fipple);
+    root.set ("fipple", fipple);
 
     const auto& v = instrument.voicing;
     auto voicing = object();
@@ -151,14 +179,14 @@ juce::var toVar (const Instrument& instrument)
     set (voicing, "fingerGapDamping", v.fingerGapDamping);
     set (voicing, "jetGain", v.jetGain);
     set (voicing, "slowJetGrowth", v.slowJetGrowth);
-    voicing.getDynamicObject()->setProperty ("jetStages", v.jetStages);
+    voicing.set ("jetStages", v.jetStages);
     set (voicing, "breathScale", v.breathScale);
     set (voicing, "breathCurve", v.breathCurve);
     set (voicing, "jetLowReynolds", v.jetLowReynolds);
     set (voicing, "jetFlatAbove", v.jetFlatAbove);
     set (voicing, "jetFlatTop", v.jetFlatTop);
     set (voicing, "jetSpreading", v.jetSpreading);
-    voicing.getDynamicObject()->setProperty ("jetModel", v.jetModel);
+    voicing.set ("jetModel", v.jetModel);
     set (voicing, "jetThinning", v.jetThinning);
     set (voicing, "jetCutoff", v.jetCutoff);
     set (voicing, "jetBend_Pa", v.jetBend);
@@ -167,19 +195,19 @@ juce::var toVar (const Instrument& instrument)
     set (voicing, "bodyKnock", v.bodyKnock);
     set (voicing, "bodyPitch_Hz", v.bodyPitch);
     set (voicing, "bodyRing", v.bodyRing);
-    root.getDynamicObject()->setProperty ("voicing", voicing);
+    root.set ("voicing", voicing);
 
     return root;
 }
 
-std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, const Instrument* base)
+std::optional<Instrument> fromValue (const json::Value& root, std::string& error, const Instrument* base)
 {
     if (! root.isObject() || root["format"].toString() != kFormat)
     {
         error = "Not a WARBL whistle file";
         return std::nullopt;
     }
-    if ((int) root["version"] > kVersion)
+    if (root["version"].toInt() > kVersion)
     {
         error = "Made by a newer version of WhistleSim";
         return std::nullopt;
@@ -191,7 +219,7 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
     else
         instrument.geometry = presets().front();
     auto& g = instrument.geometry;
-    if (root.hasProperty ("name"))
+    if (root.has ("name"))
         g.name = root["name"].toString();
 
     const auto& bore = root["bore"];
@@ -206,11 +234,11 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
     read (bore, "slide_mm", g.slide, 0.001);                            // Missing in older files: 0 (pushed in)
 
     // Holes are listed by name; the ones not listed are plugged.
-    if (const auto* holes = root["holes"].getArray())
+    if (const auto& holes = root["holes"]; holes.isArray())
     {
         for (auto& h : g.holes)
             h.enabled = false;
-        for (const auto& entry : *holes)
+        for (const auto& entry : holes.items())
         {
             const auto name = entry["name"].toString();
             for (int i = 0; i < kNumHoles; ++i)
@@ -224,21 +252,21 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
             }
         }
     }
-    if (root.hasProperty ("bellClosesFoot"))
-        g.bellClosesFoot = (bool) root["bellClosesFoot"];
+    if (root.has ("bellClosesFoot"))
+        g.bellClosesFoot = root["bellClosesFoot"].toBool();
     // Older files had a chart of the Härjedalspipa's own, on A#: now the whistle chart a major third down, with its
     // scale as a tuning (converted below).
     bool oldHarjedalChart = false;
-    if (root.hasProperty ("fingeringChart"))
+    if (root.has ("fingeringChart"))
     {
         const auto chart = root["fingeringChart"].toString();
-        oldHarjedalChart = chart.startsWith ("harjedalspipa");
-        g.chart = chart.startsWith ("recorder") ? FingeringChart::baroqueRecorder : FingeringChart::whistle;
+        oldHarjedalChart = startsWith (chart, "harjedalspipa");
+        g.chart = startsWith (chart, "recorder") ? FingeringChart::baroqueRecorder : FingeringChart::whistle;
     }
-    if (root.hasProperty ("referenceA_Hz"))
-        g.referenceA = (double) root["referenceA_Hz"];
-    if (root.hasProperty ("chartTranspose"))
-        g.chartTranspose = (int) root["chartTranspose"];
+    if (root.has ("referenceA_Hz"))
+        g.referenceA = root["referenceA_Hz"].toDouble();
+    if (root.has ("chartTranspose"))
+        g.chartTranspose = root["chartTranspose"].toInt();
 
     // Missing in older files: equal temperament on the home key, as they were tuned.
     g.tuning = {};
@@ -251,42 +279,39 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
                 g.tuning.temperament = t;
         read (tuning, "towardEqual", g.tuning.towardEqual);
         for (const auto& [property, offset] : { std::pair { "majorKeys", 0 }, std::pair { "minorKeys", TuningGoal::kMinor } })
-            if (const auto* keys = tuning[property].getArray())
-                for (int k = 0; k < 12 && k < keys->size(); ++k)
-                    g.tuning.keys[(size_t) (k + offset)] = (double) (*keys)[k];
+            if (const auto& keys = tuning[property]; keys.isArray())
+                for (size_t k = 0; k < 12 && k < keys.items().size(); ++k)
+                    g.tuning.keys[k + (size_t) offset] = keys.items()[k].toDouble();
         g.tuning.topHoleForHighD = tuning["topHoleFor"].toString() == "high D";
-        if (tuning.hasProperty ("lowestNote"))
+        if (tuning.has ("lowestNote"))
         {
             // "D5", "F#4", "Bb3": the note name, then the octave.
-            const auto text = tuning["lowestNote"].toString().trim();
+            const auto text = trimmed (tuning["lowestNote"].toString());
             static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
             static const char* flats[] = { "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B" };
-            const auto letters = text.initialSectionNotContaining ("-0123456789");
-            const int octave = text.substring (letters.length()).getIntValue();
+            const auto letters = text.substr (0, std::min (text.size(), text.find_first_of ("-0123456789")));
+            const int octave = (int) std::strtol (text.c_str() + letters.size(), nullptr, 10);
             for (int i = 0; i < 12; ++i)
-                if (letters.equalsIgnoreCase (names[i]) || letters.equalsIgnoreCase (flats[i]))
-                    g.tuning.lowestNote = juce::jlimit (0, 127, (octave + 1) * 12 + i);
+                if (equalsIgnoringCase (letters, names[i]) || equalsIgnoringCase (letters, flats[i]))
+                    g.tuning.lowestNote = limit (0, 127, (octave + 1) * 12 + i);
         }
-        if (tuning.hasProperty ("tuneHoleSizes"))
-            g.tuning.tuneHoleSizes = (bool) tuning["tuneHoleSizes"];
-        if (tuning.hasProperty ("shapeHead"))
-            g.tuning.shapeHead = (bool) tuning["shapeHead"];
-        if (const auto* position = tuning["breathPosition"].getArray())
-            for (int i = 0; i < 2 && i < position->size(); ++i)
-                g.tuning.breathPosition[(size_t) i] = juce::jlimit (0.0, 1.0, (double) (*position)[i]);
-        g.tuning.useLearnedBreath = (bool) tuning["useLearnedBreath"];
-        if (const auto* custom = tuning["customCents"].getArray())
-            for (int d = 0; d < 12 && d < custom->size(); ++d)
-                g.tuning.custom[(size_t) d] = (double) (*custom)[d];
-        if (auto* learned = tuning["learnedBreath_Pa"].getDynamicObject())
-            for (const auto& entry : learned->getProperties())
-                g.tuning.learnedBreath[entry.name.toString().toStdString()] = (double) entry.value;
-        if (auto* weights = tuning["weights"].getDynamicObject())
-            for (const auto& entry : weights->getProperties())
-                g.tuning.weights[entry.name.toString().toStdString()] = juce::jlimit (0.0, 1.0, (double) entry.value);
-        if (auto* fingerings = tuning["fingerings"].getDynamicObject())
-            for (const auto& entry : fingerings->getProperties())
-                g.tuning.fingerings[entry.name.toString().toStdString()] = (bool) entry.value;
+        if (tuning.has ("tuneHoleSizes"))
+            g.tuning.tuneHoleSizes = tuning["tuneHoleSizes"].toBool();
+        if (tuning.has ("shapeHead"))
+            g.tuning.shapeHead = tuning["shapeHead"].toBool();
+        if (const auto& position = tuning["breathPosition"]; position.isArray())
+            for (size_t i = 0; i < 2 && i < position.items().size(); ++i)
+                g.tuning.breathPosition[i] = limit (0.0, 1.0, position.items()[i].toDouble());
+        g.tuning.useLearnedBreath = tuning["useLearnedBreath"].toBool();
+        if (const auto& custom = tuning["customCents"]; custom.isArray())
+            for (size_t d = 0; d < 12 && d < custom.items().size(); ++d)
+                g.tuning.custom[d] = custom.items()[d].toDouble();
+        for (const auto& [id, value] : tuning["learnedBreath_Pa"].members())
+            g.tuning.learnedBreath[id] = value.toDouble();
+        for (const auto& [id, value] : tuning["weights"].members())
+            g.tuning.weights[id] = limit (0.0, 1.0, value.toDouble());
+        for (const auto& [id, value] : tuning["fingerings"].members())
+            g.tuning.fingerings[id] = value.toBool();
     }
 
     if (oldHarjedalChart)
@@ -329,17 +354,17 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
     read (voicing, "bodyKnock", instrument.voicing.bodyKnock);
     read (voicing, "bodyPitch_Hz", instrument.voicing.bodyPitch);
     read (voicing, "bodyRing", instrument.voicing.bodyRing);
-    if (voicing.hasProperty ("jetStages"))
-        instrument.voicing.jetStages = juce::jlimit (1, 2, (int) voicing["jetStages"]);
+    if (voicing.has ("jetStages"))
+        instrument.voicing.jetStages = limit (1, 2, voicing["jetStages"].toInt());
     read (voicing, "jetThinning", instrument.voicing.jetThinning);
     read (voicing, "jetCutoff", instrument.voicing.jetCutoff);
-    if (voicing.hasProperty ("jetModel"))
-        instrument.voicing.jetModel = juce::jlimit (0, 1, (int) voicing["jetModel"]);
+    if (voicing.has ("jetModel"))
+        instrument.voicing.jetModel = limit (0, 1, voicing["jetModel"].toInt());
 
     // Sanity checks: anything that would make the model meaningless.
     auto bad = [&] (bool condition, const char* message)
     {
-        if (condition && error.isEmpty())
+        if (condition && error.empty())
             error = message;
         return condition;
     };
@@ -358,27 +383,29 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
     for (const auto& h : g.holes)
         if (h.enabled)
             bad (h.diameter <= 0.0 || h.position <= 0.0 || h.position >= g.boreLength, "Every hole needs a positive size and a position inside the bore");
-    if (error.isNotEmpty())
+    if (! error.empty())
         return std::nullopt;
 
     return instrument;
 }
 
-juce::String toJson (const Instrument& instrument)
+std::string toJson (const Instrument& instrument, bool oneLine)
 {
-    return juce::JSON::toString (toVar (instrument), false, 6);  // Lengths to 1 nm: presets keep their exact values
+    if (oneLine)
+        return json::write (toValue (instrument), true);
+    return json::write (toValue (instrument), false, 6);  // Lengths to 1 nm: presets keep their exact values
 }
 
-std::optional<Instrument> fromJson (const juce::String& text, juce::String& error, const Instrument* base)
+std::optional<Instrument> fromJson (std::string_view text, std::string& error, const Instrument* base)
 {
-    juce::var parsed;
-    const auto result = juce::JSON::parse (text, parsed);
-    if (result.failed())
+    std::string reason;
+    const auto parsed = json::parse (text, reason);
+    if (! parsed)
     {
-        error = "Not valid JSON: " + result.getErrorMessage();
+        error = "Not valid JSON: " + reason;
         return std::nullopt;
     }
-    return fromVar (parsed, error, base);
+    return fromValue (*parsed, error, base);
 }
 
 } // namespace whistle
