@@ -30,7 +30,7 @@ int main()
                 unsigned noise = 1;
                 for (size_t n = 0; n < x.size(); ++n)
                 {
-                    const double t = 2.0 * juce::MathConstants<double>::pi * hz * (double) n / rate;
+                    const double t = 2.0 * std::numbers::pi * hz * (double) n / rate;
                     noise = noise * 1664525u + 1013904223u;
                     x[n] = (float) (0.3 * std::sin (t) + 0.3 * h2 * std::sin (2.0 * t + 0.4) + 0.05 * std::sin (3.0 * t)
                                     + 0.01 * ((double) (noise >> 8) / (1 << 24) - 0.5));
@@ -55,17 +55,17 @@ int main()
     for (size_t i = 0; i < presets().size(); ++i)
     {
         const auto& g = presets()[i];
-        if (g.name.contains ("(measured)") || g.name.contains ("holes L2-R4"))  // The L2-R4 copies are the same instruments
+        if (g.name.find ("(measured)") != std::string::npos || g.name.find ("holes L2-R4") != std::string::npos)  // The L2-R4 copies are the same instruments
             continue;
         const auto notes = measurePlayed (g, presetVoicing (i), presetLowestNote (g));
         const double rms = playedRms (g, notes);
         int silent = 0;
         for (const auto& n : notes)
             silent += chartFor (g.chart)[n.chartIndex].counts && std::abs (n.resonance) < kCentsNotReachable && ! n.sounds ? 1 : 0;
-        std::printf ("%-60s played %4.1f c rms%s\n", g.name.toRawUTF8(), rms, silent > 0 ? " (some notes don't sound)" : "");
+        std::printf ("%-60s played %4.1f c rms%s\n", g.name.c_str(), rms, silent > 0 ? " (some notes don't sound)" : "");
         if (rms > kLimit || silent > 0)
         {
-            std::printf ("FAILED %s: retune with WhistleCheck code\n", g.name.toRawUTF8());
+            std::printf ("FAILED %s: retune with WhistleCheck code\n", g.name.c_str());
             ++failures;
         }
         ++checked;

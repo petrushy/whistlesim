@@ -4,9 +4,12 @@
 
 #pragma once
 
+#include "Json.h"
 #include "WhistleGeometry.h"
 
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace whistle
 {
@@ -17,11 +20,13 @@ struct Instrument
     Voicing voicing;
 };
 
-juce::var toVar (const Instrument&);
+json::Value toValue (const Instrument&);
 // `base` gives the values a file leaves out (default: the first preset, with the default voicing).
-std::optional<Instrument> fromVar (const juce::var&, juce::String& error, const Instrument* base = nullptr);
+std::optional<Instrument> fromValue (const json::Value&, std::string& error, const Instrument* base = nullptr);
 
-juce::String toJson (const Instrument&);
-std::optional<Instrument> fromJson (const juce::String&, juce::String& error, const Instrument* base = nullptr);
+// The file's text: indented, with 6 decimals (files and presets); oneLine: on one line with every digit (the
+// instrument in a recording's header).
+std::string toJson (const Instrument&, bool oneLine = false);
+std::optional<Instrument> fromJson (std::string_view, std::string& error, const Instrument* base = nullptr);
 
 } // namespace whistle

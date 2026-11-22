@@ -62,7 +62,7 @@ std::vector<ChartFingering> lowRegister (const Geometry& g)
 
 void printTable (const Geometry& g)
 {
-    std::printf ("\n%s\n  fingering   register 1          register 2        2/1 ratio (cents from octave)\n", g.name.toRawUTF8());
+    std::printf ("\n%s\n  fingering   register 1          register 2        2/1 ratio (cents from octave)\n", g.name.c_str());
     for (const auto& c : lowRegister (g))
     {
         const auto r = resonances (g, c.openness (g), lowestNote (g) * 0.6, lowestNote (g) * 6.0);
@@ -181,7 +181,7 @@ static int presetArg (const char* arg)
     if (text.containsOnly ("0123456789"))
         return juce::jlimit (0, (int) presets().size() - 1, text.getIntValue());
     for (size_t i = 0; i < presets().size(); ++i)
-        if (presets()[i].name.containsIgnoreCase (text))
+        if (juce::String (presets()[i].name).containsIgnoreCase (text))
             return (int) i;
     std::printf ("No preset matches \"%s\"\n", arg);
     std::exit (1);
@@ -268,7 +268,7 @@ static void play (const Geometry& g)
 {
     constexpr double rate = 48000.0;
     const double pressures[] = { 100, 200, 400, 700, 1000, 1500, 2200 };
-    std::printf ("\n%s: pitch played by the model (cents from the predicted register 1 / 2), level dBFS\n", g.name.toRawUTF8());
+    std::printf ("\n%s: pitch played by the model (cents from the predicted register 1 / 2), level dBFS\n", g.name.c_str());
     std::printf ("  fingering   predicted        ");
     for (double p : pressures)
         std::printf ("%7.0f Pa      ", p);
@@ -326,7 +326,7 @@ static void play (const Geometry& g)
 static void slide (const Geometry& g, int hole, double pressure)
 {
     constexpr double rate = 48000.0;
-    std::printf ("\n%s: hole %s from covered to open at %.0f Pa\n  openness   pitch\n", g.name.toRawUTF8(), kHoleNames[(size_t) hole], pressure);
+    std::printf ("\n%s: hole %s from covered to open at %.0f Pa\n  openness   pitch\n", g.name.c_str(), kHoleNames[(size_t) hole], pressure);
     for (int step = 0; step <= 10; ++step)
     {
         WhistleModel model;
@@ -387,7 +387,7 @@ static double playOnce (const Geometry& g, const Openness& open, double pressure
 static void chart (const Geometry& g)
 {
     const double lowest = lowestNote (g);
-    std::printf ("\n%s\n  note      fingering  predicted (geometry)   model plays it at    pitch at lowest / highest\n", g.name.toRawUTF8());
+    std::printf ("\n%s\n  note      fingering  predicted (geometry)   model plays it at    pitch at lowest / highest\n", g.name.c_str());
 
     for (const auto& c : chartFor (g.chart))
     {
@@ -416,7 +416,7 @@ static void chart (const Geometry& g)
 static void head (const Geometry& base)
 {
     const double lowest = lowestNote (base);
-    std::printf ("\n%s: head section effect (whistle retuned for each), second register vs. octave in cents\n", base.name.toRawUTF8());
+    std::printf ("\n%s: head section effect (whistle retuned for each), second register vs. octave in cents\n", base.name.c_str());
     std::printf ("  head            ");
     for (const auto& c : chartFor (base.chart))
         if (c.reg == 2)
@@ -499,11 +499,11 @@ int main (int argc, char* argv[])
         std::optional<Instrument> loaded;
         if (argc > 2 && juce::String (argv[2]).endsWith (".whistle"))
         {
-            juce::String error;
-            loaded = fromJson (file.loadFileAsString(), error);
+            std::string error;
+            loaded = fromJson (file.loadFileAsString().toStdString(), error);
             if (! loaded)
             {
-                std::printf ("Can't load %s: %s\n", argv[2], error.toRawUTF8());
+                std::printf ("Can't load %s: %s\n", argv[2], error.c_str());
                 return 1;
             }
         }
@@ -534,7 +534,7 @@ int main (int argc, char* argv[])
                 cross = false;
             if (arg == "chart=recorder" || arg == "chart=whistle")  // As choosing the chart in the app
                 std::printf ("Chart changed: %s\n", setChart (g, arg.endsWith ("recorder") ? FingeringChart::baroqueRecorder
-                                                                                            : FingeringChart::whistle).toRawUTF8());
+                                                                                            : FingeringChart::whistle).c_str());
         }
         double lowest = lowestNote (g);
         for (int i = 3; i < argc; ++i)  // lowest=<Hz>: another key
@@ -543,7 +543,7 @@ int main (int argc, char* argv[])
         auto report = [&] (const Geometry& geometry, const std::vector<PlayedNote>& notes, const char* title)
         {
             std::printf ("\n%s, %s: played at the middle of each note's pressures\n  note      fingering  resonance   sounds at      played at     played   pull\n",
-                         geometry.name.toRawUTF8(), title);
+                         geometry.name.c_str(), title);
             for (const auto& n : notes)
             {
                 const auto& c = chartFor (geometry.chart)[n.chartIndex];
@@ -635,7 +635,7 @@ int main (int argc, char* argv[])
         std::vector<double> settleTimes;
         std::printf ("%s at %.0f Pa: one hole switched within one 2 ms sensor frame. Pitch (from zero crossings, cents\n"
                      "relative to the new note) in the 5 ms steps after the change, and when it stays within 10 cents.\n\n",
-                     g.name.toRawUTF8(), pressure);
+                     g.name.c_str(), pressure);
         constexpr double rate = 48000.0;
         const auto low = lowRegister (g);
         for (size_t k = 0; k + 1 < low.size(); ++k)
@@ -734,7 +734,7 @@ int main (int argc, char* argv[])
         {
             const auto& base = presets()[p];
             const int baseMidi = (int) std::lround (69.0 + 12.0 * std::log2 (lowestNote (base) / 440.0));
-            std::printf ("  %-48s", base.name.toRawUTF8());
+            std::printf ("  %-48s", base.name.c_str());
             for (int k = 0; k < 12; ++k)
             {
                 // The key closest to the preset's own (within half an octave up or down).
@@ -768,7 +768,7 @@ int main (int argc, char* argv[])
             if (juce::String (argv[i]).startsWith ("p="))
                 pressure = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         std::printf ("%s at %.0f Pa, breath noise off. Per host rate: pitch, harmonics 1-12 (dB re the fundamental), and the\n"
-                     "energy between the harmonics up to 20 kHz relative to the tone (aliasing, inharmonic artefacts).\n\n", g.name.toRawUTF8(), pressure);
+                     "energy between the harmonics up to 20 kHz relative to the tone (aliasing, inharmonic artefacts).\n\n", g.name.c_str(), pressure);
         for (const char* pattern : { "xxxxxx", "xxoooo", "xooooo" })
         {
             ChartFingering c { "", pattern, 0.0, 1 };
@@ -835,7 +835,7 @@ int main (int argc, char* argv[])
         std::printf ("%s, low G at %.0f Pa: the breath noise (sound with noise minus sound without) against the tone,\n"
                      "in 5 ms windows after a tongued attack (2 ms) and after a slow swell (300 ms), for several\n"
                      "Attack chiff settings. dB relative to the steady tone. After ~25 ms the 'noise' is mostly tone: the noise\n"
-                     "seeds the oscillation, so the noisy sound's tone builds up sooner than the clean one's.\n\n", g.name.toRawUTF8(), pressure);
+                     "seeds the oscillation, so the noisy sound's tone builds up sooner than the clean one's.\n\n", g.name.c_str(), pressure);
         constexpr double rate = 48000.0;
         const auto open = ChartFingering { "G", "xxxooo", 7.0, 1 }.openness (g);
         auto render = [&] (float noise, float chiffAmount, double rise, double seconds)
@@ -906,9 +906,9 @@ int main (int argc, char* argv[])
             auto& name = instrument.geometry.name;
             if (! all)
             {
-                if (name.endsWith (", holes L2-R4"))
+                if (name.ends_with (", holes L2-R4"))
                     continue;  // Made from the L1-R3 one when the presets load
-                name = name.upToLastOccurrenceOf (", holes L1-R3", false, false);
+                name = juce::String (name).upToLastOccurrenceOf (", holes L1-R3", false, false).toStdString();
             }
             const auto file = dir.getChildFile (juce::String (++number).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (name) + ".whistle");
             file.replaceWithText (toJson (instrument), false, false, "\n");
@@ -943,7 +943,7 @@ int main (int argc, char* argv[])
             const double hz = measurePitch (out, rate, clarity);
             return clarity > 0.8 ? hz : 0.0;
         };
-        std::printf ("%s\n  note      Pa   real  model  model-real   rise 0.7-1.4x\n", g.name.toRawUTF8());
+        std::printf ("%s\n  note      Pa   real  model  model-real   rise 0.7-1.4x\n", g.name.c_str());
         double sum = 0.0, riseSum = 0.0;
         int n = 0, silent = 0, rises = 0;
         for (const auto& r : real)
@@ -1516,7 +1516,7 @@ int main (int argc, char* argv[])
 
         std::printf ("%s: %d swell(s); against %s.\n"
                      "Rows: level below the swell's loudest point. Pitch in cents re the swell's median; bright = mean of H7-H10 (dB re H1).\n",
-                     source.toRawUTF8(), (int) swells.size(), g.name.toRawUTF8());
+                     source.toRawUTF8(), (int) swells.size(), g.name.c_str());
         for (const auto& s : swells)
         {
             const auto* c = fingeringFor (s.hz);
@@ -2070,7 +2070,7 @@ int main (int argc, char* argv[])
             std::printf ("\n");
             std::vector<float> modelOut;
             playScale (g, voicing, steps, rate, &modelOut);
-            print ((g.name + " (model, scale at the in-tune pressures)").toRawUTF8(), analyse (modelOut, rate), &recordedNotes);
+            print ((g.name + " (model, scale at the in-tune pressures)").c_str(), analyse (modelOut, rate), &recordedNotes);
             saveWavArg (argc, argv, "model-scale", modelOut, rate);
         }
         return 0;
@@ -2121,11 +2121,11 @@ int main (int argc, char* argv[])
         {
             if (line.startsWith ("# instrument "))
             {
-                juce::String error;
-                if (auto parsed = fromJson (line.fromFirstOccurrenceOf ("# instrument ", false, false), error))
+                std::string error;
+                if (auto parsed = fromJson (line.fromFirstOccurrenceOf ("# instrument ", false, false).toStdString(), error))
                     instrument = *parsed;
                 else
-                    std::printf ("instrument: %s\n", error.toRawUTF8());
+                    std::printf ("instrument: %s\n", error.c_str());
             }
             else if (line.startsWith ("# sensors "))
             {
@@ -2180,7 +2180,7 @@ int main (int argc, char* argv[])
         const auto& g = instrument.geometry;
         std::printf ("Jet Strouhal %.3f, breath output max %.0f Pa.\n", instrument.voicing.jetStrouhal, breath.outputMax);
         std::printf ("%s: %d frames, %.1f s. Hole response: %s; breath %g-%g Pa -> %g Pa (curve %g).\n",
-                     g.name.toRawUTF8(), (int) frames.size(), (frames.back().ms - frames.front().ms) / 1000.0,
+                     g.name.c_str(), (int) frames.size(), (frames.back().ms - frames.front().ms) / 1000.0,
                      holes.fingerHeight ? "finger height" : holes.sCurve ? "S-curve" : "power curve", breath.inputMin, breath.inputMax,
                      breath.outputMax, breath.curve);
 
@@ -2345,7 +2345,7 @@ int main (int argc, char* argv[])
         std::printf ("%s at %.0f Pa, breath noise off. One hole opened or closed over 3 ms along an S-shaped path (as\n"
                      "fingers do: slow at both ends). Level in 0.8-6 kHz in 1 ms windows, from the change to 15 ms after,\n"
                      "above the louder of the two notes' steady levels in that band (dB; > 0 is a burst), without and with\n"
-                     "the finger gap's viscous resistance.\n\n", g.name.toRawUTF8(), pressure);
+                     "the finger gap's viscous resistance.\n\n", g.name.c_str(), pressure);
         constexpr double rate = 48000.0;
         auto bandpass = [] (const std::vector<float>& x)
         {
@@ -2420,7 +2420,7 @@ int main (int argc, char* argv[])
         }
         std::printf ("%s at %.0f Pa, fingering changed over %.0f ms at t = 0: level above 5 kHz in 1 ms windows, dB\n"
                      "relative to the same band in the steady old note; breath noise off (so it's only the tone).\n\n",
-                     g.name.toRawUTF8(), pressure, rampMs);
+                     g.name.c_str(), pressure, rampMs);
         constexpr double rate = 48000.0;
         // Two-pole highpass at 5 kHz.
         auto highpass = [] (const std::vector<float>& x)
@@ -2498,7 +2498,7 @@ int main (int argc, char* argv[])
         std::printf ("%s at %.0f Pa: fingering changed over %.0f ms (openness ramped, frames every 2 ms). Level in 2 ms windows\n"
                      "relative to the old note (dB), from 4 ms before to 30 ms after the start; then the lowest level and any\n"
                      "period between zero crossings far from both notes (a chirp: another register or a glitch).\n\n",
-                     g.name.toRawUTF8(), pressure, rampMs);
+                     g.name.c_str(), pressure, rampMs);
         constexpr double rate = 48000.0;
         const auto low = lowRegister (g);
         for (size_t k = 0; k + 1 < low.size(); ++k)
@@ -2609,7 +2609,7 @@ int main (int argc, char* argv[])
             if (arg.startsWith ("foot=")) g.boreDiameterFoot = value;
         }
         const bool ok = tuneToScale (g, lowestNote (g), true);
-        std::printf ("%s, bore %.1f -> %.1f mm: %s\n ", g.name.toRawUTF8(), g.boreDiameterTop * 1000.0, g.boreDiameterFoot * 1000.0, ok ? "tuned" : "NOT ALL IN TUNE");
+        std::printf ("%s, bore %.1f -> %.1f mm: %s\n ", g.name.c_str(), g.boreDiameterTop * 1000.0, g.boreDiameterFoot * 1000.0, ok ? "tuned" : "NOT ALL IN TUNE");
         for (const auto& c : chartFor (g.chart))
             std::printf (" %s %+.0f", c.name, predictedCents (g, c, lowestNote (g)));
         std::printf ("\n  sizes (mm):");
@@ -2626,7 +2626,7 @@ int main (int argc, char* argv[])
         const double lowest = lowestNote (g);
         tuneToScale (g, lowest, false);
         const auto& chart = chartFor (g.chart);
-        std::printf ("%s: cents each chart note moves when one hole is made 10 %% wider (positions retuned)\n  %-9s now  ", g.name.toRawUTF8(), "note");
+        std::printf ("%s: cents each chart note moves when one hole is made 10 %% wider (positions retuned)\n  %-9s now  ", g.name.c_str(), "note");
         for (int h = 0; h < kNumHoles; ++h)
             if (g.holes[(size_t) h].enabled)
                 std::printf ("%6s", kHoleNames[(size_t) h]);
@@ -2669,7 +2669,7 @@ int main (int argc, char* argv[])
         const auto fingerings = lowRegister (g);
         const auto& c = fingerings[(size_t) juce::jlimit (0, (int) fingerings.size() - 1, which)];
         std::printf ("%s, %s at %.0f Pa: breath reading noise (stdev, Pa at the model, a new reading every 2 ms, ramped)\n"
-                     "  noise      level   between the harmonics, 0.3-4 kHz (dB re the tone)   pitch wobble\n", g.name.toRawUTF8(), c.holePattern (g).c_str(), pressure);
+                     "  noise      level   between the harmonics, 0.3-4 kHz (dB re the tone)   pitch wobble\n", g.name.c_str(), c.holePattern (g).c_str(), pressure);
         constexpr double rate = 48000.0;
         for (double sigma : { 0.0, 1.0, 3.0, 6.0, 12.0 })
         {
@@ -2779,7 +2779,7 @@ int main (int argc, char* argv[])
             model.render (out.data() + start, std::min (block, (int) out.size() - start));
         }
         std::printf ("%s, %s at %.0f Pa (blown up over 40 ms), breath noise %.3f: per 10 ms, level (dBFS) and pitch (cents from %s)\n  ",
-                     g.name.toRawUTF8(), c.name, pressure, voicing.breathNoise, c.name);
+                     g.name.c_str(), c.name, pressure, voicing.breathNoise, c.name);
         const int window = (int) (0.01 * rate);
         for (int w = 0; w + window <= (int) out.size(); w += window)
         {
@@ -2812,7 +2812,7 @@ int main (int argc, char* argv[])
         const auto index = (size_t) (argc > 2 ? presetArg (argv[2]) : 0);
         auto g = presets()[index];
         windwayArgs (argc, argv, 3, g);
-        std::printf ("%s: resonances (Hz), and in brackets cents from k x the second resonance (the second octave's harmonics)\n", g.name.toRawUTF8());
+        std::printf ("%s: resonances (Hz), and in brackets cents from k x the second resonance (the second octave's harmonics)\n", g.name.c_str());
         for (const auto& c : lowRegister (g))
         {
             const auto r = resonances (g, c.openness (g), lowestNote (g) * 0.6, 8000.0);
@@ -2881,7 +2881,7 @@ int main (int argc, char* argv[])
         }
         std::printf ("%s, %.0f s of random fingering (changes every 20-170 ms, some partly open holes) and breath (0-6 kPa):\n"
                      "  instability resets %d, peak output %.2f, 2 ms blocks silent while blowing > 300 Pa: %d\n",
-                     g.name.toRawUTF8(), seconds, model.instabilityResets.load(), peak, silentBlocksAfterSound);
+                     g.name.c_str(), seconds, model.instabilityResets.load(), peak, silentBlocksAfterSound);
         return 0;
     }
 
@@ -2898,7 +2898,7 @@ int main (int argc, char* argv[])
         constexpr double rate = 48000.0;
         std::printf ("%s, no breath: the lowest covered hole of each fingering tapped at %.2f m/s (tap %.1f, knock %.1f, body %.0f Hz, ring %.0f)\n"
                      "  note   fingering  peak dBFS  strongest Hz  bore resonance Hz  ms to -20 dB  ms to peak  sharpness\n",
-                     g.name.toRawUTF8(), speed, voicing.fingerTap, voicing.bodyKnock, voicing.bodyPitch, voicing.bodyRing);
+                     g.name.c_str(), speed, voicing.fingerTap, voicing.bodyKnock, voicing.bodyPitch, voicing.bodyRing);
         std::vector<float> all;
         for (const auto& c : lowRegister (g))
         {
@@ -3012,7 +3012,7 @@ int main (int argc, char* argv[])
         const double noteLevel = rms (out.data() + out.size() - (size_t) (0.1 * rate), (size_t) (0.1 * rate));
         std::printf ("%s, %s %s at %.0f Pa, breath to %.0f %% over %.0f ms\n"
                      "     ms     Pa  jet m/s  level dB   swing max  drive  vortex (Pa rms over 2 ms)\n",
-                     g.name.toRawUTF8(), noteArg.c_str(), chosen->holePattern (g).c_str(), pressure, share * 100.0, rampMs);
+                     g.name.c_str(), noteArg.c_str(), chosen->holePattern (g).c_str(), pressure, share * 100.0, rampMs);
         model.jetLog = &jetLog;
         const size_t perStep = (size_t) (0.002 * rate);
         for (int step = -5; step < 60; ++step)
@@ -3077,7 +3077,7 @@ int main (int argc, char* argv[])
                      "  swing: deflection minus edge over the jet half-width (min/max); sat: share of time |x| > half-width\n"
                      "  harmonics in dB re H1 of: window flow (into the bore), jet flow, sound out\n\n"
                      "  Pa     f0 Hz  dBFS   swing min/max  sat    flow H2 H3 H4      jet H2 H3 H4      out H2 H3 H4   drive/vortex H1 Pa\n",
-                     g.name.toRawUTF8(), c.holePattern (g).c_str(), g.edgeOffset * 1000.0, voicing.vortexLoss, voicing.jetStrouhal, voicing.jetGain,
+                     g.name.c_str(), c.holePattern (g).c_str(), g.edgeOffset * 1000.0, voicing.vortexLoss, voicing.jetStrouhal, voicing.jetGain,
                      voicing.slowJetGrowth, voicing.jetStages);
         constexpr double rate = 48000.0;
         std::vector<double> pressures { 150.0, 250.0, 350.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1050.0, 1200.0, 1500.0 };
@@ -3199,7 +3199,7 @@ int main (int argc, char* argv[])
         constexpr double rate = 48000.0;
         std::printf ("%s, breath noise off. Per note and pressure: the strongest component that is not a harmonic (more than 40 Hz from one,\n"
                      "dB re the fundamental, 200 Hz-9 kHz) and the level's flutter at 15-80 Hz (%% of the level). '<' marks > -45 dB or > 1 %%.\n\n",
-                     g.name.toRawUTF8());
+                     g.name.c_str());
         int rough = 0, total = 0;
         for (const auto& c : chartFor (g.chart))
         {
@@ -3308,7 +3308,7 @@ int main (int argc, char* argv[])
         std::printf ("%s at %.0f Pa: harmonic levels (dBFS) at the listener 0.5 m in front of the window, from everything,\n"
                      "from the window alone, and from the holes and foot alone; 'power' adds the two parts' powers (as a room\n"
                      "would, roughly) instead of their pressures.\n\n  fingering        H1: all  window  body  power    H2: all  window  body  power    H3: all  power\n",
-                     g.name.toRawUTF8(), pressure);
+                     g.name.c_str(), pressure);
         constexpr double rate = 48000.0;
         for (const auto& c : lowRegister (g))
         {
@@ -3410,7 +3410,7 @@ int main (int argc, char* argv[])
         std::printf ("\n%s: windway %.1f mm long, %.2f mm high; window %.1f mm (W/h %.1f).\n"
                      "Per frequency: phase speed c/U and growth over the window (dB) from the profile theory, then\n"
                      "the model's current jet (delay at %.2f U, band-pass at Strouhal %.3f, growth e^(0.38 W/h)).\n",
-                     g.name.toRawUTF8(), g.windwayLength * 1000.0, h * 1000.0, w * 1000.0, w / h, v.jetConvection, v.jetStrouhal);
+                     g.name.c_str(), g.windwayLength * 1000.0, h * 1000.0, w * 1000.0, w / h, v.jetConvection, v.jetStrouhal);
         for (double pressure : { 300.0, 1000.0, 3000.0 })
         {
             const double u = std::sqrt (2.0 * pressure / kAirDensity);
@@ -3482,7 +3482,7 @@ int main (int argc, char* argv[])
                      "Which register sounds over which pressures, in the order heard (1 = low register, - = no clear note,\n"
                      "below -40 dBFS or not on a resonance). Going up and coming down differ: flutes have hysteresis. A brief 1\n"
                      "between registers 2 and 3 is the crossover: both sound at once, and together they repeat at the low note.\n",
-                     g.name.toRawUTF8());
+                     g.name.c_str());
 
         constexpr double rate = 48000.0, lo = 100.0, hi = 5000.0;
         for (const auto& c : lowRegister (g))
@@ -3584,7 +3584,7 @@ int main (int argc, char* argv[])
         std::printf ("%s: breath from %.0f to %.0f Pa and back, %.0f %% a second (%.0f s each way). Pressures where the low\n"
                      "register starts (held 50 ms), where it breaks upwards, where it returns coming down, and its pitch at\n"
                      "start and break. f: fades out instead of breaking. Down to: the softest it holds coming down. Squeaks: other\nregisters (resonance@Pa) below the start.\n\n  note   fingering   starts   breaks   ratio   returns  down to   pitch at start  at break   span  squeaks\n",
-                     g.name.toRawUTF8(), lo, hi, 100.0 * perSecond, sweep);
+                     g.name.c_str(), lo, hi, 100.0 * perSecond, sweep);
         for (const auto& c : chartFor (g.chart))
         {
             const auto open = c.openness (g);
@@ -3715,7 +3715,7 @@ int main (int argc, char* argv[])
                 pressure = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         std::printf ("%s at %.0f Pa: a note, then four more tongued after a gap with no breath (hard tongue: 2 ms\n"
                      "steps). Per gap length: how far the sound falls in the gap, and how long each re-attack takes to\n"
-                     "reach 90 %% of the steady level (2 ms windows). The first note is a fresh start.\n\n", g.name.toRawUTF8(), pressure);
+                     "reach 90 %% of the steady level (2 ms windows). The first note is a fresh start.\n\n", g.name.c_str(), pressure);
         std::printf ("  fingering   fresh   gap 10 ms: dip / re-attack   gap 20 ms           gap 40 ms\n");
 
         constexpr double rate = 48000.0, noteLength = 0.25;
@@ -3767,7 +3767,7 @@ int main (int argc, char* argv[])
                 g.wallLoss = juce::String (argv[i]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         std::printf ("%s: passive resonances (jet off). An impulse at the window; the model's admittance U/p there\n"
                      "against Acoustics' 1/Z. Per resonance: frequency (Acoustics), the model's offset in cents,\n"
-                     "Q (Acoustics / model) and the model's peak height relative to Acoustics (dB).\n\n", g.name.toRawUTF8());
+                     "Q (Acoustics / model) and the model's peak height relative to Acoustics (dB).\n\n", g.name.c_str());
 
         constexpr double hostRate = 48000.0, rate = 2.0 * hostRate;  // The model runs at twice the host rate
         constexpr int order = 17;
@@ -3859,7 +3859,7 @@ int main (int argc, char* argv[])
         windwayNoiseArg (argc, argv, voicing);
         voicing.windwayMass = windwayMass;
         voicing.windwayFriction = windwayFriction;
-        std::printf ("%s, windway %.0f mm, mass %.2f, friction %.2f, breath noise %.2f\n", g.name.toRawUTF8(), g.windwayLength * 1000.0, windwayMass,
+        std::printf ("%s, windway %.0f mm, mass %.2f, friction %.2f, breath noise %.2f\n", g.name.c_str(), g.windwayLength * 1000.0, windwayMass,
                      windwayFriction, voicing.breathNoise);
         std::printf ("  Breath steps to the pressure in 2 ms (a hard tongued attack). Times from the step to reach\n"
                      "  10 %% and 90 %% of the note's steady level (RMS in 2 ms windows), and the steady level.\n");
@@ -3943,7 +3943,7 @@ int main (int argc, char* argv[])
 
         constexpr int fftOrder = 14, fftSize = 1 << fftOrder;
         juce::dsp::FFT fft (fftOrder);
-        std::printf ("%s, breath noise %.2f, direct %.2f\n", g.name.toRawUTF8(), voicing.breathNoise, direct);
+        std::printf ("%s, breath noise %.2f, direct %.2f\n", g.name.c_str(), voicing.breathNoise, direct);
 
         for (int semitones : { 0, 5 })
         {
@@ -4049,7 +4049,7 @@ int main (int argc, char* argv[])
         const double lowest = lowestNote (g);
         const auto planStart = juce::Time::getMillisecondCounterHiRes();
         const auto steps = planScale (g, scaleVoicing, lowest);
-        std::printf ("%s: %d notes, planned in %.0f ms\n", g.name.toRawUTF8(), (int) steps.size(), juce::Time::getMillisecondCounterHiRes() - planStart);
+        std::printf ("%s: %d notes, planned in %.0f ms\n", g.name.c_str(), (int) steps.size(), juce::Time::getMillisecondCounterHiRes() - planStart);
         // Play it exactly as the app does (same timing and breath envelope), measure every note, and save a WAV.
         constexpr double rate = 48000.0;
         std::vector<float> out;
@@ -4143,7 +4143,7 @@ int main (int argc, char* argv[])
     {
         const auto g = presets()[(size_t) (argc > 2 ? presetArg (argv[2]) : 0)];
         const double pressures[] = { 300, 600, 1000, 1500, 2200, 3000, 4000, 5500, 7000, 8500 };
-        std::printf ("\n%s: resonance played (1 = low register, 2 = octave, 3 = twelfth, 4 = double octave) and note\n  fingering  ", g.name.toRawUTF8());
+        std::printf ("\n%s: resonance played (1 = low register, 2 = octave, 3 = twelfth, 4 = double octave) and note\n  fingering  ", g.name.c_str());
         for (double p : pressures)
             std::printf ("%7.0f Pa  ", p);
         std::printf ("\n");
@@ -4230,27 +4230,27 @@ int main (int argc, char* argv[])
 
         if (mode == "code")  // Retunes the presets to the played pitch and writes them into their files in Presets/ (rebuild after)
         {
-            if (g.name.contains ("(measured)"))
+            if (g.name.find ("(measured)") != std::string::npos)
             {
-                std::printf ("  %s: measured, not tuned\n", g.name.toRawUTF8());
+                std::printf ("  %s: measured, not tuned\n", g.name.c_str());
                 continue;
             }
             // Whistles also get their head section shaped (the octaves); recorders and the Härjedalspipa keep their bores.
-            if (g.name.endsWith (", holes L2-R4"))
+            if (g.name.ends_with (", holes L2-R4"))
                 continue;  // The same instrument as its L1-R3 copy, which is the one in the file
             std::vector<PlayedNote> notes;
             tuneToPlayed (g, presetVoicing ((size_t) presetIndex), lowestNote (g), true, g.chart == FingeringChart::whistle, 4, &notes);
-            std::printf ("  %s: played %.1f c rms; length %.5f, head %.4f long, %.5f at the window\n", g.name.toRawUTF8(),
+            std::printf ("  %s: played %.1f c rms; length %.5f, head %.4f long, %.5f at the window\n", g.name.c_str(),
                          playedRms (g, notes), g.boreLength, g.headLength, g.headDiameter);
 
             // Into its file in Presets/ (found by the name in it): the tuner's dimensions, everything else kept.
-            const auto baseName = g.name.upToLastOccurrenceOf (", holes L1-R3", false, false);
+            const auto baseName = juce::String (g.name).upToLastOccurrenceOf (", holes L1-R3", false, false).toStdString();
             bool written = false;
             for (const auto& file : juce::File (WHISTLESIM_PRESET_DIR).findChildFiles (juce::File::findFiles, false, "*.whistle"))
             {
-                juce::String error;
+                std::string error;
                 const Instrument blank;
-                auto instrument = fromJson (file.loadFileAsString(), error, &blank);
+                auto instrument = fromJson (file.loadFileAsString().toStdString(), error, &blank);
                 if (! instrument || instrument->geometry.name != baseName)
                     continue;
                 auto& out = instrument->geometry;
@@ -4264,14 +4264,14 @@ int main (int argc, char* argv[])
                 break;
             }
             if (! written)
-                std::printf ("    NOT WRITTEN: no file in %s named \"%s\"\n", WHISTLESIM_PRESET_DIR, baseName.toRawUTF8());
+                std::printf ("    NOT WRITTEN: no file in %s named \"%s\"\n", WHISTLESIM_PRESET_DIR, baseName.c_str());
             continue;
         }
 
         if (mode == "tune" || mode == "tunec")  // tunec: also tune cross-fingerings with hole sizes
         {
             const bool ok = tuneToScale (g, lowestNote (g), mode == "tunec");
-            std::printf ("%s: %s\n  bore %.4f  holes (position/diameter)", g.name.toRawUTF8(), ok ? "tuned" : "DID NOT CONVERGE", g.boreLength);
+            std::printf ("%s: %s\n  bore %.4f  holes (position/diameter)", g.name.c_str(), ok ? "tuned" : "DID NOT CONVERGE", g.boreLength);
             for (const auto& h : g.holes)
                 std::printf ("  %.4f/%.4f", h.position, h.diameter);
             std::printf ("\n  ");

@@ -1,10 +1,10 @@
 #include "WhistleGeometry.h"
 
 #include "InstrumentFile.h"
-
-#include <PresetData.h>
+#include "PresetFiles.h"
 
 #include <algorithm>
+#include <cassert>
 
 namespace whistle
 {
@@ -78,22 +78,18 @@ const PresetList& presetList()
 {
     static const PresetList list = []
     {
-        std::vector<std::pair<juce::String, juce::String>> files;  // (file name, text)
-        for (int i = 0; i < PresetData::namedResourceListSize; ++i)
-        {
-            int size = 0;
-            if (const char* data = PresetData::getNamedResource (PresetData::namedResourceList[i], size))
-                files.push_back ({ PresetData::originalFilenames[i], juce::String::fromUTF8 (data, size) });
-        }
+        std::vector<std::pair<std::string, std::string>> files;  // (file name, text)
+        for (const auto& file : presetFiles())
+            files.push_back ({ file.name, std::string (file.data, file.size) });
         std::sort (files.begin(), files.end());
 
         PresetList out;
         const Instrument base;  // The files give every value; anything missing stays at the defaults
         for (const auto& [file, text] : files)
         {
-            juce::String error;
+            std::string error;
             const auto instrument = fromJson (text, error, &base);
-            jassert (instrument.has_value());  // A broken preset file
+            assert (instrument.has_value());  // A broken preset file
             if (! instrument)
                 continue;
             if (instrument->geometry.chart == FingeringChart::baroqueRecorder)  // Uses all eight holes
@@ -103,8 +99,8 @@ const PresetList& presetList()
                 continue;
             }
             auto upper = instrument->geometry, lower = instrument->geometry;
-            upper.name << ", holes L1-R3";
-            lower.name << ", holes L2-R4";
+            upper.name += ", holes L1-R3";
+            lower.name += ", holes L2-R4";
             moveFrontHoles (lower, 2);
             for (const auto& g : { upper, lower })
             {

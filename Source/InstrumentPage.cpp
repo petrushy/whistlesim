@@ -232,7 +232,7 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
         const auto changed = whistle::setChart (geometry, id == 2 ? whistle::FingeringChart::baroqueRecorder : whistle::FingeringChart::whistle);
         refreshSliders();
         geometryChanged();
-        if (onChartHolesChanged != nullptr && changed.isNotEmpty())
+        if (onChartHolesChanged != nullptr && ! changed.empty())
             onChartHolesChanged (changed);
     };
     bellButton.setColour (juce::ToggleButton::textColourId, text);
@@ -733,15 +733,15 @@ void InstrumentPage::loadUserPreset (int index)
     if (index < 0 || index >= (int) userPresets.size())
         return;
     const auto file = userPresets[(size_t) index];
-    juce::String error;
-    if (auto instrument = whistle::fromJson (file.loadFileAsString(), error))
+    std::string error;
+    if (auto instrument = whistle::fromJson (file.loadFileAsString().toStdString(), error))
     {
-        instrument->geometry.name = file.getFileNameWithoutExtension();
+        instrument->geometry.name = file.getFileNameWithoutExtension().toStdString();
         setInstrument (*instrument);
     }
     else
     {
-        tuneStatus.setText (file.getFileName() + ": " + error, juce::dontSendNotification);
+        tuneStatus.setText (file.getFileName() + ": " + juce::String (error), juce::dontSendNotification);
     }
 }
 
@@ -769,7 +769,7 @@ void InstrumentPage::savePresetNamed (const juce::String& requestedName)
     const auto folder = userPresetFolder();
     folder.createDirectory();
     const auto file = folder.getChildFile (name + ".whistle");
-    geometry.name = name;
+    geometry.name = name.toStdString();
     if (file.replaceWithText (whistle::toJson (getInstrument())))
     {
         refreshPresetList();
@@ -864,7 +864,7 @@ void InstrumentPage::saveToFile()
             return;
         file = file.withFileExtension ("whistle");
 
-        geometry.name = file.getFileNameWithoutExtension();
+        geometry.name = file.getFileNameWithoutExtension().toStdString();
         if (file.replaceWithText (whistle::toJson (getInstrument())))
         {
             presetBox.setText (geometry.name, juce::dontSendNotification);
@@ -890,19 +890,19 @@ void InstrumentPage::loadFromFile()
         if (file == juce::File())
             return;
 
-        juce::String error;
+        std::string error;
         const auto json = file.loadFileAsString();
        #if JUCE_IOS
         file.deleteFile();  // Only a copy (see readableChosenFile).
        #endif
-        if (auto instrument = whistle::fromJson (json, error))
+        if (auto instrument = whistle::fromJson (json.toStdString(), error))
         {
             setInstrument (*instrument);
             tuneStatus.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);
         }
         else
         {
-            tuneStatus.setText (file.getFileName() + ": " + error, juce::dontSendNotification);
+            tuneStatus.setText (file.getFileName() + ": " + juce::String (error), juce::dontSendNotification);
         }
     });
 }

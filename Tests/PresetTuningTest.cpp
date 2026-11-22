@@ -29,7 +29,7 @@ int main()
             front += g.holes[(size_t) i].enabled ? 1 : 0;
         if (! ok || g.holes[0].enabled || front != 6)
         {
-            std::printf ("FAILED %s: switching to the recorder chart and back gave the wrong holes\n", preset.name.toRawUTF8());
+            std::printf ("FAILED %s: switching to the recorder chart and back gave the wrong holes\n", preset.name.c_str());
             ++failures;
         }
     }
@@ -38,13 +38,13 @@ int main()
     for (const auto& g : presets())
     {
         const double lowest = presetLowestNote (g);
-        const bool alto = g.name.startsWith ("Alto recorder"), tenor = g.name.startsWith ("Tenor recorder");
+        const bool alto = g.name.starts_with ("Alto recorder"), tenor = g.name.starts_with ("Tenor recorder");
         foundAlto = foundAlto || alto;
         foundTenor = foundTenor || tenor;
         if ((alto || tenor) && (g.chart != FingeringChart::baroqueRecorder || ! g.bellClosesFoot
                                || std::abs (lowest - (alto ? 349.228 : 261.626)) > 0.01))
         {
-            std::printf ("FAILED recorder key/chart: %s, %.2f Hz\n", g.name.toRawUTF8(), lowest);
+            std::printf ("FAILED recorder key/chart: %s, %.2f Hz\n", g.name.c_str(), lowest);
             ++failures;
         }
     }
@@ -61,7 +61,7 @@ int main()
         auto moved = preset;
         if (! moveFrontHoles (moved, 2) || firstFrontHole (moved) != 2 || moved.holes[1].enabled || ! moved.holes[7].enabled)
         {
-            std::printf ("FAILED moving %s to L2-R4\n", preset.name.toRawUTF8());
+            std::printf ("FAILED moving %s to L2-R4\n", preset.name.c_str());
             ++failures;
             continue;
         }
@@ -70,7 +70,7 @@ int main()
             const double before = predictedCents (preset, c, 587.33), after = predictedCents (moved, c, 587.33);
             if (std::abs (before - after) > 0.01)
             {
-                std::printf ("FAILED %s on L2-R4, %s: %+.2f vs %+.2f cents\n", preset.name.toRawUTF8(), c.name, after, before);
+                std::printf ("FAILED %s on L2-R4, %s: %+.2f vs %+.2f cents\n", preset.name.c_str(), c.name, after, before);
                 ++failures;
             }
         }
@@ -90,7 +90,7 @@ int main()
             const auto& hole = preset.holes[(size_t) i];
             if (hole.enabled && std::abs (out.radiusAt (out.holes[(size_t) i].position) - preset.radiusAt (hole.position)) > 1.0e-9)
             {
-                std::printf ("FAILED %s: the bore at %s changes width with the slide\n", preset.name.toRawUTF8(), kHoleNames[(size_t) i]);
+                std::printf ("FAILED %s: the bore at %s changes width with the slide\n", preset.name.c_str(), kHoleNames[(size_t) i]);
                 ++failures;
             }
         }
@@ -102,7 +102,7 @@ int main()
             const double pulled = predictedCents (out, c, lowest), returned = predictedCents (back, c, lowest);
             if (pulled > made - 1.0 || std::abs (returned - made) > 0.01)
             {
-                std::printf ("FAILED %s slide, %s: %+.2f made, %+.2f pulled out 4 mm, %+.2f pushed back\n", preset.name.toRawUTF8(),
+                std::printf ("FAILED %s slide, %s: %+.2f made, %+.2f pulled out 4 mm, %+.2f pushed back\n", preset.name.c_str(),
                              c.name, made, pulled, returned);
                 ++failures;
             }
@@ -110,7 +110,7 @@ int main()
         const double made = bestSlide (preset, lowest), pulled = bestSlide (out, lowest);
         if (std::abs (pulled - made) > 0.0002)
         {
-            std::printf ("FAILED %s: best slide %.2f mm, pulled out 4 mm %.2f mm\n", preset.name.toRawUTF8(), made * 1000.0, pulled * 1000.0);
+            std::printf ("FAILED %s: best slide %.2f mm, pulled out 4 mm %.2f mm\n", preset.name.c_str(), made * 1000.0, pulled * 1000.0);
             ++failures;
         }
     }
