@@ -52,6 +52,7 @@ struct ChartFingering
     int reg;              // 1 = low register, 2 = second octave, 3 = third octave.
     int tunes = kTunesNothing;          // Finger whose hole's position is set by this note, or the bore length.
     int tunesDiameter = kTunesNothing;  // Optional: finger whose hole's diameter is set by this note (cross-fingerings).
+    bool counts = true;  // False: shown, but the tuner and the error figures leave it out (a fingering players avoid)
 
     Openness openness (const Geometry&) const;
 
@@ -64,13 +65,29 @@ struct ChartFingering
 
 const std::vector<ChartFingering>& chartFor (FingeringChart);
 
-// Cents from the target note to the nearest resonance the geometry gives for this fingering.
+// A fingering's name in the tuning goal (TuningGoal::fingerings): note name and pattern, e.g. "high D xxxxxx".
+std::string fingeringId (const ChartFingering&);
+
+// Whether the tuner and the error figures count this fingering: the chart's default unless the goal says otherwise.
+bool fingeringCounts (const Geometry&, const ChartFingering&);
+
+// The temperament's offsets from equal temperament (cents) for each degree above the lowest note, pulled toward
+// equal by TuningGoal::towardEqual. Degree 0 is always 0 (the slide sets the overall pitch).
+std::array<double, 12> temperamentCents (const TuningGoal&);
+
+// The pitch the tuner aims a fingering at: its chart note, moved by the temperament. In cents from the
+// equal-tempered note, and in Hz.
+double targetCents (const Geometry&, const ChartFingering&);
+double targetHz (const Geometry&, const ChartFingering&, double lowestHz);
+
+// Cents from the target to the nearest resonance the geometry gives for this fingering.
 double predictedCents (const Geometry&, const ChartFingering&, double lowestHz);
 
-// How much a note counts when the tuner shares the error out (its squared error is multiplied by this): the
-// notes of the plain scale 1, accidentals (forks, cross-fingerings) and the third octave 0.3; a note with two
-// fingerings counts once in all.
-double tuningWeight (FingeringChart, const ChartFingering&);
+// How much a note counts when the tuner shares the error out (its squared error is multiplied by this): from 0.3
+// for a note in none of the keys that count (TuningGoal::keys) to 1 for one in all of them, as much in the third
+// octave; 0 for a fingering that doesn't count; a whistle's C natural a tenth with TuningGoal::topHoleForHighD. A note with two fingerings that count counts once in all. (With the
+// default goal: the scale 1, accidentals 0.3.)
+double tuningWeight (const Geometry&, const ChartFingering&);
 
 // Further than this from its target a note isn't this instrument's (a plugged hole): the tuner leaves it out.
 constexpr double kCentsNotReachable = 80.0;
@@ -82,10 +99,24 @@ struct TuningError
 };
 TuningError tuningError (const Geometry&, double lowestHz);
 
+// Moves the tuning slide to `slide` (m from the made position, positive = pulled out): the tube below the joint,
+// with its holes, moves down by the change, as on a real whistle or recorder.
+void setSlide (Geometry&, double slide);
+
+// The slide setting (m, as Geometry::slide) that brings the chart best in tune on `lowestHz`, the notes weighted as
+// for the tuner (tuningWeight), as a player tunes to the others' A. Within -15 to +30 mm. With `pullCents` (one per
+// chartFor entry: how far each note plays from its resonance; NaN for a note that doesn't sound) it tunes the
+// played notes instead of the resonances.
+double bestSlide (const Geometry&, double lowestHz, const std::vector<double>* pullCents = nullptr);
+constexpr double kSlideMin = -0.015, kSlideMax = 0.030;
+
 // The weighted least-squares fit on its own, from the instrument as it stands: moves the bore length and hole
 // positions, and with `fitSizes` the hole sizes the chart marks (tunesDiameter), to minimise the squared cents
-// error over every chart note, both octaves alike.
-void fitTuning (Geometry&, double lowestHz, bool fitSizes);
+// error over every chart note, both octaves alike. With `aimCents` (one per chartFor entry, cents from the note) the
+// resonances are aimed there instead of at the notes: see PlayedTuning, which aims them so the notes play in tune.
+// With `fitHead`, an instrument with a head section also gets its diameter fitted: the one dimension here that moves
+// every fingering's second register against its first.
+void fitTuning (Geometry&, double lowestHz, bool fitSizes, const std::vector<double>* aimCents = nullptr, bool fitHead = false);
 
 // Tunes the instrument to equal temperament on `lowestHz` (or the chart's own scale): places the bore and holes
 // note by note, then fitTuning shares the remaining error over all the notes rather than leaving it in the upper

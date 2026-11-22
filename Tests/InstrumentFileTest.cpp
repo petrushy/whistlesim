@@ -1,6 +1,7 @@
 // Whistle files: every preset survives a save/load round trip, partial files fill in defaults, and broken or
 // meaningless files are rejected with a message.
 
+#include "Whistle/Acoustics.h"
 #include "Whistle/InstrumentFile.h"
 
 #include <cmath>
@@ -29,6 +30,16 @@ int main()
     {
         Instrument in;
         in.geometry = preset;
+        setSlide (in.geometry, 0.0025);  // Pulled out, so the slide is saved too
+        in.geometry.tuning.temperament = Temperament::meantone;
+        in.geometry.tuning.towardEqual = 0.25;
+        in.geometry.tuning.keys[5] = 0.5;
+        in.geometry.tuning.keys[TuningGoal::kMinor + 9] = 0.75;
+        in.geometry.tuning.fingerings["high D oxxxxx"] = false;
+        in.geometry.tuning.topHoleForHighD = true;
+        in.geometry.tuning.breathPosition = { { 0.4, 0.3 } };
+        in.geometry.tuning.useLearnedBreath = true;
+        in.geometry.tuning.learnedBreath["high A xxoooo"] = 1234.5;
         in.voicing = { 0.031f, 0.55f, 0.4f, -3.5f, 0.7f, 0.3f, 0.6f, 0.45f, 2.5f, 0.8f };
         in.voicing.jetBend = 7.5f;
         in.voicing.breathCurve = 1.45f;
@@ -58,6 +69,14 @@ int main()
         CHECK (a.chartTranspose == b.chartTranspose);
         CHECK (near (presetLowestNote (a), presetLowestNote (b)));
         CHECK (near (a.headLength, b.headLength) && near (a.headDiameter, b.headDiameter) && near (a.headStraightLength, b.headStraightLength));
+        CHECK (near (a.slide, b.slide));
+        CHECK (a.tuning.temperament == b.tuning.temperament && near (a.tuning.towardEqual, b.tuning.towardEqual));
+        for (size_t k = 0; k < a.tuning.keys.size(); ++k)
+            CHECK (near (a.tuning.keys[k], b.tuning.keys[k]));
+        CHECK (a.tuning.fingerings == b.tuning.fingerings && a.tuning.topHoleForHighD == b.tuning.topHoleForHighD);
+        CHECK (near (a.tuning.breathPosition[0], b.tuning.breathPosition[0]) && near (a.tuning.breathPosition[1], b.tuning.breathPosition[1]));
+        CHECK (a.tuning.useLearnedBreath == b.tuning.useLearnedBreath && b.tuning.learnedBreath.size() == 1
+               && near (b.tuning.learnedBreath.at ("high A xxoooo"), 1234.5));
         CHECK (near (a.windwayHeight, b.windwayHeight) && near (a.windwayLength, b.windwayLength) && near (a.windowLength, b.windowLength) && near (a.windowWidth, b.windowWidth)
                && near (a.edgeOffset, b.edgeOffset));
         CHECK (near (out->voicing.jetStrouhal, 0.031f) && near (out->voicing.jetConvection, 0.55f) && near (out->voicing.breathNoise, 0.4f)
@@ -67,6 +86,20 @@ int main()
                && near (out->voicing.fingerGapDamping, 0.8f));
         CHECK (near (out->voicing.jetBend, 7.5f) && near (out->voicing.breathCurve, 1.45f));
         CHECK (near (out->voicing.jetLowReynolds, 1050.0f) && near (out->voicing.jetFlatAbove, 0.9f) && near (out->voicing.jetFlatTop, 2.75f));
+    }
+
+    // An older Härjedalspipa file, with the chart of its own on A#: now the whistle chart a major third down, tuned to
+    // its traditional scale.
+    {
+        juce::String error;
+        const auto old = fromJson (R"({ "format": "warbl-whistle", "version": 1, "name": "Old pipa", "fingeringChart": "harjedalspipa", "chartTranspose": 0 })", error);
+        CHECK (old.has_value());
+        if (old)
+        {
+            CHECK (old->geometry.chart == FingeringChart::whistle && old->geometry.chartTranspose == -4);
+            CHECK (old->geometry.tuning.temperament == Temperament::harjedalSwedish);
+            CHECK (std::abs (presetLowestNote (old->geometry) - 466.16) < 0.05);
+        }
     }
 
     // A file with only some fields: the rest come from the first preset.

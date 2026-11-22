@@ -12,82 +12,83 @@ const juce::Colour metal { 0xff9aa3ad };
 
 using whistle::kHoleNames;
 
-juce::String noteName (double hz, double referenceA)
-{
-    static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    const int midi = (int) std::lround (69.0 + 12.0 * std::log2 (hz / referenceA));
-    return juce::String (names[(midi % 12 + 12) % 12]) + juce::String (midi / 12 - 1);
-}
-
-juce::String signedCents (int cents) { return (cents >= 0 ? "+" : "") + juce::String (cents); }
 } // namespace
 
 //==============================================================================
 WhistleView::WhistleView (AudioEngine& a) : audio (a) {}
 
-float WhistleView::xFor (double metres) const
+float WhistleView::yFor (double metres) const
 {
-    // The window sits at the left; leave room for the mouthpiece.
-    const auto area = getLocalBounds().toFloat().reduced (12.0f, 0.0f);
-    const float head = 60.0f;
-    const double scale = (area.getWidth() - head) / std::max (0.1, geometry.boreLength);
-    return area.getX() + head + (float) (metres * scale);
+    // Drawn upright: the mouthpiece at the top, the foot at the bottom; room above for the mouthpiece, below for the
+    // length.
+    const auto area = getLocalBounds().toFloat().reduced (0.0f, 10.0f);
+    return area.getY() + 70.0f + (float) (metres * scale());
 }
+
+float WhistleView::scale() const
+{
+    const auto area = getLocalBounds().toFloat().reduced (0.0f, 10.0f);
+    return (float) ((area.getHeight() - 70.0f - 40.0f) / std::max (0.1, geometry.boreLength));  // px per metre
+}
+
+float WhistleView::axisX() const { return getWidth() * 0.42f; }
 
 juce::Rectangle<float> WhistleView::holeBounds (int hole) const
 {
-    // Front holes above the tube; the thumb hole (on the back) below it.
+    // Front holes on the tube's face; the thumb hole (on the back) beside the tube, to the left.
     const auto& h = geometry.holes[(size_t) hole];
-    const float scale = (xFor (1.0) - xFor (0.0));
-    const float d = std::max (8.0f, (float) h.diameter * scale);
-    return juce::Rectangle<float> (d, d).withCentre ({ xFor (h.position), getHeight() * (hole == 0 ? 0.72f : 0.38f) });
+    const float d = std::max (10.0f, (float) h.diameter * scale());
+    const float x = hole == 0 ? axisX() - (float) geometry.radiusAt (h.position) * scale() - 26.0f : axisX();
+    return juce::Rectangle<float> (d, d).withCentre ({ x, yFor (h.position) });
 }
 
 juce::Rectangle<float> WhistleView::footBounds() const
 {
-    const float x = xFor (geometry.boreLength);
-    return { x - 4.0f, getHeight() * 0.55f - 22.0f, 12.0f, 44.0f };
+    const float halfWidth = (float) geometry.radiusAt (geometry.boreLength) * scale() + 8.0f;
+    return { axisX() - halfWidth, yFor (geometry.boreLength) - 4.0f, 2.0f * halfWidth, 12.0f };
 }
 
 void WhistleView::paint (juce::Graphics& g)
 {
     g.fillAll (panel);
 
-    const float scale = xFor (1.0) - xFor (0.0);
-    const float centre = getHeight() * 0.55f;
-    const float topHalf = (float) geometry.radiusAt (0.0) * scale + 4.0f;
+    const float px = scale(), centre = axisX();
+    const float topHalf = (float) geometry.radiusAt (0.0) * px + 4.0f;
 
     // Body: the bore profile (including any head section), drawn 4 px wider than the bore for the wall.
     juce::Path body;
-    const float x0 = xFor (0.0);
+    const float y0 = yFor (0.0);
     constexpr int steps = 100;
-    body.startNewSubPath (x0 - 50.0f, centre - topHalf);
+    body.startNewSubPath (centre - topHalf, y0 - 55.0f);
     for (int i = 0; i <= steps; ++i)
     {
-        const double x = geometry.boreLength * i / steps;
-        body.lineTo (xFor (x), centre - (float) geometry.radiusAt (x) * scale - 4.0f);
+        const double y = geometry.boreLength * i / steps;
+        body.lineTo (centre - (float) geometry.radiusAt (y) * px - 4.0f, yFor (y));
     }
     for (int i = steps; i >= 0; --i)
     {
-        const double x = geometry.boreLength * i / steps;
-        body.lineTo (xFor (x), centre + (float) geometry.radiusAt (x) * scale + 4.0f);
+        const double y = geometry.boreLength * i / steps;
+        body.lineTo (centre + (float) geometry.radiusAt (y) * px + 4.0f, yFor (y));
     }
-    body.lineTo (x0 - 50.0f, centre + topHalf);
+    body.lineTo (centre + topHalf, y0 - 55.0f);
     body.closeSubPath();
     g.setColour (metal.withAlpha (0.35f));
     g.fillPath (body);
     g.setColour (metal);
     g.strokePath (body, juce::PathStrokeType (1.5f));
 
-    // Mouthpiece and window
-    const float windowWidth = std::max (6.0f, (float) geometry.windowLength * scale);
+    // The window, on the front face just above the bore's start
+    const float windowLength = std::max (6.0f, (float) geometry.windowLength * px);
+    const float windowWidth = std::min (2.0f * topHalf - 4.0f, std::max (8.0f, (float) geometry.windowWidth * px));
     g.setColour (panel.darker (0.4f));
-    g.fillRect (juce::Rectangle<float> (x0 - windowWidth, centre - topHalf - 1.0f, windowWidth, 6.0f));
+    g.fillRect (juce::Rectangle<float> (centre - 0.5f * windowWidth, y0 - windowLength, windowWidth, windowLength));
     g.setColour (text.withAlpha (0.7f));
-    g.setFont (11.0f);
-    g.drawText ("window", juce::Rectangle<float> (x0 - 60.0f, centre - topHalf - 22.0f, 60.0f, 16.0f), juce::Justification::centred);
+    g.setFont (13.0f);
+    g.drawText ("window", juce::Rectangle<float> (centre + topHalf + 6.0f, y0 - windowLength - 4.0f, 80.0f, 16.0f),
+                juce::Justification::centredLeft);
 
-    // Holes in use, with live openness
+    // Holes in use, with live openness; names to the right (the thumb's to the left)
+    g.setFont (14.0f);
     for (int i = 0; i < whistle::kNumHoles; ++i)
     {
         if (! geometry.holes[(size_t) i].enabled)
@@ -99,10 +100,25 @@ void WhistleView::paint (juce::Graphics& g)
         g.setColour (coveredColour.withAlpha (1.0f - open));
         g.fillEllipse (r.reduced (1.0f));
         g.setColour (metal);
-        g.drawEllipse (r, 1.2f);
+        if (i == 0)
+        {
+            juce::Path outline;
+            outline.addEllipse (r);
+            const float dashes[] = { 3.0f, 3.0f };
+            juce::PathStrokeType (1.2f).createDashedStroke (outline, outline, dashes, 2);
+            g.fillPath (outline);  // Dashed: it is on the back
+        }
+        else
+        {
+            g.drawEllipse (r, 1.2f);
+        }
         g.setColour (text);
-        const auto label = i == 0 ? r.withY (r.getBottom() + 2.0f) : r.withY (r.getY() - 16.0f);
-        g.drawText (i == 0 ? "LT (back)" : kHoleNames[(size_t) i], label.withHeight (14.0f).expanded (24.0f, 0.0f), juce::Justification::centred);
+        const float halfWidth = (float) geometry.radiusAt (geometry.holes[(size_t) i].position) * px + 4.0f;
+        if (i == 0)
+            g.drawText ("LT (back)", juce::Rectangle<float> (r.getX() - 74.0f, r.getCentreY() - 8.0f, 70.0f, 16.0f), juce::Justification::centredRight);
+        else
+            g.drawText (kHoleNames[(size_t) i], juce::Rectangle<float> (centre + halfWidth + 8.0f, r.getCentreY() - 8.0f, 40.0f, 16.0f),
+                        juce::Justification::centredLeft);
     }
 
     // Foot, if the bell sensor can close it
@@ -114,12 +130,13 @@ void WhistleView::paint (juce::Graphics& g)
         g.setColour (metal);
         g.drawRect (r, 1.2f);
         g.setColour (text);
-        g.drawText ("bell", r.withY (r.getBottom() + 2.0f).withHeight (14.0f).expanded (14.0f, 0.0f), juce::Justification::centred);
+        g.drawText ("bell", r.translated (r.getWidth() + 6.0f, 0.0f).withWidth (40.0f), juce::Justification::centredLeft);
     }
 
     g.setColour (text.withAlpha (0.7f));
-    g.drawText (juce::String (geometry.boreLength * 1000.0, 1) + " mm from window to foot",
-                getLocalBounds().removeFromBottom (18).toFloat(), juce::Justification::centred);
+    g.setFont (13.0f);
+    g.drawText (juce::String (geometry.boreLength * 1000.0, 1) + " mm, window to foot", getLocalBounds().removeFromBottom (22).toFloat(),
+                juce::Justification::centred);
 }
 
 void WhistleView::mouseDown (const juce::MouseEvent& e)
@@ -139,48 +156,6 @@ void WhistleView::mouseDown (const juce::MouseEvent& e)
             toggle (audio.manualOpenness[(size_t) i]);
     if (geometry.bellClosesFoot && footBounds().expanded (6.0f).contains (e.position))
         toggle (audio.manualFootOpenness);
-}
-
-//==============================================================================
-void TuningTable::paint (juce::Graphics& g)
-{
-    g.fillAll (panel);
-    auto area = getLocalBounds().reduced (10, 6);
-    g.setFont (13.0f);
-
-    auto header = area.removeFromTop (20);
-    g.setColour (text.withAlpha (0.7f));
-    const int columns[] = { 80, 120 };
-    g.drawText ("Note", header.removeFromLeft (columns[0]), juce::Justification::centredLeft);
-    g.drawText ("Fingering", header.removeFromLeft (columns[1]), juce::Justification::centredLeft);
-    g.drawText ("Resonance vs. the note (> 10 c highlighted)", header, juce::Justification::centredLeft);
-
-    // Rows shrink if the chart is long, so every note shows.
-    const int rowHeight = entries.empty() ? 19 : juce::jlimit (13, 19, area.getHeight() / (int) entries.size());
-    for (const auto& e : entries)
-    {
-        auto line = area.removeFromTop (rowHeight);
-        // Filled, open and half circles; plugged or unused holes left out.
-        juce::String pattern;
-        for (auto ch : e.pattern)
-        {
-            if (ch == 'x')
-                pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8f"));
-            else if (ch == 'o')
-                pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x8b"));
-            else if (ch == 'h' || ch == 'p')
-                pattern += juce::String (juce::CharPointer_UTF8 ("\xe2\x97\x90"));
-            else if (ch == '|')
-                pattern += " ";
-        }
-
-        g.setColour (text);
-        g.drawText (e.note, line.removeFromLeft (columns[0]), juce::Justification::centredLeft);
-        g.drawText (pattern, line.removeFromLeft (columns[1]), juce::Justification::centredLeft);
-        const int cents = (int) std::lround (e.cents);
-        g.setColour (std::abs (cents) > 10 ? coveredColour : text);
-        g.drawText (signedCents (cents) + " c", line, juce::Justification::centredLeft);
-    }
 }
 
 //==============================================================================
@@ -223,9 +198,9 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     octaveBox.setTooltip ("The instrument's lowest note: in octave 5 (high whistles, recorders) or 4 (low whistles)");
     keyBox.onChange = octaveBox.onChange = [this]
     {
-        tuningDirty = true;
-        tuningCountdown = 0;
         audio.setScaleInstrument (geometry, lowestNoteHz());
+        if (onInstrumentChanged != nullptr)
+            onInstrumentChanged();
     };
 
     referenceBox.setSliderStyle (juce::Slider::IncDecButtons);
@@ -235,35 +210,25 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     referenceBox.setTextBoxStyle (juce::Slider::TextBoxLeft, false, 62, 20);
     referenceBox.setValue (geometry.referenceA, juce::dontSendNotification);
     referenceBox.setTooltip ("Pitch standard: the frequency of A4 that the tuner, the tuning table and the scale aim for "
-                             "(440 Hz; e.g. 442 for many orchestras, 415 for baroque pitch). Press Tune holes to retune.");
+                             "(440 Hz; e.g. 442 for many orchestras, 415 for baroque pitch). Tune holes retunes the instrument for it.");
     referenceBox.onValueChange = [this]
     {
         geometry.referenceA = referenceBox.getValue();
-        tuningDirty = true;
-        tuningCountdown = 0;
         audio.setScaleInstrument (geometry, lowestNoteHz());
+        if (onInstrumentChanged != nullptr)
+            onInstrumentChanged();
     };
     referenceLabel.setColour (juce::Label::textColourId, text);
     referenceLabel.setJustificationType (juce::Justification::centredRight);
-    addAndMakeVisible (referenceBox);
-    addAndMakeVisible (referenceLabel);
     refreshers.push_back ([this] { referenceBox.setValue (geometry.referenceA, juce::dontSendNotification); });
-
-    crossButton.setColour (juce::ToggleButton::textColourId, text);
-    crossButton.setToggleState (true, juce::dontSendNotification);
-    crossButton.setTooltip ("A smaller top hole makes the cross-fingered flat 7th (C natural on a D whistle) flatter; "
-                            "this picks L1's size so that note is in tune, with C# still set by L1's position.");
 
     chartBox.addItem ("Whistle fingering", 1);
     chartBox.addItem ("Recorder fingering (baroque)", 2);
-    chartBox.addItem (juce::String::fromUTF8 ("Härjedalspipa (traditional scale)"), 3);
-    chartBox.setTooltip ("Which fingering chart the tuning table and the tuner use. The sound never uses a chart.");
+    chartBox.setTooltip ("Which fingering chart the Tuning workshop's table and tuner use. The sound never uses a chart.");
     chartBox.onChange = [this]
     {
         const int id = chartBox.getSelectedId();
-        geometry.chart = id == 2 ? whistle::FingeringChart::baroqueRecorder
-                       : id == 3 ? whistle::FingeringChart::harjedalspipa
-                                 : whistle::FingeringChart::whistle;
+        geometry.chart = id == 2 ? whistle::FingeringChart::baroqueRecorder : whistle::FingeringChart::whistle;
         geometryChanged();
     };
     bellButton.setColour (juce::ToggleButton::textColourId, text);
@@ -276,43 +241,6 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
         geometryChanged();
     };
 
-    tuneButton.onClick = [this]
-    {
-        const double hz = lowestNoteHz();
-        auto tuned = geometry;
-        bool ok = whistle::tuneToScale (tuned, hz, crossButton.getToggleState());
-        juce::String resized;
-        if (! ok)
-        {
-            // The holes can't all reach their notes at these sizes: let the tuner change the sizes of the ones
-            // that are stuck, and say which.
-            tuned = geometry;
-            ok = whistle::tuneToScale (tuned, hz, crossButton.getToggleState(), true);
-            for (int i = 0; ok && i < whistle::kNumHoles; ++i)
-            {
-                const double before = geometry.holes[(size_t) i].diameter, after = tuned.holes[(size_t) i].diameter;
-                if (geometry.holes[(size_t) i].enabled && std::abs (after - before) > 0.00005)
-                    resized << (resized.isEmpty() ? "; resized " : ", ") << whistle::kHoleNames[(size_t) i] << " "
-                            << juce::String (before * 1000.0, 1) << " -> " << juce::String (after * 1000.0, 1) << " mm";
-            }
-        }
-        if (ok)
-        {
-            geometry = tuned;
-            const auto error = whistle::tuningError (geometry, hz);
-            tuneStatus.setText ("Holes placed for " + noteName (hz, geometry.referenceA) + ": error " + juce::String (error.rms, 1)
-                                    + " c rms, worst scale note " + juce::String (error.worstScaleNote, 0) + " c" + resized,
-                                juce::dontSendNotification);
-            tuneStatus.setTooltip (tuneStatus.getText());
-            refreshSliders();
-            geometryChanged();
-        }
-        else
-        {
-            tuneStatus.setText ("Couldn't tune, even with other hole sizes: try another key or bore length", juce::dontSendNotification);
-        }
-    };
-
     savePresetButton.onClick = [this] { savePreset(); };
     deleteButton.onClick = [this] { deletePreset(); };
     exportButton.onClick = [this] { saveToFile(); };
@@ -323,8 +251,8 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     importButton.setTooltip ("Load a .whistle file");
     deleteButton.setEnabled (false);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &presetBox, &materialBox, &keyBox, &octaveBox, &tuneButton, &tuneStatus, &crossButton,
-                                                             &savePresetButton, &deleteButton, &exportButton, &importButton, &chartBox, &bellButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &presetBox, &materialBox, &tuneStatus,
+                                                             &savePresetButton, &deleteButton, &exportButton, &importButton, &bellButton })
         addAndMakeVisible (c);
     tuneStatus.setColour (juce::Label::textColourId, text);
 
@@ -336,6 +264,16 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     };
 
     addHeading ("Bore");
+    addRow ("Tuning slide (pulled out)", whistle::kSlideMin * 1000.0, whistle::kSlideMax * 1000.0, 0.1, "mm", [this] { return geometry.slide * 1000.0; },
+            [this] (double v)
+            {
+                whistle::setSlide (geometry, v / 1000.0);
+                refreshSliders();  // The bore length and the holes moved with it
+            })
+        .setTooltip ("How far the head is pulled out of the body, as on a tunable whistle or a recorder's head joint (negative: "
+                     "pushed in further than made). It adds tube between the head and the first hole, so the bore length and "
+                     "every hole move with it. Pulling out lowers every note, the top notes most. The Tuning workshop tab's Slide tuned "
+                     "column has it set for the reference A; its Tune slide moves it there.");
     addLength ("Length (window to foot)", geometry.boreLength, 100.0, 700.0)
         .setTooltip ("The tube's length from the window's edge to the open foot. Longer plays lower. Tune holes sets it from the key you choose.");
     addLength ("Diameter at top", geometry.boreDiameterTop, 6.0, 30.0)
@@ -385,9 +323,7 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
                 rows[r].label->setEnabled (on);
             }
         }
-        chartBox.setSelectedId (geometry.chart == whistle::FingeringChart::baroqueRecorder ? 2
-                                : geometry.chart == whistle::FingeringChart::harjedalspipa ? 3
-                                                                                          : 1, juce::dontSendNotification);
+        chartBox.setSelectedId (geometry.chart == whistle::FingeringChart::baroqueRecorder ? 2 : 1, juce::dontSendNotification);
 
         bellButton.setToggleState (geometry.bellClosesFoot, juce::dontSendNotification);
     });
@@ -512,7 +448,6 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
 
     // Right side
     addAndMakeVisible (whistleView);
-    addAndMakeVisible (tuningTable);
     for (auto* b : { &enableButton, &manualButton })
     {
         b->setColour (juce::ToggleButton::textColourId, text);
@@ -538,13 +473,14 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     manualBreath.setTooltip ("Breath pressure when playing from the screen. A D whistle's low register starts around 400 Pa; "
                              "it jumps to the octave above ~1000 Pa, the twelfth around 4000 Pa and the double octave around 7000 Pa.");
 
-    for (auto* l : { &manualBreathLabel, &liveLabel, &tableTitle })
+    for (auto* l : { &manualBreathLabel, &liveLabel, &tuningSummary })
     {
         l->setColour (juce::Label::textColourId, text);
         addAndMakeVisible (l);
     }
     addAndMakeVisible (manualBreath);
-    tableTitle.setText ("Tuning predicted from the geometry, for the key above (design aid; the sound comes from the simulation)", juce::dontSendNotification);
+    tuningSummary.setText ("Tuning: Tuning workshop tab", juce::dontSendNotification);
+    tuningSummary.setTooltip ("How in tune this instrument plays: the Tuning workshop tab has the fingering table, the tuner and the tuning goal.");
 
     loadPreset (0);
     startTimerHz (30);
@@ -552,6 +488,8 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
 
 InstrumentPage::~InstrumentPage()
 {
+    for (auto& row : rows)
+        row.slider->setLookAndFeel (nullptr);
     audio.manualPlay = false;
 }
 
@@ -563,10 +501,12 @@ juce::Slider& InstrumentPage::addRow (juce::String name, double min, double max,
     row.kind = kind;
     row.label = std::make_unique<juce::Label> (juce::String(), name);
     row.label->setColour (juce::Label::textColourId, text);
+    row.label->setFont (juce::FontOptions (15.5f));
     row.slider = std::make_unique<juce::Slider>();
     row.slider->setScrollWheelEnabled (false);  // Only dragging or typing changes a value; the wheel scrolls the page
+    row.slider->setLookAndFeel (&valueLook);
     row.slider->setRange (min, max, step);
-    row.slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 20);
+    row.slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, 84, 22);
     if (unit.isNotEmpty())
         row.slider->setTextValueSuffix (" " + unit);
     row.slider->setValue (get(), juce::dontSendNotification);
@@ -577,6 +517,8 @@ juce::Slider& InstrumentPage::addRow (juce::String name, double min, double max,
         set (slider->getValue());
         if (changesGeometry)
             geometryChanged();
+        else
+            voicingChanged();
     };
     // Remember how to read the value back when the geometry changes as a whole (preset, material, tuning).
     refreshers.push_back ([slider, get] { slider->setValue (get(), juce::dontSendNotification); });
@@ -597,7 +539,7 @@ void InstrumentPage::addHeading (juce::String name)
 {
     auto label = std::make_unique<juce::Label> (juce::String(), name);
     label->setColour (juce::Label::textColourId, accent);
-    label->setFont (juce::FontOptions (14.0f, juce::Font::bold));
+    label->setFont (juce::FontOptions (16.5f, juce::Font::bold));
     settingsContent.addAndMakeVisible (*label);
     leftColumn.push_back (label.get());
     headings.push_back (std::move (label));
@@ -665,35 +607,29 @@ void InstrumentPage::geometryChanged()
     audio.whistleModel.setGeometry (geometry);
     audio.setScaleInstrument (geometry, lowestNoteHz());
     whistleView.setGeometry (geometry);
-    tuningDirty = true;
-    tuningCountdown = 6;  // Recompute the table once the sliders have been still for a moment.
+    voicingChanged();
+}
+
+void InstrumentPage::voicingChanged()
+{
+    if (onInstrumentChanged != nullptr)
+        onInstrumentChanged();
+}
+
+void InstrumentPage::applyGeometry (const whistle::Geometry& g)
+{
+    geometry = g;
+    refreshSliders();
+    geometryChanged();
+}
+
+void InstrumentPage::setTuningSummary (const juce::String& summary)
+{
+    tuningSummary.setText (summary, juce::dontSendNotification);
 }
 
 void InstrumentPage::timerCallback()
 {
-    if (tuningDirty && --tuningCountdown <= 0)
-    {
-        tuningDirty = false;
-        const double lowest = lowestNoteHz();
-        std::vector<TuningTable::Entry> entries;
-        for (const auto& c : whistle::chartFor (geometry.chart))
-        {
-            // The pattern for the holes in use, grouped as thumb | left hand | right hand.
-            const auto holes = c.holePattern (geometry);
-            juce::String pattern;
-            for (int i = 0; i < whistle::kNumHoles; ++i)
-            {
-                if (! geometry.holes[(size_t) i].enabled)
-                    continue;
-                if ((i == 1 && geometry.holes[0].enabled) || i == 4)
-                    pattern << '|';
-                pattern << (holes[(size_t) i] == '-' ? 'o' : holes[(size_t) i]);
-            }
-            entries.push_back ({ noteName (lowest * std::pow (2.0, c.semitones / 12.0), geometry.referenceA), pattern, whistle::predictedCents (geometry, c, lowest) });
-        }
-        tuningTable.setEntries (std::move (entries));
-    }
-
     const float pressure = audio.shownPressure.load();
     const float jet = audio.whistleModel.jetVelocity.load();
     const float level = audio.whistleModel.level.load();
@@ -957,6 +893,21 @@ void InstrumentPage::loadFromFile()
     });
 }
 
+void InstrumentPage::showTuningControlsIn (juce::Component& parent)
+{
+    for (auto* c : std::initializer_list<juce::Component*> { &keyBox, &octaveBox, &referenceLabel, &referenceBox, &chartBox })
+        parent.addAndMakeVisible (c);
+}
+
+void InstrumentPage::layOutTuningControls (juce::Rectangle<int> row, juce::Rectangle<int> chartRow)
+{
+    keyBox.setBounds (row.removeFromLeft (70).reduced (2));
+    octaveBox.setBounds (row.removeFromLeft (120).reduced (2));
+    referenceLabel.setBounds (row.removeFromLeft (34));
+    referenceBox.setBounds (row.removeFromLeft (122).reduced (2));
+    chartBox.setBounds (chartRow.reduced (2));
+}
+
 double InstrumentPage::lowestNoteHz() const
 {
     // Lowest note in octave 5 (high whistles: C5..B5) or 4 (low whistles).
@@ -973,94 +924,123 @@ void InstrumentPage::resized()
 {
     auto area = getLocalBounds().reduced (10);
 
-    // Left: instrument choice and settings
-    auto left = area.removeFromLeft (560);
-    area.removeFromLeft (10);
+    // Right: playing from the screen, the live readings and the whistle, upright.
+    auto right = area.removeFromRight (juce::jlimit (280, 380, area.getWidth() / 4));
+    area.removeFromRight (10);
+    auto playRow = right.removeFromTop (28);
+    enableButton.setBounds (playRow.removeFromLeft (110));
+    scaleButton.setBounds (playRow.removeFromLeft (110).reduced (2));
+    manualButton.setBounds (right.removeFromTop (26));
+    auto breathRow = right.removeFromTop (26);
+    manualBreathLabel.setBounds (breathRow.removeFromLeft (55));
+    manualBreath.setBounds (breathRow);
+    liveLabel.setBounds (right.removeFromTop (40));
+    tuningSummary.setBounds (right.removeFromTop (40));
+    right.removeFromTop (4);
+    whistleView.setBounds (right);
 
-    auto choose = left.removeFromTop (28);
-    presetBox.setBounds (choose.removeFromLeft (250).reduced (2));
-    savePresetButton.setBounds (choose.removeFromLeft (110).reduced (2));
-    deleteButton.setBounds (choose.removeFromLeft (64).reduced (2));
-    exportButton.setBounds (choose.removeFromLeft (68).reduced (2));
-    importButton.setBounds (choose.reduced (2));
-    auto tuneRow = left.removeFromTop (28);
-    tuneButton.setBounds (tuneRow.removeFromLeft (100).reduced (2));
-    keyBox.setBounds (tuneRow.removeFromLeft (70).reduced (2));
-    octaveBox.setBounds (tuneRow.removeFromLeft (110).reduced (2));
-    referenceLabel.setBounds (tuneRow.removeFromLeft (34));
-    referenceBox.setBounds (tuneRow.removeFromLeft (122).reduced (2));
+    // Left: instrument choice, then the settings.
+    auto choose = area.removeFromTop (28);
+    presetBox.setBounds (choose.removeFromLeft (300).reduced (2));
+    savePresetButton.setBounds (choose.removeFromLeft (120).reduced (2));
+    deleteButton.setBounds (choose.removeFromLeft (70).reduced (2));
+    exportButton.setBounds (choose.removeFromLeft (80).reduced (2));
+    importButton.setBounds (choose.removeFromLeft (80).reduced (2));
+    auto tuneRow = area.removeFromTop (28);
+    materialBox.setBounds (tuneRow.removeFromLeft (220).reduced (2));
     tuneStatus.setBounds (tuneRow);
-    crossButton.setBounds (left.removeFromTop (24));
-    auto chartRow = left.removeFromTop (28);
-    chartBox.setBounds (chartRow.removeFromLeft (260).reduced (2));
-    materialBox.setBounds (chartRow.removeFromLeft (220).reduced (2));
-    left.removeFromTop (4);
+    area.removeFromTop (6);
 
-    // The rows are laid out inside the scrolling view, as tall as they need to be.
-    settingsView.setBounds (left);
-    constexpr int unlimitedHeight = 100000;
-    left = { 0, 0, settingsView.getWidth() - settingsView.getScrollBarThickness() - 2, unlimitedHeight };
+    // The settings, in two columns when there is room (Bore, Tone holes and Fipple; then Voicing onwards), else one;
+    // inside the scrolling view, as tall as they need to be.
+    settingsView.setBounds (area);
+    const int width = settingsView.getWidth() - settingsView.getScrollBarThickness() - 2;
+    const int columns = width >= 1000 ? 2 : 1;
+    const int columnWidth = columns == 2 ? (width - 30) / 2 : width;
+    size_t split = leftColumn.size();
+    if (columns == 2)
+        for (size_t i = 0; i < leftColumn.size(); ++i)
+            for (const auto& h : headings)
+                if (h.get() == leftColumn[i] && h->getText().startsWith ("Voicing"))
+                    split = std::min (split, i);
 
-    // Rows: holes get two sliders side by side to save space.
-    const int rowHeight = 20;
-    size_t rowIndex = 0;
-    for (auto* c : leftColumn)
+    // Rows as tall as the space allows (24-38 px), the text in proportion: big screens get big text.
+    auto linesIn = [this] (size_t from, size_t to)
     {
-        const bool isHeading = std::any_of (headings.begin(), headings.end(), [c] (const auto& h) { return h.get() == c; });
-        if (isHeading)
+        int lines = 0;
+        for (size_t i = from; i < to; ++i)
         {
-            c->setBounds (left.removeFromTop (rowHeight));
-            continue;
+            const auto row = std::find_if (rows.begin(), rows.end(), [&] (const auto& r) { return r.label.get() == leftColumn[i]; });
+            lines += row != rows.end() && row->kind == RowKind::holeDiameter ? 0 : 1;
         }
-
-        auto& row = rows[rowIndex];
-        if (row.kind == RowKind::holeDiameter)
-        {
-            ++rowIndex;
-            continue;  // Laid out together with its position row.
-        }
-
-        auto line = left.removeFromTop (rowHeight);
-        row.help->setBounds (line.removeFromRight (20));
-        if (row.kind == RowKind::holePosition)
-        {
-            auto& diameter = rows[rowIndex + 1];
-            for (int i = 0; i < whistle::kNumHoles; ++i)
-                if (holeRow[(size_t) i] == rowIndex)
-                    holeToggles[(size_t) i]->setBounds (line.removeFromLeft (26));
-            row.label->setBounds (line.removeFromLeft (30));
-            row.slider->setBounds (line.removeFromLeft (258));
-            diameter.label->setBounds ({});
-            diameter.slider->setBounds (line);
-
-            // The bell isn't a hole (no position or size) but is switched on and off with them, after R4.
-            if (rowIndex == holeRow[whistle::kNumHoles - 1])
-            {
-                auto bellLine = left.removeFromTop (rowHeight);
-                bellHelp.setBounds (bellLine.removeFromRight (20));
-                bellButton.setBounds (bellLine);
-            }
-        }
-        else
-        {
-            row.label->setBounds (line.removeFromLeft (230));
-            row.slider->setBounds (line);
-        }
-        ++rowIndex;
+        return lines + 2;  // The bell line, and the gaps before headings
+    };
+    const int mostLines = std::max (linesIn (0, split), columns == 2 ? linesIn (split, leftColumn.size()) : 0);
+    const int rowHeight = juce::jlimit (24, 38, area.getHeight() / std::max (1, mostLines));
+    const float fontSize = rowHeight * 0.6f;
+    for (auto& row : rows)
+    {
+        row.label->setFont (juce::FontOptions (fontSize));
+        row.slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, juce::roundToInt (rowHeight * 3.4f), rowHeight - 4);
     }
-    settingsContent.setSize (left.getWidth(), unlimitedHeight - left.getHeight() + 4);
+    for (auto& h : headings)
+        h->setFont (juce::FontOptions (fontSize * 1.08f, juce::Font::bold));
+    bellButton.setSize (bellButton.getWidth(), rowHeight);
 
-    // Right: drawing, playing, table
-    auto controls = area.removeFromTop (28);
-    enableButton.setBounds (controls.removeFromLeft (110));
-    scaleButton.setBounds (controls.removeFromLeft (100).reduced (2));
-    manualButton.setBounds (controls.removeFromLeft (150));
-    manualBreathLabel.setBounds (controls.removeFromLeft (55));
-    manualBreath.setBounds (controls);
+    size_t rowIndex = 0;
+    int tallest = 0;
+    for (int column = 0; column < columns; ++column)
+    {
+        auto col = juce::Rectangle<int> (column * (columnWidth + 30), 0, columnWidth, 100000);
+        const size_t from = column == 0 ? 0 : split, to = column == 0 ? split : leftColumn.size();
+        for (size_t i = from; i < to; ++i)
+        {
+            auto* c = leftColumn[i];
+            const bool isHeading = std::any_of (headings.begin(), headings.end(), [c] (const auto& h) { return h.get() == c; });
+            if (isHeading)
+            {
+                if (i != from)
+                    col.removeFromTop (6);
+                c->setBounds (col.removeFromTop (rowHeight));
+                continue;
+            }
 
-    whistleView.setBounds (area.removeFromTop (190));
-    liveLabel.setBounds (area.removeFromTop (24));
-    area.removeFromTop (8);
-    tableTitle.setBounds (area.removeFromTop (22));
-    tuningTable.setBounds (area);  // The rest: a recorder's chart has 22 notes
+            auto& row = rows[rowIndex];
+            if (row.kind == RowKind::holeDiameter)
+            {
+                ++rowIndex;
+                continue;  // Laid out together with its position row.
+            }
+
+            auto line = col.removeFromTop (rowHeight);
+            row.help->setBounds (line.removeFromRight (24).withSizeKeepingCentre (20, 20));
+            if (row.kind == RowKind::holePosition)
+            {
+                auto& diameter = rows[rowIndex + 1];
+                for (int h = 0; h < whistle::kNumHoles; ++h)
+                    if (holeRow[(size_t) h] == rowIndex)
+                        holeToggles[(size_t) h]->setBounds (line.removeFromLeft (28));
+                row.label->setBounds (line.removeFromLeft (36));
+                row.slider->setBounds (line.removeFromLeft (line.getWidth() / 2).reduced (0, 1));
+                diameter.label->setBounds ({});
+                diameter.slider->setBounds (line.reduced (0, 1));
+
+                // The bell isn't a hole (no position or size) but is switched on and off with them, after R4.
+                if (rowIndex == holeRow[whistle::kNumHoles - 1])
+                {
+                    auto bellLine = col.removeFromTop (rowHeight);
+                    bellHelp.setBounds (bellLine.removeFromRight (24).withSizeKeepingCentre (20, 20));
+                    bellButton.setBounds (bellLine);
+                }
+            }
+            else
+            {
+                row.label->setBounds (line.removeFromLeft (juce::jmin (280, columnWidth / 2)));
+                row.slider->setBounds (line.reduced (0, 1));
+            }
+            ++rowIndex;
+        }
+        tallest = std::max (tallest, 100000 - col.getHeight());
+    }
+    settingsContent.setSize (width, tallest + 4);
 }

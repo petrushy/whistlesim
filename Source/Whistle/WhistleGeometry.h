@@ -7,6 +7,8 @@
 #include <juce_core/juce_core.h>
 
 #include <array>
+#include <map>
+#include <string>
 #include <vector>
 
 namespace whistle
@@ -34,9 +36,55 @@ struct ToneHole
 // Which fingering chart the tuning table, tuner and checks use (the sound never uses it).
 enum class FingeringChart
 {
-    whistle,          // Six holes, L1-R3
-    baroqueRecorder,   // Thumb and seven holes, baroque fingering
-    harjedalspipa      // Six holes like a whistle, the traditional Härjedalspipa scale (not tempered)
+    whistle,          // Six holes, L1-R3 (also the Härjedalspipa's: its scale is a tuning, Temperament::harjedal...)
+    baroqueRecorder   // Thumb and seven holes, baroque fingering
+};
+
+// The pitches the tuner aims each note at (cents from equal temperament, by the note's degree above the lowest note).
+enum class Temperament
+{
+    equal,
+    meantone,     // Quarter-comma meantone, its chain of narrow fifths centred on the lowest note
+    just,         // Just intonation (5-limit) of the major scale on the lowest note
+    bestForKeys,  // The chords of the keys that count (TuningGoal::keys) as pure as least squares can make them
+    // Traditional scales. The Härjedalspipa's (a Swedish duct flute, on A#), as two sources give it; no primary
+    // measurement was found: Swedish Wikipedia II -20, III +35, VI -20; English Wikipedia III, VI and VII 20-25 c
+    // flat (taken as -22.5).
+    harjedalSwedish,
+    harjedalEnglish,
+    custom        // TuningGoal::custom: the player's own offsets, by degree
+};
+
+// What the tuner aims for, and what it counts: part of the instrument (the Tuning workshop tab sets it), saved with it.
+struct TuningGoal
+{
+    Temperament temperament = Temperament::equal;
+    double towardEqual = 0.0;  // 0-1: how far the temperament is pulled back to equal (1 = equal)
+    std::array<double, 12> custom {};  // Cents from equal by degree above the lowest note, for Temperament::custom
+
+    // How much each key counts (0-1), by its tonic's semitones above the instrument's lowest note: 0-11 major,
+    // 12-23 minor (on a D whistle: 0 = D, 5 = G, 12 + 9 = Bm, 12 + 2 = Em). Its scale's notes count more in the tuner,
+    // and with bestForKeys its chords set the temperament. By default the home key alone, as a whistle's scale.
+    std::array<double, 24> keys { { 1.0 } };
+
+    // Fingerings whose part in the tuning differs from the chart's default (ChartFingering::counts), by
+    // fingeringId: true = counts, false = shown but left out.
+    std::map<std::string, bool> fingerings;
+
+    // Whistles: L1's size (when the tuner may set it) serves high D with L1 open (oxxxxx) rather than the
+    // cross-fingered C natural (oxxooo), which then counts only a tenth and is left to half-holing.
+    bool topHoleForHighD = false;
+
+    // The breath each note is tuned at (PlayedTuning). Without a learned breath: where in the pressures the note
+    // sounds at, 0 = its softest, 1 = its strongest, 0.5 the (geometric) middle; one for the low octave, one for
+    // the octaves above.
+    std::array<double, 2> breathPosition { { 0.5, 0.5 } };
+    // The player's own breath, learned by playing (Tuning workshop tab): the model's pressure (Pa) each fingering was
+    // held at, by fingeringId. Used, where there is one, when useLearnedBreath is on.
+    bool useLearnedBreath = false;
+    std::map<std::string, double> learnedBreath;
+
+    static constexpr int kMinor = 12;
 };
 
 struct Geometry
@@ -63,6 +111,7 @@ struct Geometry
     FingeringChart chart = FingeringChart::whistle;
     int chartTranspose = 0;  // Semitones from the chart's base pitch (recorder: C5); does not shift the audio.
     double referenceA = 440.0;  // Hz: the pitch standard the instrument is tuned to (A4)
+    TuningGoal tuning;          // What the tuner aims for (temperament, keys, fingerings)
 
     // Fipple (mouthpiece). The windway ends in a flat jet that crosses the window and hits the edge (labium).
     double windwayHeight = 0.001;    // Jet thickness at the flue exit (h).
@@ -73,11 +122,22 @@ struct Geometry
 
     double wallLoss = 1.0;  // Viscous and thermal losses at the bore wall: 1 = smooth metal, more for rough walls.
 
+    // Tuning slide: how far the head is pulled out from where the instrument was made (m; negative = pushed in).
+    // It adds that much tube at the joint (slideJoint()), so boreLength and every hole position already include it
+    // (setSlide in Acoustics moves them); the bore's taper belongs to the tube as made, without the slide.
+    double slide = 0.0;
+    double slideJoint() const { return headLength; }  // Below the head section: the fipple part moves as one
+
     double radiusAt (double x) const
     {
-        const auto body = [this] (double at)
+        const double madeLength = boreLength - slide;
+        const auto body = [this, madeLength] (double at)
         {
-            const double t = juce::jlimit (0.0, 1.0, at / boreLength);
+            // Below the joint the tube is the made one moved down by the slide; the inserted part is as wide as the
+            // bore at the joint.
+            const double joint = slideJoint();
+            const double made = at <= joint ? at : std::max (joint, at - slide);
+            const double t = juce::jlimit (0.0, 1.0, made / madeLength);
             return 0.5 * (boreDiameterTop + t * (boreDiameterFoot - boreDiameterTop));
         };
         if (headLength > 0.0 && x < headLength)
@@ -243,6 +303,10 @@ const std::vector<Geometry>& presets();
 // The lowest note a preset is tuned to (Hz, at its reference A): recorders C5 plus chartTranspose,
 // whistles D5 (low whistles D4),
 // the Härjedalspipa A#4.
+// The Härjedalspipa's tuning goal: its traditional scale (Swedish Wikipedia), the high tonic overblown with every hole
+// covered, no cross-fingered seventh.
+TuningGoal harjedalGoal();
+
 double presetLowestNote (const Geometry&);
 
 // The voicing that goes with each preset (same order as presets()).

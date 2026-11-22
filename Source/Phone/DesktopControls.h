@@ -2,7 +2,7 @@
 // the reverb sliders, Simulate WARBL, Record...) instead of the engine directly, so a change made on the phone
 // does exactly what it does on the desktop, and is saved the same way. The pages keep running behind the phone
 // screens (connection, stream renewal, recording), whichever screen is shown. Friend of MonitorPage,
-// InstrumentPage and SensorsPage.
+// InstrumentPage, WorkshopPage and SensorsPage.
 
 #pragma once
 
@@ -31,11 +31,16 @@ public:
     juce::ComboBox& chartBox() { return instrument().chartBox; }
     juce::ComboBox& materialBox() { return instrument().materialBox; }
     juce::Slider& pitchStandard() { return instrument().referenceBox; }
-    juce::ToggleButton& crossFingerings() { return instrument().crossButton; }
+    juce::ToggleButton& crossFingerings() { return workshop().crossButton; }
     juce::ToggleButton& bell() { return instrument().bellButton; }
     juce::ToggleButton& holeUsed (int hole) { return *instrument().holeToggles[(size_t) hole]; }
-    void tuneHoles() { instrument().tuneButton.onClick(); }
-    juce::String instrumentStatus() { return instrument().tuneStatus.getText(); }
+    void tuneHoles() { workshop().tuneButton.onClick(); }
+    juce::String instrumentStatus()
+    {
+        // The Instrument tab's (files, presets) and the Tuning workshop's (the tuner).
+        const auto files = instrument().tuneStatus.getText(), tuner = workshop().status.getText();
+        return files.isEmpty() ? tuner : tuner.isEmpty() ? files : files + "\n" + tuner;
+    }
     juce::String instrumentName() { return instrument().geometry.name; }
     void savePreset (const juce::String& name) { instrument().savePresetNamed (name); }
     bool canDeletePreset() { return instrument().selectedUserPreset() != juce::File(); }
@@ -43,7 +48,7 @@ public:
     void deletePreset() { instrument().deleteUserPreset (instrument().selectedUserPreset()); }  // Without asking
     void exportInstrument() { instrument().saveToFile(); }
     void importInstrument() { instrument().loadFromFile(); }
-    const std::vector<TuningTable::Entry>& tuningTable() { return instrument().tuningTable.getEntries(); }
+    const std::vector<TuningTable::Entry>& tuningTable() { return workshop().table.getEntries(); }
 
     // The Instrument tab's sliders, grouped under its headings, in its order. A hole's two sliders (position and
     // diameter) carry the hole's index.
@@ -138,6 +143,7 @@ public:
 private:
     MonitorPage& monitor() { return main.getMonitor(); }
     InstrumentPage& instrument() { return main.getInstrumentPage(); }
+    WorkshopPage& workshop() { return main.getWorkshopPage(); }
     SensorsPage& sensors() { return main.getSensorsPage(); }
 
     template <typename Rows>

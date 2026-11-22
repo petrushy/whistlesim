@@ -3,6 +3,7 @@
 #pragma once
 
 #include "InstrumentPage.h"
+#include "WorkshopPage.h"
 #include "ModelPage.h"
 #include "MonitorPage.h"
 #include "SensorsPage.h"
@@ -17,12 +18,14 @@ public:
 
     MonitorPage& getMonitor() { return *monitor; }
     InstrumentPage& getInstrumentPage() const { return *instrument; }
+    WorkshopPage& getWorkshopPage() const { return *workshop; }
     SensorsPage& getSensorsPage() const { return *sensors; }
     StreamReceiver& getReceiver() { return receiver; }
     void showMonitor() { tabs.setCurrentTabIndex (0); }
     void showInstrument() { tabs.setCurrentTabIndex (1); }
-    void showSensors() { tabs.setCurrentTabIndex (2); }
-    void showModel() { tabs.setCurrentTabIndex (3); }
+    void showWorkshop() { tabs.setCurrentTabIndex (2); }
+    void showSensors() { tabs.setCurrentTabIndex (3); }
+    void showModel() { tabs.setCurrentTabIndex (4); }
     void loadPreset (int index) { instrument->loadPreset (index); }
     void showAbout();
     juce::Component* getAboutPanel() { return aboutWindow != nullptr ? aboutWindow->getContentComponent() : nullptr; }
@@ -44,6 +47,7 @@ private:
     StreamReceiver receiver;
     AudioEngine audio { receiver };
     InstrumentPage* instrument = nullptr;  // Owned by tabs.
+    WorkshopPage* workshop = nullptr;      // Owned by tabs.
     SensorsPage* sensors = nullptr;        // Owned by tabs.
     bool saveOnExit = true;
 

@@ -277,10 +277,19 @@ bool moveFrontHoles (Geometry& g, int firstHole)
     return true;
 }
 
+TuningGoal harjedalGoal()
+{
+    TuningGoal goal;
+    goal.temperament = Temperament::harjedalSwedish;
+    goal.fingerings["high D xxxxxx"] = true;   // Its high tonic: overblown, every hole covered
+    goal.fingerings["high D oxxxxx"] = false;
+    goal.fingerings["C nat oxxooo"] = false;   // No cross-fingered seventh in its scale
+    return goal;
+}
+
 double presetLowestNote (const Geometry& g)
 {
     const double at440 = g.chart == FingeringChart::baroqueRecorder ? 523.25
-                       : g.chart == FingeringChart::harjedalspipa  ? 466.16
                        : g.boreLength > 0.4                        ? 293.66
                                                                    : 587.33;
     return at440 * std::pow (2.0, g.chartTranspose / 12.0) * g.referenceA / 440.0;
@@ -315,46 +324,73 @@ const std::vector<Geometry>& presets()
         return g;
     };
 
-    // Bore lengths, hole positions and the cross-fingering hole sizes (whistles: L1 for C natural; recorder:
-    // R1 for the F# fork, R3 for E'' and L3 for A'') come from the tuner: `WhistleCheck code` prints them. PresetTuningTest checks they are
-    // still in tune with the current acoustics. Holes: LT, L1, L2, L3, R1, R2, R3, R4 as { used, position, diameter }.
+    // Bore lengths, hole positions, the cross-fingering hole sizes (whistles: L1 for C natural; recorder: R1 for the
+    // F# fork, R3 for E'' and L3 for A'') and the whistles' head sections come from the tuner, tuned to the pitch the
+    // model plays (PlayedTuning: each note at the middle of the breath it sounds at): `WhistleCheck code` prints
+    // them. PlayedTuningTest checks they still play in tune. The whistles' heads came out wider than the bore
+    // (13.5-14 mm on 12): it plays the second octave flatter against the first, which the holes can't do.
+    // Holes: LT, L1, L2, L3, R1, R2, R3, R4 as { used, position, diameter }.
     static const std::vector<Geometry> list = [&]
     {
         std::vector<Geometry> instruments {
-            make ("D whistle, cylindrical metal", 0.26829, 0.0120, 0.0120,
-                  { { { false, 0.0, 0.0 }, { true, 0.12026, 0.00427 }, { true, 0.14576, 0.00700 }, { true, 0.16553, 0.00650 },
-                      { true, 0.19197, 0.00720 }, { true, 0.20215, 0.00680 }, { true, 0.22738, 0.00580 }, { false, 0.0, 0.0 } } },
-                  0.0005, 1.0, 0.0010, 0.0050, 0.0080),
-            make ("D whistle, conical metal", 0.26527, 0.0130, 0.0105,
-                  { { { false, 0.0, 0.0 }, { true, 0.11710, 0.00423 }, { true, 0.14355, 0.00700 }, { true, 0.16357, 0.00650 },
-                      { true, 0.18987, 0.00720 }, { true, 0.20058, 0.00680 }, { true, 0.22643, 0.00580 }, { false, 0.0, 0.0 } } },
-                  0.0005, 1.0, 0.0010, 0.0050, 0.0080),
             [&]
             {
-                // A narrower bore around the fipple, widening to the 12 mm bore over 30 mm: widens the octaves,
-                // which in the model brings the played second register close to in tune (WhistleCheck head).
-                auto g = make ("D whistle, narrow head", 0.26593, 0.0120, 0.0120,
-                               { { { false, 0.0, 0.0 }, { true, 0.11812, 0.00423 }, { true, 0.14526, 0.00700 }, { true, 0.16461, 0.00650 },
-                                   { true, 0.19068, 0.00720 }, { true, 0.20054, 0.00680 }, { true, 0.22539, 0.00580 }, { false, 0.0, 0.0 } } },
+                // A cylindrical body; the tuner's head section (14.2 mm over the top 30 mm) puts its octaves in tune.
+                auto g = make ("D whistle, cylindrical metal", 0.26931, 0.0120, 0.0120,
+                               { { { false, 0.0, 0.0 }, { true, 0.12654, 0.00552 }, { true, 0.14604, 0.00700 }, { true, 0.16499, 0.00650 },
+                                   { true, 0.19296, 0.00720 }, { true, 0.20299, 0.00680 }, { true, 0.22923, 0.00580 }, { false, 0.0, 0.0 } } },
                                0.0005, 1.0, 0.0010, 0.0050, 0.0080);
                 g.headLength = 0.030;
-                g.headDiameter = 0.0105;
+                g.headDiameter = 0.01417;
                 return g;
             }(),
-            make ("D whistle, wood", 0.25926, 0.0125, 0.0125,
-                  { { { false, 0.0, 0.0 }, { true, 0.11680, 0.00688 }, { true, 0.13866, 0.00850 }, { true, 0.15716, 0.00800 },
-                      { true, 0.18030, 0.00700 }, { true, 0.19404, 0.00920 }, { true, 0.21526, 0.00720 }, { false, 0.0, 0.0 } } },
-                  0.0040, 1.3, 0.00087, 0.0042, 0.0080),  // The Golden style's fipple: the easiest to play
             [&]
             {
-                // In the style of a Golden high D (not measured): a thin aluminium tube, a narrow head (as the
-                // narrow-head preset), a low windway ceiling (Golden's "medium" is ~0.87 mm) and a short window.
-                auto g = make ("D whistle, Golden style", 0.26530, 0.0120, 0.0120,
-                               { { { false, 0.0, 0.0 }, { true, 0.11820, 0.00476 }, { true, 0.14308, 0.00700 }, { true, 0.16245, 0.00650 },
-                                   { true, 0.18904, 0.00720 }, { true, 0.19865, 0.00680 }, { true, 0.22325, 0.00580 }, { false, 0.0, 0.0 } } },
+                // A conical body (13 mm at the top, 10.5 at the foot), with the tuner's head section (16.3 mm over 30 mm).
+                auto g = make ("D whistle, conical metal", 0.26677, 0.0130, 0.0105,
+                               { { { false, 0.0, 0.0 }, { true, 0.12343, 0.00542 }, { true, 0.14144, 0.00700 }, { true, 0.16193, 0.00650 },
+                                   { true, 0.18866, 0.00720 }, { true, 0.20107, 0.00680 }, { true, 0.22789, 0.00580 }, { false, 0.0, 0.0 } } },
+                               0.0005, 1.0, 0.0010, 0.0050, 0.0080);
+                g.headLength = 0.030;
+                g.headDiameter = 0.01652;
+                return g;
+            }(),
+            [&]
+            {
+                // Started as a narrower bore around the fipple (10.5 mm, widening to the 12 mm bore over 30 mm), which
+                // widens the octaves: played at the middle of each note's breath its second octave was 30 c sharp. Tuned
+                // to the played pitch, the head came out wide instead.
+                auto g = make ("D whistle, narrow head", 0.26745, 0.0120, 0.0120,
+                               { { { false, 0.0, 0.0 }, { true, 0.12527, 0.00508 }, { true, 0.14662, 0.00700 }, { true, 0.16538, 0.00650 },
+                                   { true, 0.19285, 0.00720 }, { true, 0.20260, 0.00680 }, { true, 0.22979, 0.00580 }, { false, 0.0, 0.0 } } },
+                               0.0005, 1.0, 0.0010, 0.0050, 0.0080);
+                g.headLength = 0.030;
+                g.headDiameter = 0.01375;
+                return g;
+            }(),
+            [&]
+            {
+                // The Golden style's fipple (the easiest to play) on a thick-walled wooden tube, with the tuner's head
+                // section (14.3 mm over 30 mm).
+                auto g = make ("D whistle, wood", 0.25974, 0.0125, 0.0125,
+                               { { { false, 0.0, 0.0 }, { true, 0.11930, 0.00730 }, { true, 0.13819, 0.00850 }, { true, 0.15800, 0.00800 },
+                                   { true, 0.18097, 0.00700 }, { true, 0.19631, 0.00920 }, { true, 0.21519, 0.00720 }, { false, 0.0, 0.0 } } },
+                               0.0040, 1.3, 0.00087, 0.0042, 0.0080);
+                g.headLength = 0.030;
+                g.headDiameter = 0.01433;
+                return g;
+            }(),
+            [&]
+            {
+                // In the style of a Golden high D (not measured): a thin aluminium tube, a low windway ceiling (Golden's
+                // "medium" is ~0.87 mm) and a short window. The head was narrow (11.5 mm, as a real Golden's); tuned to the
+                // played pitch it came out at 14 mm (the real one's octaves are voiced in ways the model doesn't have).
+                auto g = make ("D whistle, Golden style", 0.26731, 0.0120, 0.0120,
+                               { { { false, 0.0, 0.0 }, { true, 0.12418, 0.00618 }, { true, 0.14311, 0.00700 }, { true, 0.16323, 0.00650 },
+                                   { true, 0.18973, 0.00720 }, { true, 0.20166, 0.00680 }, { true, 0.22438, 0.00580 }, { false, 0.0, 0.0 } } },
                                0.0010, 1.0, 0.00087, 0.0042, 0.0080);
                 g.headLength = 0.030;
-                g.headDiameter = 0.0115;  // Narrow, but less than the narrow-head preset's 10.5 mm: its octave played 20-30 c sharp
+                g.headDiameter = 0.01401;
                 g.edgeOffset = 0.00015;   // Into the pipe: the second harmonic of the recorded Golden's low notes
                 return g;
             }(),
@@ -386,28 +422,32 @@ const std::vector<Geometry>& presets()
                 // medium blowers 0.9-1.0 mm) and a 13 mm wide window, as forum measurements of low whistles give. The
                 // window is short (5.2 mm, Overton style): a longer one let the jet grow so much that quick fingering
                 // changes flipped into the octave on the way (WhistleCheck transition).
-                auto g = make ("Low D whistle", 0.53179, 0.0220, 0.0220,
-                               { { { false, 0.0, 0.0 }, { true, 0.23341, 0.00733 }, { true, 0.28101, 0.01100 }, { true, 0.32150, 0.01050 },
-                                   { true, 0.37518, 0.01150 }, { true, 0.39542, 0.01100 }, { true, 0.44659, 0.00950 }, { false, 0.0, 0.0 } } },
+                auto g = make ("Low D whistle", 0.53411, 0.0220, 0.0220,
+                               { { { false, 0.0, 0.0 }, { true, 0.23696, 0.00800 }, { true, 0.28315, 0.01100 }, { true, 0.32271, 0.01050 },
+                                   { true, 0.37498, 0.01150 }, { true, 0.39827, 0.01100 }, { true, 0.44869, 0.00950 }, { false, 0.0, 0.0 } } },
                                0.0010, 1.0, 0.0010, 0.0052, 0.0130);
                 g.windwayLength = 0.028;  // A bigger fipple
-                // A slightly wider head (24 mm over the top 60 mm) flattens the second octave into tune: with the
-                // plain bore it played 10-18 cents sharp (WhistleCheck chart "low D" headlength= headdiameter=).
+                // A slightly wider head (25 mm over the top 60 mm) flattens the second octave into tune: with the
+                // plain bore it played 10-18 cents sharp. The diameter is the played-pitch tuner's.
                 g.headLength = 0.060;
-                g.headDiameter = 0.024;
+                g.headDiameter = 0.02512;
                 return g;
             }(),
             [&]
             {
                 // Härjedalspipa (Härjedalen, Sweden): a wooden duct flute with a cylindrical bore and six finger holes,
-                // in the traditional scale on A# with its neutral thirds and sevenths (see chartFor). Typical
-                // dimensions, scaled from the wooden whistle, not a measured instrument; holes placed by the tuner.
+                // in the traditional scale on A# with its neutral thirds and sevenths. It is fingered as a whistle (holes
+                // opened from the bottom; the whistle chart a major third down) and tuned to its scale as Swedish
+                // Wikipedia gives it (Temperament::harjedalSwedish); the high tonic overblown with every hole covered,
+                // no cross-fingered seventh. Typical dimensions, scaled from the wooden whistle, not a measured
+                // instrument; holes placed by the tuner.
                 // R1 small and R2 large (4 and 10 mm) keep D+35 and D#, only 65 cents apart, about 20 mm apart.
-                auto g = make (juce::String::fromUTF8 ("Härjedalspipa (A#, traditional scale)"), 0.33720, 0.0130, 0.0130,
-                               { { { false, 0.0, 0.0 }, { true, 0.15504, 0.00700 }, { true, 0.18180, 0.00700 }, { true, 0.20413, 0.00700 },
-                                   { true, 0.22851, 0.00400 }, { true, 0.25017, 0.01000 }, { true, 0.27613, 0.00500 }, { false, 0.0, 0.0 } } },
+                auto g = make (juce::String::fromUTF8 ("Härjedalspipa (A#, traditional scale)"), 0.33542, 0.0130, 0.0130,
+                               { { { false, 0.0, 0.0 }, { true, 0.15651, 0.00700 }, { true, 0.18231, 0.00700 }, { true, 0.20396, 0.00700 },
+                                   { true, 0.22936, 0.00400 }, { true, 0.25026, 0.01000 }, { true, 0.27672, 0.00500 }, { false, 0.0, 0.0 } } },
                                0.0040, 1.3, 0.0010, 0.0055, 0.0090);
-                g.chart = FingeringChart::harjedalspipa;
+                g.chartTranspose = -4;  // A#4: the whistle chart's D5 a major third down
+                g.tuning = harjedalGoal();
                 g.windwayLength = 0.022;
                 return g;
             }(),
@@ -417,9 +457,9 @@ const std::vector<Geometry>& presets()
                 // the back, all seven front holes, thick walls and a wide windway. Typical dimensions, not a measured
                 // instrument. The sizes of the thumb hole, L3, R1 and R3 come from the tuner (high Bb, high A, the F#
                 // fork and high B); L2's (5 mm) puts the Bb fork in tune; L1's, R2's and R4's are first guesses.
-                auto g = make ("Soprano recorder in C (baroque fingering)", 0.29024, 0.0130, 0.0095,
-                               { { { true, 0.10140, 0.00501 }, { true, 0.12019, 0.00600 }, { true, 0.12775, 0.00503 }, { true, 0.14817, 0.00498 },
-                                   { true, 0.16672, 0.00398 }, { true, 0.20006, 0.00650 }, { true, 0.21513, 0.00557 }, { true, 0.24068, 0.00450 } } },
+                auto g = make ("Soprano recorder in C (baroque fingering)", 0.28774, 0.0130, 0.0095,
+                               { { { true, 0.10017, 0.00459 }, { true, 0.12131, 0.00600 }, { true, 0.12752, 0.00503 }, { true, 0.14836, 0.00502 },
+                                   { true, 0.16384, 0.00382 }, { true, 0.20002, 0.00650 }, { true, 0.21396, 0.00538 }, { true, 0.23773, 0.00450 } } },
                                0.0035, 1.1, 0.0010, 0.0037, 0.0088);  // Window 3.7 x 8.8 mm, as a measured soprano (NMMSD)
                 g.chart = FingeringChart::baroqueRecorder;
                 // A short window for the jet's thickness (W/h 3.7, a whistle's ~5) grows the jet less on its way to the
@@ -438,14 +478,29 @@ const std::vector<Geometry>& presets()
         for (size_t i = 0; i < instruments.size(); ++i)
             if (instruments[i].name == "D whistle, Golden style")
             {
-                auto generation = instruments[i], lof = instruments[i];
+                // Each voicing pulls the notes a little differently: each has its own tuning (played-pitch tuner).
+                auto retuned = [] (Geometry g, double length, double head, std::array<ToneHole, kNumHoles> holes)
+                {
+                    g.boreLength = length;
+                    g.headDiameter = head;
+                    g.holes = holes;
+                    return g;
+                };
+                auto generation = retuned (instruments[i], 0.26688, 0.01382,
+                                           { { { false, 0.0, 0.0 }, { true, 0.12345, 0.00587 }, { true, 0.14363, 0.00700 }, { true, 0.16315, 0.00650 },
+                                             { true, 0.18960, 0.00720 }, { true, 0.20153, 0.00680 }, { true, 0.22421, 0.00580 }, { false, 0.0, 0.0 } } });
+                auto lof = retuned (instruments[i], 0.26677, 0.01371,
+                                    { { { false, 0.0, 0.0 }, { true, 0.12154, 0.00506 }, { true, 0.14375, 0.00700 }, { true, 0.16323, 0.00650 },
+                                             { true, 0.19002, 0.00720 }, { true, 0.20160, 0.00680 }, { true, 0.22437, 0.00580 }, { false, 0.0, 0.0 } } });
                 generation.name = "D whistle, Generation style";
                 generation.edgeOffset = 0.00015;
                 lof.name = juce::String::fromUTF8 ("D whistle, Löf style");
                 lof.edgeOffset = 0.0002;  // Its first octave's strong second harmonic (H2 -11 dB)
                 // The same whistle voiced after the RODE recording of the Golden (presetVoicing): the edge nearer the
                 // jet's centre line, since its jet is bent off it at a soft breath (Voicing::jetBend).
-                auto bright = instruments[i];
+                auto bright = retuned (instruments[i], 0.26651, 0.01342,
+                                       { { { false, 0.0, 0.0 }, { true, 0.12198, 0.00508 }, { true, 0.14393, 0.00700 }, { true, 0.16274, 0.00650 },
+                                             { true, 0.18981, 0.00720 }, { true, 0.20101, 0.00680 }, { true, 0.22505, 0.00580 }, { false, 0.0, 0.0 } } });
                 bright.name = "D whistle, Golden style (bright)";
                 bright.edgeOffset = 0.00005;
                 instruments.insert (instruments.begin() + (long) i + 1, { bright, generation, lof });
@@ -473,6 +528,10 @@ const std::vector<Geometry>& presets()
                 auto bright = instruments[i];
                 bright.name = "Low D whistle (bright)";
                 bright.edgeOffset = 0.00025;
+                bright.boreLength = 0.53288;  // Tuned to its own played pitch
+                bright.headDiameter = 0.02506;
+                bright.holes = { { { false, 0.0, 0.0 }, { true, 0.23912, 0.00849 }, { true, 0.28269, 0.01100 }, { true, 0.32218, 0.01050 },
+                     { true, 0.37534, 0.01150 }, { true, 0.39816, 0.01100 }, { true, 0.44829, 0.00950 }, { false, 0.0, 0.0 } } };
                 instruments.insert (instruments.begin() + (long) i + 1, bright);
                 break;
             }
@@ -505,15 +564,15 @@ const std::vector<Geometry>& presets()
             // scale exactly with the instrument, so simply multiplying the soprano leaves these notes sharp.
             if (transpose == -7)
             {
-                g.boreLength = 0.43704;
-                g.holes = { { { true, 0.15558, 0.00791 }, { true, 0.18180, 0.00899 }, { true, 0.19316, 0.00754 }, { true, 0.22347, 0.00733 },
-                              { true, 0.25172, 0.00587 }, { true, 0.30125, 0.00974 }, { true, 0.32348, 0.00831 }, { true, 0.36290, 0.00674 } } };
+                g.boreLength = 0.43606;
+                g.holes = { { { true, 0.15318, 0.00704 }, { true, 0.18295, 0.00899 }, { true, 0.19263, 0.00754 }, { true, 0.22538, 0.00751 },
+                              { true, 0.24859, 0.00567 }, { true, 0.30272, 0.00974 }, { true, 0.32532, 0.00843 }, { true, 0.36054, 0.00674 } } };
             }
             else
             {
-                g.boreLength = 0.58531;
-                g.holes = { { { true, 0.21000, 0.01082 }, { true, 0.24405, 0.01200 }, { true, 0.25917, 0.01006 }, { true, 0.29969, 0.00975 },
-                              { true, 0.33764, 0.00784 }, { true, 0.40365, 0.01300 }, { true, 0.43356, 0.01113 }, { true, 0.48637, 0.00900 } } };
+                g.boreLength = 0.58304;
+                g.holes = { { { true, 0.20750, 0.00973 }, { true, 0.24554, 0.01200 }, { true, 0.25781, 0.01006 }, { true, 0.30208, 0.01000 },
+                              { true, 0.33509, 0.00767 }, { true, 0.40662, 0.01300 }, { true, 0.43280, 0.01098 }, { true, 0.48344, 0.00900 } } };
             }
             instruments.push_back (g);
         }
@@ -523,8 +582,25 @@ const std::vector<Geometry>& presets()
             auto real = soprano;
             real.name = "Soprano recorder in C (baroque fingering), real pressure";
             real.edgeOffset = 0.0003;
+            real.boreLength = 0.28898;  // Tuned to its own played pitch
+            real.holes = { { { true, 0.10056, 0.00475 }, { true, 0.12093, 0.00600 }, { true, 0.12725, 0.00503 }, { true, 0.14743, 0.00496 },
+                             { true, 0.16359, 0.00381 }, { true, 0.19985, 0.00650 }, { true, 0.21329, 0.00543 }, { true, 0.23917, 0.00450 } } };
             instruments.push_back (real);
         }
+
+        // Whistles are tuned for the keys they are mostly played in, D, G, Em and Bm (on a D whistle), their chords
+        // halfway from equal temperament to as pure as can be, with L1's size for high D (TuningGoal); recorders to
+        // equal temperament, the Härjedalspipa to its own scale.
+        for (auto& g : instruments)
+            if (g.chart == FingeringChart::whistle && g.tuning.temperament == Temperament::equal)  // Not the Härjedalspipa
+            {
+                g.tuning.temperament = Temperament::bestForKeys;
+                g.tuning.towardEqual = 0.5;
+                g.tuning.topHoleForHighD = true;  // L1's size for high D; C natural is half-holed
+                g.tuning.keys = {};
+                g.tuning.keys[0] = g.tuning.keys[5] = 1.0;                                                  // I, IV
+                g.tuning.keys[TuningGoal::kMinor + 2] = g.tuning.keys[TuningGoal::kMinor + 9] = 1.0;       // ii, vi (minor)
+            }
 
         // Edge offsets found with the voicings in presetVoicing() (m, into the pipe).
         for (auto& g : instruments)
