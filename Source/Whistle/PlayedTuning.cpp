@@ -2,6 +2,7 @@
 
 #include "ScalePlan.h"
 
+#include <algorithm>
 #include <cmath>
 #include <future>
 #include <map>
