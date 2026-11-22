@@ -910,7 +910,7 @@ int main (int argc, char* argv[])
                 name = name.upToLastOccurrenceOf (", holes L1-R3", false, false);
             }
             const auto file = dir.getChildFile (juce::String (++number).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (name) + ".whistle");
-            file.replaceWithText (toJson (instrument));
+            file.replaceWithText (toJson (instrument), false, false, "\n");
             std::printf ("%s\n", file.getFileName().toRawUTF8());
         }
         return 0;
@@ -4255,7 +4255,7 @@ int main (int argc, char* argv[])
                 out.headDiameter = g.headDiameter;
                 out.headStraightLength = g.headStraightLength;
                 out.holes = g.holes;
-                written = file.replaceWithText (toJson (*instrument));
+                written = file.replaceWithText (toJson (*instrument), false, false, "\n");
                 std::printf ("    written to Presets/%s\n", file.getFileName().toRawUTF8());
                 break;
             }
