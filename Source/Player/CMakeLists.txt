@@ -17,7 +17,8 @@ endif()
 
 add_library(WhistlePlayer STATIC
     Player.cpp
-    StreamCore.cpp)
+    StreamCore.cpp
+    Workshop.cpp)
 target_compile_features(WhistlePlayer PUBLIC cxx_std_20)
 # Users include "Player/Player.h"; StreamProtocol.h, SensorResponse.h and SimulatedPlayer.h are in Source.
 target_include_directories(WhistlePlayer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/.." PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

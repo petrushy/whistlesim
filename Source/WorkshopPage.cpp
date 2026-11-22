@@ -1,6 +1,6 @@
 #include "WorkshopPage.h"
 
-#include "Whistle/PitchDetect.h"
+#include "Player/Workshop.h"
 
 #include <map>
 
@@ -14,27 +14,10 @@ const juce::Colour highlight { 0xffe0a24f };
 
 const char* const kPitchNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
-int midiOf (double hz, double referenceA) { return (int) std::lround (69.0 + 12.0 * std::log2 (hz / referenceA)); }
-
-juce::String noteName (double hz, double referenceA)
-{
-    const int midi = midiOf (hz, referenceA);
-    return juce::String (kPitchNames[(midi % 12 + 12) % 12]) + juce::String (midi / 12 - 1);
-}
-
-juce::String signedCents (double cents)
-{
-    const int c = (int) std::lround (cents);
-    return (c >= 0 ? "+" : "") + juce::String (c) + " c";
-}
-
-// After an rms: how many counted notes it leaves out because they don't sound.
-juce::String silentText (int silent)
-{
-    return silent == 0 ? juce::String() : " (" + juce::String (silent) + (silent == 1 ? " note doesn't" : " notes don't") + " sound)";
-}
-
-juce::String mm (double metres) { return juce::String (std::abs (metres) < 0.00005 ? 0.0 : metres * 1000.0, 1) + " mm"; }
+// The workshop's wording is shared with the iPhone app (Player/Workshop.h).
+using workshop::midiOf;
+juce::String noteName (double hz, double referenceA) { return juce::String (workshop::noteName (hz, referenceA)); }
+juce::String signedCents (double cents) { return juce::String (workshop::signedCents (cents)); }
 
 // Columns: Use, Note, Fingering, Target, Weight, Breath, Tube, Played (from the target and from equal; with the slide as it
 // is), and Slide tuned. The header has two lines: the names, then what the cents are from.
@@ -379,10 +362,9 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
         if (learnButton.getToggleState())
         {
             learning = true;
-            breathSamples.clear();
-            lastFingering.clear();
+            learner.start();
             learnButton.setButtonText ("Stop learning");
-            learnStatus.setText ("Listening: play each note, holding it steady for a moment", juce::dontSendNotification);
+            learnStatus.setText (learner.status(), juce::dontSendNotification);
         }
         else
         {
@@ -475,7 +457,7 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
                             "at the reference A. The green zone is the tuning's target for that note (Target pitches above).");
     tunerButton.onClick = [this]
     {
-        tunerHistory.clear();
+        tuner.clear();
         tunerView.setActive (tunerButton.getToggleState());
     };
     addAndMakeVisible (tunerButton);
@@ -499,39 +481,13 @@ void WorkshopPage::listen()
     if (! tunerOn && ! learning)
         return;
 
-    // The latest 0.1 s and a bit (what measurePitch looks at), read up to 30 times a second.
-    const double rate = audio.getSampleRate();
-    const int needed = (int) (0.1 * rate) + (int) (rate / 120.0) + 3;
-    std::vector<float> fresh ((size_t) needed);
-    const int got = audio.readTunerSamples (fresh.data(), needed);
-    if (got < 100)  // The model is resting (no sound) or audio isn't running
-        tunerHistory.clear();
-    else
-        tunerHistory.insert (tunerHistory.end(), fresh.begin(), fresh.begin() + got);
-    if ((int) tunerHistory.size() > needed)
-        tunerHistory.erase (tunerHistory.begin(), tunerHistory.end() - needed);
-
-    double clarity = 0.0;
-    const double hz = (int) tunerHistory.size() == needed ? whistle::measurePitch (tunerHistory, rate, clarity) : 0.0;
-    if (hz > 0.0 && clarity >= 0.8)
-        heardHz = hz;
+    const auto reading = tuner.update (audio, instrument.getGeometry(), instrument.lowestNoteHz());
+    heardHz = tuner.heardHz();
     if (! tunerOn)
         return;
-    if (heardHz <= 0.0)
-    {
-        tunerView.setReading (0.0, {}, 0.0, 0.0);
-        if (onTunerReading != nullptr)
-            onTunerReading (0.0, {}, 0.0, 0.0);
-        return;
-    }
-    const auto& g = instrument.getGeometry();
-    const double exact = 69.0 + 12.0 * std::log2 (heardHz / g.referenceA);
-    const int midi = (int) std::lround (exact);
-    const int key = midiOf (instrument.lowestNoteHz(), g.referenceA);
-    const double target = whistle::temperamentCents (g.tuning)[(size_t) (((midi - key) % 12 + 12) % 12)];
-    tunerView.setReading (heardHz, noteName (heardHz, g.referenceA), (exact - midi) * 100.0, target);
+    tunerView.setReading (reading.hz, reading.note, reading.centsFromEqual, reading.targetCents);
     if (onTunerReading != nullptr)
-        onTunerReading (heardHz, noteName (heardHz, g.referenceA), (exact - midi) * 100.0, target);
+        onTunerReading (reading.hz, reading.note, reading.centsFromEqual, reading.targetCents);
 }
 
 void WorkshopPage::setShownElsewhere (bool on)
@@ -662,9 +618,7 @@ void WorkshopPage::setGoal (const whistle::TuningGoal& goal)
 
 juce::String WorkshopPage::keyName (int key) const
 {
-    const int lowest = midiOf (instrument.lowestNoteHz(), instrument.getGeometry().referenceA);
-    const bool minor = key >= whistle::TuningGoal::kMinor;
-    return juce::String (kPitchNames[((lowest + key % 12) % 12 + 12) % 12]) + (minor ? "m" : "");
+    return juce::String (workshop::keyName (key, instrument.lowestNoteHz(), instrument.getGeometry().referenceA));
 }
 
 void WorkshopPage::refreshGoalControls()
@@ -736,210 +690,47 @@ void WorkshopPage::timerCallback()
 
 void WorkshopPage::rebuildTable()
 {
-    const auto& geometry = instrument.getGeometry();
-    const double lowest = instrument.lowestNoteHz();
-    const auto& chart = whistle::chartFor (geometry.chart);
-
-    // Each note's pull from its resonance, as last measured; the slide is tuned on the played notes.
-    std::vector<double> pull (chart.size(), std::nan (""));
-    if (playedValid)
-        for (const auto& n : playedNotes)
-            if (n.sounds && n.chartIndex < pull.size())
-                pull[n.chartIndex] = n.cents - n.resonance;
-    bestSlide = playedValid ? whistle::bestSlide (geometry, lowest, &pull) : whistle::bestSlide (geometry, lowest);
-    auto atBest = geometry;
-    whistle::setSlide (atBest, bestSlide);
-
+    const auto built = workshop::buildTable (instrument.getGeometry(), instrument.lowestNoteHz(), playedValid ? &playedNotes : nullptr);
+    bestSlide = built.bestSlide;
     std::vector<TuningTable::Entry> entries;
-    double playedSum = 0.0, slideSum = 0.0, weights = 0.0;
-    for (size_t i = 0; i < chart.size(); ++i)
+    for (const auto& row : built.rows)
     {
-        const auto& c = chart[i];
-        // The pattern for the holes in use, grouped as thumb | left hand | right hand.
-        const auto holes = c.holePattern (geometry);
-        juce::String pattern;
-        for (int h = 0; h < whistle::kNumHoles; ++h)
-        {
-            if (! geometry.holes[(size_t) h].enabled)
-                continue;
-            if ((h == 1 && geometry.holes[0].enabled) || h == 4)
-                pattern << '|';
-            pattern << (holes[(size_t) h] == '-' ? 'o' : holes[(size_t) h]);
-        }
         TuningTable::Entry e;
-        e.note = noteName (lowest * std::pow (2.0, c.semitones / 12.0), geometry.referenceA);
-        e.pattern = pattern;
-        e.cents = whistle::predictedCents (geometry, c, lowest);
-        e.target = whistle::targetCents (geometry, c);
-        const double weight = whistle::tuningWeight (geometry, c);
-        e.weight = weight;  // As the tuner counts it (the keys' weights go up to 1; typed ones are shown as typed)
-        e.weightSet = geometry.tuning.weights.count (whistle::fingeringId (c)) > 0;
-        e.measuring = ! playedValid;
-        e.counts = whistle::fingeringCounts (geometry, c);
-        if (playedValid)
-            for (const auto& n : playedNotes)
-                if (n.chartIndex == i && n.sounds)
-                {
-                    e.breath = n.pressure;
-                    e.learnedBreath = n.learned;
-                    e.estimatedBreath = n.estimated;
-                }
-        if (std::isfinite (pull[i]))
-        {
-            e.played = e.cents + pull[i];
-            e.fromEqual = e.target + e.played;
-            e.slideTuned = whistle::predictedCents (atBest, c, lowest) + pull[i];
-            playedSum += weight * e.played * e.played;
-            slideSum += weight * e.slideTuned * e.slideTuned;
-            weights += weight;
-        }
+        e.note = row.note;
+        e.pattern = row.pattern;
+        e.cents = row.cents;
+        e.fromEqual = row.fromEqual;
+        e.played = row.played;
+        e.slideTuned = row.slideTuned;
+        e.target = row.target;
+        e.weight = row.weight;
+        e.breath = row.breath;
+        e.weightSet = row.weightSet;
+        e.learnedBreath = row.learnedBreath;
+        e.estimatedBreath = row.estimatedBreath;
+        e.measuring = row.measuring;
+        e.counts = row.counts;
         entries.push_back (e);
     }
     table.setEntries (std::move (entries));
     chords.setText (chordReport(), juce::dontSendNotification);
-
-    if (! playedValid)
-    {
-        tableTitle.setText ("Measuring the played pitch...", juce::dontSendNotification);
-        return;
-    }
-    const double change = bestSlide - geometry.slide;
-    const juce::String move = std::abs (change) < 0.00005 ? juce::String ("where it is")
-                                                          : (change > 0.0 ? "pull out " : "push in ") + mm (std::abs (change));
-    const auto rms = [weights] (double sum) { return juce::String (weights > 0.0 ? std::sqrt (sum / weights) : 0.0, 1); };
-    tableTitle.setText ("From the targets: played " + rms (playedSum) + " c rms (slide at " + mm (geometry.slide) + "). Slide tuned: " + move
-                            + (std::abs (change) < 0.00005 || std::abs (geometry.slide) < 0.00005 ? juce::String() : " (to " + mm (bestSlide) + ")")
-                            + ", " + rms (slideSum) + " c rms" + silentText (whistle::silentNotes (geometry, playedNotes)),
-                        juce::dontSendNotification);
-    instrument.setTuningSummary ("Tuning (Tuning workshop tab): played " + rms (playedSum) + " c rms, slide tuned " + rms (slideSum) + " c rms");
+    tableTitle.setText (built.title, juce::dontSendNotification);
+    if (! built.summary.empty())
+        instrument.setTuningSummary (built.summary);
 }
 
 juce::String WorkshopPage::chordReport() const
 {
-    if (! playedValid)
-        return "(once the played pitch is measured)";
-    const auto& geometry = instrument.getGeometry();
-    const auto& chart = whistle::chartFor (geometry.chart);
-
-    // Each note's played pitch from equal temperament, by its semitones above the lowest note (the first fingering
-    // for it that counts): a chord is built upward from its root in the low octave, so G major's fifth is the high D.
-    std::map<int, double> played;
-    for (const auto& n : playedNotes)
-    {
-        const auto& c = chart[n.chartIndex];
-        const int semitones = (int) std::lround (c.semitones);
-        if (n.sounds && whistle::fingeringCounts (geometry, c) && played.count (semitones) == 0)
-            played[semitones] = whistle::targetCents (geometry, c) + n.cents;
-    }
-
     juce::StringArray lines;
-    for (int key = 0; key < 24; ++key)
-    {
-        if (geometry.tuning.keys[(size_t) key] <= 0.0)
-            continue;
-        const bool minor = key >= whistle::TuningGoal::kMinor;
-        const int root = key % 12, third = root + (minor ? 3 : 4), fifth = root + 7;
-        auto at = [&] (int semitones)
-        {
-            const auto found = played.find (semitones);
-            return found != played.end() ? found->second : std::nan ("");
-        };
-        juce::String line = keyName (key).paddedRight (' ', 4) + "  ";
-        if (! std::isfinite (at (root)) || ! std::isfinite (at (third)) || ! std::isfinite (at (fifth)))
-        {
-            lines.add (line + "(a note of its chord isn't on this instrument)");
-            continue;
-        }
-        const double thirdError = (minor ? 300.0 : 400.0) + at (third) - at (root) - (minor ? 315.641 : 386.314);
-        const double fifthError = 700.0 + at (fifth) - at (root) - 701.955;
-        lines.add (line + "third " + signedCents (thirdError) + ", fifth " + signedCents (fifthError));
-    }
-    return lines.isEmpty() ? juce::String ("(no key counts)") : lines.joinIntoString ("\n");
+    for (const auto& line : workshop::chordReport (instrument.getGeometry(), instrument.lowestNoteHz(), playedValid ? &playedNotes : nullptr))
+        lines.add (line);
+    return lines.joinIntoString ("\n");
 }
 
 void WorkshopPage::sampleBreath()
 {
-    // A note is heard when it sounds (the model's output above -54 dBFS), the holes the chart uses match a fingering
-    // (each hole taken as open or covered, whichever it is nearer: a finger hovering over a lifted hole reads part
-    // covered), and the breath stays within 15 % from one look to the next (30 a second): steady notes, not attacks
-    // or changes. Which of that fingering's notes (registers) it is comes from the pitch heard: the nearest, however
-    // out of tune (up to 3.5 semitones off), since it is the breath that is being learned. Without a clear pitch, from
-    // where the breath lies among the pressures the model plays each of the notes at from rest (measured for the
-    // table): the nearest, up to 1.6 x beyond its ends, since a note already sounding holds on past them.
-    const float pressure = audio.shownPressure.load(), level = audio.whistleModel.level.load();
-    const auto& g = instrument.getGeometry();
-    const auto& chart = whistle::chartFor (g.chart);
-    const double lowest = instrument.lowestNoteHz();
-    auto nameOf = [&] (const whistle::ChartFingering& c) { return noteName (lowest * std::pow (2.0, c.semitones / 12.0), g.referenceA); };
-
-    juce::String now;
-    int best = -1;
-    if (! playedValid)
-        now = "waiting for the played pitch to be measured";
-    else if (pressure < 20.0f || level < 0.002f)
-        now = "no note";
-    else
-    {
-        const bool byPitch = heardHz > 0.0;
-        double bestDistance = byPitch ? 350.0 : std::log (1.6);
-        bool fingeringFound = false;
-        for (const auto& n : playedNotes)
-        {
-            const auto& c = chart[n.chartIndex];
-            const auto holes = c.holePattern (g);
-            bool matches = byPitch || n.sounds;
-            for (int h = 0; h < whistle::kNumHoles && matches; ++h)
-            {
-                if (! g.holes[(size_t) h].enabled || holes[(size_t) h] == '-')
-                    continue;
-                const float open = audio.shownOpenness[(size_t) h].load();
-                const char want = holes[(size_t) h];
-                matches = want == 'x' ? open < 0.5f : want == 'o' ? open >= 0.5f : std::abs (open - (want == 'h' ? 0.5f : 0.25f)) < 0.25f;
-            }
-            if (! matches)
-                continue;
-            fingeringFound = true;
-            // How far the pitch heard is from this note (cents), or the breath outside the pressures it sounds at
-            // from rest (0 inside).
-            const double distance = byPitch ? std::abs (1200.0 * std::log2 (heardHz / (lowest * std::pow (2.0, c.semitones / 12.0))))
-                                  : pressure < n.lowPa ? std::log (n.lowPa / pressure)
-                                  : pressure > n.highPa ? std::log (pressure / n.highPa) : 0.0;
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                best = (int) n.chartIndex;
-            }
-        }
-        now = best >= 0 ? nameOf (chart[(size_t) best]) + " at " + juce::String (juce::roundToInt (pressure)) + " Pa"
-            : fingeringFound ? (byPitch ? "the pitch " + noteName (heardHz, g.referenceA) + " is far from that fingering's notes"
-                                        : "breath " + juce::String (juce::roundToInt (pressure)) + " Pa is far from that fingering's notes")
-                             : juce::String ("the holes match no fingering of the chart");
-    }
-
-    if (best >= 0)
-    {
-        const auto id = whistle::fingeringId (chart[(size_t) best]);
-        if (id == lastFingering && std::abs (pressure / lastPressure - 1.0f) < 0.15f)
-        {
-            auto& samples = breathSamples[id];
-            if (samples.size() < 5000)
-                samples.push_back (pressure);
-        }
-        lastFingering = id;
-        lastPressure = pressure;
-    }
-    else
-    {
-        lastFingering.clear();
-    }
-
-    // Which notes have been heard long enough (a third of a second), and what is heard now.
-    juce::StringArray heard;
-    for (const auto& c : chart)
-        if (const auto found = breathSamples.find (whistle::fingeringId (c)); found != breathSamples.end() && found->second.size() >= 10)
-            heard.addIfNotAlreadyThere (nameOf (c));
-    learnStatus.setText ("Now: " + now + ". Heard: " + (heard.isEmpty() ? juce::String ("nothing yet") : heard.joinIntoString (" ")),
-                         juce::dontSendNotification);
+    learner.sample (audio, instrument.getGeometry(), instrument.lowestNoteHz(), playedValid ? &playedNotes : nullptr, heardHz);
+    learnStatus.setText (learner.status(), juce::dontSendNotification);
     learnStatus.setTooltip (learnStatus.getText());
 }
 
@@ -949,25 +740,9 @@ void WorkshopPage::stopLearning()
     learnButton.setToggleState (false, juce::dontSendNotification);
     learnButton.setButtonText ("Learn my breath");
     auto goal = instrument.getGeometry().tuning;
-    int kept = 0;
-    for (auto& [id, samples] : breathSamples)
-    {
-        if (samples.size() < 10)
-            continue;  // Under a third of a second: not a held note
-        std::nth_element (samples.begin(), samples.begin() + (long) samples.size() / 2, samples.end());
-        goal.learnedBreath[id] = samples[samples.size() / 2];
-        ++kept;
-    }
-    breathSamples.clear();
-    if (kept == 0)
-    {
-        learnStatus.setText ("Nothing heard long enough: hold each note steady for a moment", juce::dontSendNotification);
-        return;
-    }
-    goal.useLearnedBreath = true;
-    setGoal (goal);
-    learnStatus.setText ("Learned " + juce::String (kept) + " fingerings (" + juce::String ((int) goal.learnedBreath.size()) + " in all)",
-                         juce::dontSendNotification);
+    if (learner.finish (goal) > 0)
+        setGoal (goal);
+    learnStatus.setText (learner.status(), juce::dontSendNotification);
 }
 
 void WorkshopPage::measurePlayedInBackground()
@@ -1015,23 +790,9 @@ void WorkshopPage::tuneHoles()
                 instrumentChanged();
                 return;
             }
-            // Say what changed besides the positions: hole sizes the tuner had to change, and the head.
-            juce::String changed;
-            for (int i = 0; i < whistle::kNumHoles; ++i)
-            {
-                const double was = before.holes[(size_t) i].diameter, now = tuned.holes[(size_t) i].diameter;
-                if (tuned.holes[(size_t) i].enabled && std::abs (now - was) > 0.00005)
-                    changed << (changed.isEmpty() ? "; " : ", ") << whistle::kHoleNames[(size_t) i] << " " << juce::String (was * 1000.0, 1)
-                            << " -> " << juce::String (now * 1000.0, 1) << " mm";
-            }
-            if (std::abs (tuned.headDiameter - before.headDiameter) > 0.00005 || tuned.headLength != before.headLength)
-                changed << (changed.isEmpty() ? "; " : ", ") << "head " << juce::String (tuned.headDiameter * 1000.0, 1) << " mm over "
-                        << juce::String (tuned.headLength * 1000.0, 0) << " mm";
             auto result = tuned;
             result.slide = 0.0;  // A newly made instrument, tuned with its slide pushed in
-            status.setText ("Tuned for " + noteName (hz, result.referenceA) + ": played " + juce::String (whistle::playedRms (result, notes), 1)
-                                + " c rms" + silentText (whistle::silentNotes (result, notes)) + changed,
-                            juce::dontSendNotification);
+            status.setText (workshop::tunedReport (before, result, hz, notes), juce::dontSendNotification);
             status.setTooltip (status.getText());
             instrument.applyGeometry (result);
             // The tuner's last measurement is this geometry's: show it at once.
@@ -1119,8 +880,8 @@ void WorkshopPage::resized()
     chords.setBounds (left);
 
     tableTitle.setBounds (area.removeFromTop (24));
-    auto tuner = area.removeFromBottom (juce::jlimit (150, 240, area.getHeight() / 3));
+    auto tunerArea = area.removeFromBottom (juce::jlimit (150, 240, area.getHeight() / 3));
     tunerButton.setBounds (area.removeFromBottom (28).reduced (0, 2));
-    tunerView.setBounds (tuner.withSizeKeepingCentre (juce::jmin (tuner.getWidth(), tuner.getHeight() * 27 / 10), tuner.getHeight()));
+    tunerView.setBounds (tunerArea.withSizeKeepingCentre (juce::jmin (tunerArea.getWidth(), tunerArea.getHeight() * 27 / 10), tunerArea.getHeight()));
     table.setBounds (area);
 }

@@ -11,6 +11,7 @@
 
 #include "AudioEngine.h"
 #include "InstrumentPage.h"
+#include "Player/Workshop.h"
 #include "Whistle/PlayedTuning.h"
 
 // Every fingering of the chart, one row each. Clicking a row's Use box takes the fingering in or out of the tuning;
@@ -130,8 +131,7 @@ private:
     juce::Label towardEqualLabel { {}, "Toward equal" };
 
     // The keys offered, by TuningGoal::keys index: on a D whistle D, G, A, C major and Bm, Em, F#m, Am.
-    static constexpr int kKeys[] = { 0, 5, 7, 10, whistle::TuningGoal::kMinor + 9, whistle::TuningGoal::kMinor + 2,
-                                     whistle::TuningGoal::kMinor + 4, whistle::TuningGoal::kMinor + 7 };
+    static constexpr auto kKeys = workshop::kKeys;
     struct KeyRow
     {
         juce::Label name;
@@ -147,9 +147,7 @@ private:
     juce::ToggleButton useLearnedButton { "Tune at my learned breath" };
     juce::Slider lowPosition, highPosition;
     bool learning = false;
-    std::map<std::string, std::vector<float>> breathSamples;  // Pa, by fingeringId, while learning
-    std::string lastFingering;
-    float lastPressure = 0.0f;
+    workshop::BreathLearner learner;
     juce::ToggleButton crossButton { "Also tune hole sizes for cross-fingerings and upper notes" };
     juce::ComboBox topHoleBox;  // Whistles: L1's size for C natural or for high D
     juce::ToggleButton headButton { "Also shape the head section, for the octaves (adds one if there is none)" };
@@ -159,7 +157,7 @@ private:
     // The tuner: listens to the model's sound (whatever is played: WARBL, the screen, Play scale).
     juce::ToggleButton tunerButton { "Tuner: listens to what is played" };
     TunerView tunerView;
-    std::vector<float> tunerHistory;  // The latest samples, oldest first
+    workshop::Tuner tuner;  // The model's pitch, from the latest samples
     double heardHz = 0.0;             // The pitch heard last (0: none), for the tuner and for learning the breath
     void listen();                    // Reads the sound and its pitch, while the tuner is on or learning
     double bestSlide = 0.0;  // m: the slide setting the table's Slide tuned column is for
