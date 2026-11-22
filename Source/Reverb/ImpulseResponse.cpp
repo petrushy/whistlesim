@@ -1,8 +1,11 @@
 #include "ImpulseResponse.h"
 
-#include <juce_dsp/juce_dsp.h>
+#include "Fft.h"
 
+#include <algorithm>
 #include <cmath>
+#include <functional>
+#include <numbers>
 #include <random>
 
 namespace reverb
@@ -12,7 +15,20 @@ namespace
 {
 constexpr double kSpeedOfSound = 343.0;
 constexpr double kHeadRadius = 0.0875;  // m, as the direct sound's head in AudioEngine::placeAtEars.
-constexpr double kPi = juce::MathConstants<double>::pi;
+constexpr double kPi = std::numbers::pi;
+
+// v kept between lo and hi (argument order as limit).
+template <typename T>
+T limit (T lo, T hi, T v)
+{
+    return v < lo ? lo : (hi < v ? hi : v);
+}
+
+template <typename T>
+T square (T x)
+{
+    return x * x;
+}
 
 // Adds a band-limited impulse at a fractional sample position (Hann-windowed sinc).
 void addImpulse (float* out, int length, double position, float amplitude)
@@ -64,7 +80,7 @@ double headShadowGain (double angleFromEarAxis, double x)
 // Fraction of a bounce's sound energy that is scattered away from the mirror direction: more at short wavelengths.
 double scatteringAt (const RoomSpec& room, double hz)
 {
-    return juce::jlimit (0.02, 0.9, room.scattering * std::sqrt (std::max (hz, 1.0) / 1000.0));
+    return limit (0.02, 0.9, room.scattering * std::sqrt (std::max (hz, 1.0) / 1000.0));
 }
 
 // Correlation between the two ears in a diffuse sound field: high while the wavelength is long compared with the
@@ -112,7 +128,7 @@ double mixingTimeSeconds (const RoomSpec& room)
     return 0.001 * (20.0 * W * D * H / (2.0 * (W * D + W * H + D * H)) + 12.0);
 }
 
-juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint32_t seed, double sourceOffset)
+Buffer generate (const RoomSpec& room, double sampleRate, uint32_t seed, double sourceOffset)
 {
     const double W = room.width, D = room.depth, H = room.height;
     const double volume = W * D * H;
@@ -123,14 +139,13 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         maxRt = std::max (maxRt, t);
 
     const int length = (int) (sampleRate * std::min (8.0, 1.2 * maxRt + 0.1));
-    juce::AudioBuffer<float> ir (2, length);
-    ir.clear();
+    Buffer ir (2, length);
 
     // Source near the front of the room (moved sideways by sourceOffset), the listener further back, both at about
     // ear height. Both are a little off the room's centre line: dead centre, the two side walls' reflections arrive
     // together in pairs.
     const double lx = W * 0.41;
-    const double sx = juce::jlimit (0.3, W - 0.3, lx + sourceOffset), sy = std::min (D * 0.25, 4.0), sz = std::min (1.5, H * 0.5);
+    const double sx = limit (0.3, W - 0.3, lx + sourceOffset), sy = std::min (D * 0.25, 4.0), sz = std::min (1.5, H * 0.5);
     const double ly = std::min (sy + room.distance, D - 0.5), lz = std::min (1.6, H * 0.6);
     const double distance = std::sqrt ((sx - lx) * (sx - lx) + (ly - sy) * (ly - sy) + (lz - sz) * (lz - sz));
 
@@ -138,7 +153,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
     auto angleFromEar = [&] (int ch, double x, double y, double z)
     {
         const double along = (ch == 0 ? lx - x : x - lx) / std::max (1.0e-6, std::sqrt ((x - lx) * (x - lx) + (y - ly) * (y - ly) + (z - lz) * (z - lz)));
-        return std::acos (juce::jlimit (-1.0, 1.0, along));
+        return std::acos (limit (-1.0, 1.0, along));
     };
 
     // The specular reflections fade out over this time; the scattered sound takes over what they give up.
@@ -227,26 +242,26 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         while ((1 << order) < 2 * earlyLength)
             ++order;
         const int fftSize = 1 << order;
-        juce::dsp::FFT fft (order);
+        const Fft fft (order);
         std::vector<float> sum ((size_t) fftSize * 2, 0.0f), spectrum ((size_t) fftSize * 2);
 
         for (int b = 0; b < numBands; ++b)
         {
             std::fill (spectrum.begin(), spectrum.end(), 0.0f);
             std::copy (bands[(size_t) b].begin(), bands[(size_t) b].end(), spectrum.begin());
-            fft.performRealOnlyForwardTransform (spectrum.data(), true);
+            fft.forward (spectrum.data());
             for (int bin = 0; bin <= fftSize / 2; ++bin)
             {
                 const double hz = std::max (1.0, bin * sampleRate / fftSize);
-                const double position = juce::jlimit (0.0, (double) numBands - 1.0, std::log2 (hz / kBandCentres.front()));
+                const double position = limit (0.0, (double) numBands - 1.0, std::log2 (hz / kBandCentres.front()));
                 const double away = std::abs (position - b);
-                const auto mask = away >= 1.0 ? 0.0f : (float) juce::square (std::cos (0.5 * kPi * away));
+                const auto mask = away >= 1.0 ? 0.0f : (float) square (std::cos (0.5 * kPi * away));
                 sum[(size_t) (2 * bin)] += spectrum[(size_t) (2 * bin)] * mask;
                 sum[(size_t) (2 * bin + 1)] += spectrum[(size_t) (2 * bin + 1)] * mask;
             }
         }
-        fft.performRealOnlyInverseTransform (sum.data());
-        juce::FloatVectorOperations::copy (ir.getWritePointer (ch), sum.data(), earlyLength);
+        fft.inverse (sum.data());
+        std::copy (sum.begin(), sum.begin() + earlyLength, ir.getWritePointer (ch));
     }
 
     //==========================================================================
@@ -257,7 +272,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
     // total stays the statistical level. White noise is shaped frame by frame in the frequency domain, with:
     constexpr int fftOrder = 10;
     constexpr int N = 1 << fftOrder, hop = N / 4;
-    juce::dsp::FFT fft (fftOrder);
+    const Fft fft (fftOrder);
 
     std::vector<float> window ((size_t) N);
     for (int n = 0; n < N; ++n)
@@ -281,7 +296,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         logSpecular[(size_t) b] = std::log (1.0 - scatteringAt (room, hz));
 
         // Two independent noises mixed as cos/sin of half the arcsine of the correlation: they then have that correlation.
-        const double angle = 0.5 * std::asin (juce::jlimit (-1.0, 1.0, diffuseEarCorrelation (hz)));
+        const double angle = 0.5 * std::asin (limit (-1.0, 1.0, diffuseEarCorrelation (hz)));
         earKeep[(size_t) b] = (float) std::cos (angle);
         earMix[(size_t) b] = (float) std::sin (angle);
     }
@@ -299,7 +314,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         for (int n = 0; n < length + N; ++n)
         {
             const double t = n / sampleRate + travelTime;
-            const auto probability = (float) juce::jlimit (0.002, 1.0, 20.0 * 4.0 * kPi * std::pow (kSpeedOfSound, 3.0) * t * t / volume / sampleRate);
+            const auto probability = (float) limit (0.002, 1.0, 20.0 * 4.0 * kPi * std::pow (kSpeedOfSound, 3.0) * t * t / volume / sampleRate);
             const float v = gauss (rng);
             noise[(size_t) ch][(size_t) n] = probability >= 1.0f ? v : (uniform (rng) < probability ? v / std::sqrt (probability) : 0.0f);
         }
@@ -315,11 +330,11 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
             std::fill (f.begin(), f.end(), 0.0f);
             for (int n = 0; n < N; ++n)
                 f[(size_t) n] = start + n >= 0 ? noise[(size_t) ch][(size_t) (start + n)] * window[(size_t) n] : 0.0f;
-            fft.performRealOnlyForwardTransform (f.data(), true);
+            fft.forward (f.data());
         }
 
         const double t = std::max (0.0, (start + N / 2) / sampleRate);
-        const double specularLeft = juce::square (specularAmplitude (t));
+        const double specularLeft = square (specularAmplitude (t));
         const double bounces = (t + travelTime) * bouncesPerSecond;
         for (int b = 0; b <= N / 2; ++b)
         {
@@ -338,7 +353,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         for (int ch = 0; ch < 2; ++ch)
         {
             auto& f = frame[(size_t) ch];
-            fft.performRealOnlyInverseTransform (f.data());
+            fft.inverse (f.data());
             for (int n = 0; n < N; ++n)
                 if (start + n >= 0 && start + n < length)
                     tail[(size_t) ch][(size_t) (start + n)] += f[(size_t) n] * window[(size_t) n] * olaGain;
@@ -350,7 +365,7 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
     {
         auto* out = ir.getWritePointer (ch);
         for (int n = 0; n < length; ++n)
-            out[n] += tail[(size_t) ch][(size_t) n] * (float) noiseScale * juce::jlimit (0.0f, 1.0f, (float) (n - gateStart) / (float) gateLength);
+            out[n] += tail[(size_t) ch][(size_t) n] * (float) noiseScale * limit (0.0f, 1.0f, (float) (n - gateStart) / (float) gateLength);
 
         // Short fade at the very end.
         const int fade = std::min (length, (int) (0.05 * sampleRate));
@@ -361,13 +376,17 @@ juce::AudioBuffer<float> generate (const RoomSpec& room, double sampleRate, uint
         // 6 dB at the side). The room's sound comes from everywhere and isn't, so that is undone here.
         const double side = std::abs (std::atan2 (sx - lx, ly - sy));
         if ((ch == 0) == (sx > lx))
-            ir.applyGain (ch, 0, length, (float) std::pow (10.0, 6.0 * std::sin (side) / 20.0));
+        {
+            const auto gain = (float) std::pow (10.0, 6.0 * std::sin (side) / 20.0);
+            for (int n = 0; n < length; ++n)
+                out[n] *= gain;
+        }
     }
 
     return ir;
 }
 
-juce::AudioBuffer<float> removeDirectSound (const juce::AudioBuffer<float>& measured, double sampleRate)
+Buffer removeDirectSound (const Buffer& measured, double sampleRate)
 {
     const int numChannels = measured.getNumChannels(), numSamples = measured.getNumSamples();
     const int before = (int) (0.0005 * sampleRate), after = (int) (0.0025 * sampleRate), fade = std::max (1, (int) (0.001 * sampleRate));
@@ -404,7 +423,7 @@ juce::AudioBuffer<float> removeDirectSound (const juce::AudioBuffer<float>& meas
         return measured;  // Silent file.
 
     const int start = std::max (0, earliest - before);
-    juce::AudioBuffer<float> wet (numChannels, numSamples - start);
+    Buffer wet (numChannels, numSamples - start);
     double wetEnergy = 0.0;
     for (int ch = 0; ch < numChannels; ++ch)
     {
@@ -413,7 +432,7 @@ juce::AudioBuffer<float> removeDirectSound (const juce::AudioBuffer<float>& meas
         const int fadeFrom = peak[(size_t) ch] + after - start;  // In `out`; silence before, then fading in.
         for (int n = 0; n < wet.getNumSamples(); ++n)
         {
-            out[n] = x[n + start] * juce::jlimit (0.0f, 1.0f, (float) (n - fadeFrom) / (float) fade);
+            out[n] = x[n + start] * limit (0.0f, 1.0f, (float) (n - fadeFrom) / (float) fade);
             wetEnergy += (double) out[n] * out[n];
         }
     }
@@ -421,8 +440,52 @@ juce::AudioBuffer<float> removeDirectSound (const juce::AudioBuffer<float>& meas
 
     // Direct sound = 1, as for the generated rooms. A far-away microphone can give a lot of reverb, but past +12 dB the
     // peak found was probably not the direct sound.
-    wet.applyGain ((float) std::sqrt (std::min (1.0 / directEnergy, juce::Decibels::decibelsToGain (12.0) / wetEnergy)));
+    const auto gain = (float) std::sqrt (std::min (1.0 / directEnergy, std::pow (10.0, 12.0 / 20.0) / wetEnergy));
+    for (auto& channel : wet.channels)
+        for (auto& s : channel)
+            s *= gain;
     return wet;
+}
+
+Buffer resample (const Buffer& input, double fromRate, double toRate)
+{
+    if (std::equal_to<double>() (fromRate, toRate) || fromRate <= 0.0 || toRate <= 0.0 || input.getNumSamples() == 0)
+        return input;
+
+    // Each output sample is the input's band-limited value there: a sinc low-pass at the lower of the two Nyquist
+    // frequencies, Hann-windowed over 32 zero crossings each side. Scaled so the filter keeps its frequency response
+    // (an impulse response's samples grow with the rate for the same response: x fromRate / toRate when going up).
+    constexpr int zeroCrossings = 32;
+    const double step = fromRate / toRate;                   // Input samples per output sample
+    const double cutoff = std::min (1.0, toRate / fromRate);  // Of the input's Nyquist
+    const double halfWidth = zeroCrossings / cutoff;         // In input samples
+    const double gain = std::min (1.0, step);               // cutoff * fromRate / toRate
+    const int inLength = input.getNumSamples();
+    const int outLength = (int) std::ceil (inLength / step);
+
+    Buffer out (input.getNumChannels(), outLength);
+    for (int ch = 0; ch < input.getNumChannels(); ++ch)
+    {
+        const float* x = input.getReadPointer (ch);
+        float* y = out.getWritePointer (ch);
+        for (int m = 0; m < outLength; ++m)
+        {
+            const double centre = m * step;
+            const int first = std::max (0, (int) std::ceil (centre - halfWidth));
+            const int last = std::min (inLength - 1, (int) std::floor (centre + halfWidth));
+            double sum = 0.0;
+            for (int i = first; i <= last; ++i)
+            {
+                const double d = (double) i - centre;
+                const double arg = kPi * cutoff * d;
+                const double sinc = std::abs (arg) < 1.0e-9 ? 1.0 : std::sin (arg) / arg;
+                const double window = 0.5 + 0.5 * std::cos (kPi * d / halfWidth);
+                sum += x[i] * gain * sinc * window;
+            }
+            y[m] = (float) sum;
+        }
+    }
+    return out;
 }
 
 } // namespace reverb

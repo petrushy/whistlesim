@@ -57,8 +57,12 @@ endif()
 # builds on its own. It embeds the built-in presets, the .whistle files in Presets/ (JSON, as Export writes them;
 # file-name order is the list's order; WhistleCheck code writes retuned values back into them).
 add_subdirectory(Source/Whistle)
+# The room reverb (Source/Reverb), also without JUCE.
+add_subdirectory(Source/Reverb)
 # The same optimisation and warnings as the JUCE targets (flags only: these add no JUCE code or include paths).
-target_link_libraries(WhistleEngine PRIVATE juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+foreach(LIBRARY WhistleEngine WhistleReverb)
+    target_link_libraries(${LIBRARY} PRIVATE juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+endforeach()
 
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
 # Not a WARBL product, so the company and bundle ID are the project's own.
@@ -87,8 +91,6 @@ target_sources(WhistleSim PRIVATE
     Source/StreamReceiver.cpp
     Source/Recorder.cpp
     Source/AudioEngine.cpp
-    Source/RoomReverb.cpp
-    Source/ImpulseResponse.cpp
     Source/Phone/PhoneUI.cpp)
 
 target_include_directories(WhistleSim PRIVATE Source)
@@ -100,7 +102,7 @@ target_compile_definitions(WhistleSim PRIVATE
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:WhistleSim,JUCE_VERSION>")
 
 target_link_libraries(WhistleSim
-    PRIVATE WhistleEngine
+    PRIVATE WhistleEngine WhistleReverb
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_devices
@@ -140,6 +142,11 @@ target_compile_definitions(JsonTest PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
 target_link_libraries(JsonTest PRIVATE WhistleEngine juce::juce_core PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 add_test(NAME JsonTest COMMAND JsonTest)
 
+# The reverb without JUCE: FFT, zero-latency convolution and the room reverb ("ReverbTest speed" also times it).
+add_executable(ReverbTest Tests/ReverbTest.cpp)
+target_link_libraries(ReverbTest PRIVATE WhistleReverb juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+add_test(NAME ReverbTest COMMAND ReverbTest)
+
 # Virtual WARBL for trying the app or a synth without the instrument.
 juce_add_console_app(WarblSimulator PRODUCT_NAME "WARBL Simulator")
 target_sources(WarblSimulator PRIVATE tools/WarblSimulator.cpp)
@@ -151,11 +158,11 @@ target_link_libraries(WarblSimulator
 
 # Measures the generated room reverbs (reverberation time, direct/reverberant ratio) and renders WAVs.
 juce_add_console_app(ReverbCheck PRODUCT_NAME "Reverb Check")
-target_sources(ReverbCheck PRIVATE tools/ReverbCheck.cpp Source/ImpulseResponse.cpp Source/TestPhrase.cpp)
+target_sources(ReverbCheck PRIVATE tools/ReverbCheck.cpp Source/TestPhrase.cpp)
 target_include_directories(ReverbCheck PRIVATE Source)
 target_compile_definitions(ReverbCheck PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
 target_link_libraries(ReverbCheck
-    PRIVATE juce::juce_audio_formats juce::juce_dsp
+    PRIVATE WhistleReverb juce::juce_audio_formats juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
 
 # Whistle acoustics and model checks (tuning tables, offline playing tests).

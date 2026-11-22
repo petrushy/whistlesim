@@ -6,13 +6,14 @@ A Mac app (JUCE 9 / CMake) that plays a physical model of a whistle or recorder 
 
 - `Source/StreamProtocol.h`: protocol decoder and encoder, no JUCE. It must match the firmware; the ID and version byte in each message say which format it is.
 - `Source/Whistle/`: the physics engine: geometry, frequency-domain acoustics (`Acoustics`), the time-domain model (`WhistleModel`), the tuner and the instrument files. **No JUCE here**: standard C++ only (`Common.h` has `limit`, `kPi`, `exactlyEqual`, `SpinLock`; `Json` reads and writes the files exactly as juce::JSON did, checked by `JsonTest`). Its own `CMakeLists.txt` builds the `WhistleEngine` library and embeds `Presets/*.whistle`; the app, tools and tests link it, and an app without JUCE (the planned iPhone app, in a private repo with this one as a submodule) uses `add_subdirectory(<whistlesim>/Source/Whistle)`.
+- `Source/Reverb/`: the room reverb, also **without JUCE**: `ImpulseResponse` (generated rooms, measured IRs without their direct sound, resampling that keeps the frequency response), `Fft` (real FFT in juce::dsp::FFT's layout), `Convolver` (zero latency: a short head transformed every call, a tail in 1024-sample partitions whose older sums are spread over the block, so no call does it all) and `RoomReverb` (two sources, pre-delay, rooms generated on a background thread, new IRs faded in over 50 ms; reading IR files is the app's: `ReverbFile.h` on the desktop). Its `CMakeLists.txt` builds `WhistleReverb`. `ReverbTest speed` times it.
 - `Source/*Page`: the Monitor, Instrument, Tuning workshop (`WorkshopPage`: fingering table, tuning goal, tuner), Sensors and Model tabs.
 - `tools/`: lowercase. WarblSimulator, ReverbCheck, WhistleCheck, stream_monitor.py, fit_voicing.py (searches a voicing against a recording, with WhistleCheck), and `Real-examples/` (recordings of real whistles the presets are fitted to).
 
 ## Build and check
 
     cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j8
-    ctest --test-dir build                                         # protocol, JSON, instrument-file, preset and played-tuning tests
+    ctest --test-dir build                                         # protocol, JSON, reverb, instrument-file, preset and played-tuning tests
     build/WhistleCheck_artefacts/Release/WhistleCheck chart 0       # whistle (or a name: chart recorder): predicted + played tuning
     build/ReverbCheck_artefacts/Release/ReverbCheck <dir>          # reverb times / balance vs. targets, WAVs
 

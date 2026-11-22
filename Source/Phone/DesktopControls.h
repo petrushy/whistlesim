@@ -146,7 +146,7 @@ public:
     juce::Slider& preDelay() { return monitor().preDelaySlider; }
     juce::Slider& spread() { return monitor().spreadSlider; }
     void loadImpulseResponse() { monitor().loadIrButton.triggerClick(); }
-    juce::String roomName() { return audio().reverb.getCurrentName(); }
+    juce::String roomName() { return juce::String (audio().reverb.getCurrentName()); }
 
     // WARBL
     juce::ToggleButton& simulate() { return monitor().simulateButton; }

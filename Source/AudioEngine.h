@@ -7,7 +7,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "Recorder.h"
-#include "RoomReverb.h"
+#include "Reverb/RoomReverb.h"
 #include "SensorResponse.h"
 #include "StreamReceiver.h"
 #include "Whistle/ScalePlan.h"
