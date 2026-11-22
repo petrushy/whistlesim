@@ -174,7 +174,7 @@ static void saveWavArg (int argc, char* argv[], const juce::String& name, const 
     }
 }
 
-// A preset by number or by part of its name (e.g. "recorder", "narrow head").
+// A preset by number or by part of its name (e.g. "recorder", "wide head").
 static int presetArg (const char* arg)
 {
     const auto text = juce::String::fromUTF8 (arg);  // Names like Löf, as the shell passes them
@@ -1483,6 +1483,13 @@ int main (int argc, char* argv[])
             auto medianPitch = [&] (const std::vector<Frame>& frames) { std::vector<double> v; for (const auto& f : frames) if (f.hz > 0.0) v.push_back (f.hz); return median (v); };
             const auto rec = bands (s.frames), mod = bands (model);
             const double recMid = medianPitch (s.frames), modMid = medianPitch (model);
+            {
+                // Absolute pitch: both medians, and the tube's resonance for the fingering (the model's; the register's).
+                const auto r = resonances (g, c->openness (g), 100.0, 6000.0);
+                const double tube = r.size() >= (size_t) c->reg ? r[(size_t) c->reg - 1] : 0.0;
+                std::printf ("  median pitch: recording %.1f Hz, model %.1f Hz (%+.0f c); model tube resonance %.1f Hz (recording %+.0f c, model %+.0f c from it)\n",
+                             recMid, modMid, 1200.0 * std::log2 (modMid / recMid), tube, 1200.0 * std::log2 (recMid / tube), 1200.0 * std::log2 (modMid / tube));
+            }
             std::printf ("   level  | recording: frames  pitch   H2  H3  H5 bright | model: frames  pitch   H2  H3  H5 bright     Pa\n");
             for (size_t b = 0; b < 12; ++b)
             {
