@@ -190,7 +190,7 @@ std::unique_ptr<RoomReverb::Engine> RoomReverb::makeEngine (const reverb::Buffer
             const auto& ir = *sources[s];
             const int channel = std::min ((int) ear, ir.getNumChannels() - 1);
             engine->convolvers[2 * s + ear] = std::make_unique<reverb::Convolver> (channel >= 0 ? ir.getReadPointer (channel) : nullptr,
-                                                                                   ir.getNumSamples(), head, std::max (head, 1024));
+                                                                                   ir.getNumSamples(), head, std::max (head, 1024), (int) (2 * s + ear));
         }
     return engine;
 }

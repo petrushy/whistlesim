@@ -32,14 +32,23 @@ std::vector<std::vector<std::complex<float>>> transformPartitions (const Fft& ff
     return out;
 }
 
+// sum += a * b, element by element. Written out in real arithmetic: std::complex's operator* has to handle infinities
+// and NaNs (a library call per element), and the plain form lets the compiler use the vector units.
 void multiplyAdd (std::complex<float>* sum, const std::complex<float>* a, const std::complex<float>* b, size_t n)
 {
+    auto* s = reinterpret_cast<float*> (sum);
+    const auto* x = reinterpret_cast<const float*> (a);
+    const auto* y = reinterpret_cast<const float*> (b);
     for (size_t i = 0; i < n; ++i)
-        sum[i] += a[i] * b[i];
+    {
+        const float xr = x[2 * i], xi = x[2 * i + 1], yr = y[2 * i], yi = y[2 * i + 1];
+        s[2 * i] += xr * yr - xi * yi;
+        s[2 * i + 1] += xr * yi + xi * yr;
+    }
 }
 } // namespace
 
-Convolver::Convolver (const float* impulse, int length, int headPartition, int tailStart)
+Convolver::Convolver (const float* impulse, int length, int headPartition, int tailStart, int stagger)
 {
     assert (headPartition > 0 && (headPartition & (headPartition - 1)) == 0);
     assert (tailStart >= headPartition && (tailStart & (tailStart - 1)) == 0);
@@ -49,9 +58,19 @@ Convolver::Convolver (const float* impulse, int length, int headPartition, int t
         impulse = &silence, length = 1;
 
     head.prepare (impulse, std::min (length, tailStart), headPartition);
-    hasTail = length > tailStart;
-    if (hasTail)
-        tail.prepare (impulse + tailStart, length - tailStart, tailStart);
+    // Stages: partition B from B to 8 B, then the longest partition to the end. Each starts at its own partition size,
+    // so its one-partition delay puts its output where it belongs.
+    constexpr int kStageFactor = 8;
+    const int longest = kStageFactor * tailStart;
+    for (int partition = tailStart, start = tailStart; start < length; partition *= kStageFactor)
+    {
+        const int end = partition >= longest ? length : std::min (length, partition * kStageFactor);
+        // Staggered by quarters of its block, in whole head blocks (the calls are cut at the head's block ends).
+        const int offset = (stagger % 4) * partition / 4 / headPartition * headPartition;
+        tails.emplace_back();
+        tails.back().prepare (impulse + start, end - start, partition, offset);
+        start = end;
+    }
 }
 
 void Convolver::process (const float* in, float* out, int numSamples)
@@ -60,10 +79,10 @@ void Convolver::process (const float* in, float* out, int numSamples)
     while (numSamples > 0)
     {
         const int n = std::min (numSamples, head.partition - head.position);
-        if (hasTail)
+        for (auto& tail : tails)
             tail.process (in, nullptr, n);  // Takes the input first: `out` may be `in`
         head.process (in, out, n);
-        if (hasTail)
+        for (auto& tail : tails)
             tail.process (nullptr, out, n);
         in += n;
         out += n;
@@ -74,7 +93,7 @@ void Convolver::process (const float* in, float* out, int numSamples)
 void Convolver::reset()
 {
     head.reset();
-    if (hasTail)
+    for (auto& tail : tails)
         tail.reset();
 }
 
@@ -133,9 +152,10 @@ void Convolver::Head::process (const float* in, float* out, int numSamples)
 }
 
 //==============================================================================
-void Convolver::Tail::prepare (const float* impulse, int length, int partitionSize)
+void Convolver::Tail::prepare (const float* impulse, int length, int partitionSize, int start)
 {
     partition = partitionSize;
+    startPosition = start;
     fft = Fft (orderOf (2 * partition));
     response = transformPartitions (fft, impulse, 0, length, partition);
     history.assign (response.size(), Spectrum ((size_t) partition + 1));
@@ -154,7 +174,9 @@ void Convolver::Tail::reset()
     std::fill (output.begin(), output.end(), 0.0f);
     std::fill (sum.begin(), sum.end(), std::complex<float> {});
     newest = 0;
-    position = 0;
+    // A staggered stage starts part way into its first block, as if silence had come before: its block ends fall
+    // elsewhere than its neighbours', and as the input before the start was silent, the result is the same.
+    position = startPosition;
     summed = 0;
 }
 

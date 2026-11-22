@@ -82,7 +82,7 @@ static void testConvolver()
                     expected[(size_t) n] += (double) ir[(size_t) k] * x[(size_t) (n - k)];
 
             // In blocks of random sizes, in place.
-            Convolver convolver (ir.data(), length, headPartition, 1024);
+            Convolver convolver (ir.data(), length, headPartition, 1024, (int) (random() % 4));  // Any stagger: the same result
             std::vector<float> y = x;
             std::uniform_int_distribution<int> blockSize (1, 700);
             for (int done = 0; done < total;)
