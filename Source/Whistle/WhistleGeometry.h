@@ -87,6 +87,13 @@ struct TuningGoal
     // Weights the player typed in (0-1, by fingeringId), in place of the ones the keys give.
     std::map<std::string, double> weights;
 
+    // The note the instrument is tuned to have as its lowest (MIDI; the key and octave chosen); -1: the note its bore
+    // plays (files from before this was kept, and the built-in presets).
+    int lowestNote = -1;
+    // The tuner's options: also set the hole sizes the chart marks, and shape the head section.
+    bool tuneHoleSizes = true;
+    bool shapeHead = true;
+
     static constexpr int kMinor = 12;
 };
 

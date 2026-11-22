@@ -48,6 +48,8 @@ TuningGoal harjedalGoal()
 
 double presetLowestNote (const Geometry& g)
 {
+    if (g.tuning.lowestNote >= 0)  // The key and octave it was given
+        return g.referenceA * std::pow (2.0, (g.tuning.lowestNote - 69) / 12.0);
     const double at440 = g.chart == FingeringChart::baroqueRecorder ? 523.25
                        : g.boreLength > 0.4                        ? 293.66
                                                                    : 587.33;

@@ -103,6 +103,13 @@ juce::var toVar (const Instrument& instrument)
         fingerings.getDynamicObject()->setProperty (juce::Identifier (juce::String (id)), counts);
     tuning.getDynamicObject()->setProperty ("fingerings", fingerings);
     tuning.getDynamicObject()->setProperty ("topHoleFor", g.tuning.topHoleForHighD ? "high D" : "C natural");
+    if (g.tuning.lowestNote >= 0)  // As a note name, e.g. "D5"
+    {
+        static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        tuning.getDynamicObject()->setProperty ("lowestNote", juce::String (names[g.tuning.lowestNote % 12]) + juce::String (g.tuning.lowestNote / 12 - 1));
+    }
+    tuning.getDynamicObject()->setProperty ("tuneHoleSizes", g.tuning.tuneHoleSizes);
+    tuning.getDynamicObject()->setProperty ("shapeHead", g.tuning.shapeHead);
     juce::Array<juce::var> position;
     for (double p : g.tuning.breathPosition)
         position.add (p);
@@ -248,6 +255,22 @@ std::optional<Instrument> fromVar (const juce::var& root, juce::String& error, c
                 for (int k = 0; k < 12 && k < keys->size(); ++k)
                     g.tuning.keys[(size_t) (k + offset)] = (double) (*keys)[k];
         g.tuning.topHoleForHighD = tuning["topHoleFor"].toString() == "high D";
+        if (tuning.hasProperty ("lowestNote"))
+        {
+            // "D5", "F#4", "Bb3": the note name, then the octave.
+            const auto text = tuning["lowestNote"].toString().trim();
+            static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+            static const char* flats[] = { "C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B" };
+            const auto letters = text.initialSectionNotContaining ("-0123456789");
+            const int octave = text.substring (letters.length()).getIntValue();
+            for (int i = 0; i < 12; ++i)
+                if (letters.equalsIgnoreCase (names[i]) || letters.equalsIgnoreCase (flats[i]))
+                    g.tuning.lowestNote = juce::jlimit (0, 127, (octave + 1) * 12 + i);
+        }
+        if (tuning.hasProperty ("tuneHoleSizes"))
+            g.tuning.tuneHoleSizes = (bool) tuning["tuneHoleSizes"];
+        if (tuning.hasProperty ("shapeHead"))
+            g.tuning.shapeHead = (bool) tuning["shapeHead"];
         if (const auto* position = tuning["breathPosition"].getArray())
             for (int i = 0; i < 2 && i < position->size(); ++i)
                 g.tuning.breathPosition[(size_t) i] = juce::jlimit (0.0, 1.0, (double) (*position)[i]);

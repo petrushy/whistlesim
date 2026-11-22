@@ -86,6 +86,8 @@
       "high D xxxxxx": true
     },
     "topHoleFor": "C natural",
+    "tuneHoleSizes": true,
+    "shapeHead": true,
     "breathPosition": [
       0.35,
       0.1

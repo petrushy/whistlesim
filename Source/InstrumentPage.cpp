@@ -198,6 +198,7 @@ InstrumentPage::InstrumentPage (AudioEngine& a) : audio (a)
     octaveBox.setTooltip ("The instrument's lowest note: in octave 5 (high whistles, recorders) or 4 (low whistles)");
     keyBox.onChange = octaveBox.onChange = [this]
     {
+        geometry.tuning.lowestNote = (octaveBox.getSelectedId() == 1 ? 72 : 60) + keyBox.getSelectedId() - 1;  // Saved with it
         audio.setScaleInstrument (geometry, lowestNoteHz());
         if (onInstrumentChanged != nullptr)
             onInstrumentChanged();
@@ -571,14 +572,19 @@ void InstrumentPage::setHoleEnabled (int index, bool enabled)
 
 void InstrumentPage::showKeyOfInstrument()
 {
-    // The key the instrument is in: its lowest note (all holes covered).
-    const auto r = whistle::resonances (geometry, whistle::Openness::allClosed(), 100.0, 2000.0);
-    if (! r.empty())
+    // The key the instrument is tuned in, as saved with it; for an older file, its lowest note (all holes covered),
+    // which is then kept with it.
+    int midi = geometry.tuning.lowestNote;
+    if (midi < 0)
     {
-        const int midi = (int) std::lround (69.0 + 12.0 * std::log2 (r.front() / geometry.referenceA));
-        octaveBox.setSelectedId (midi >= 72 ? 1 : 2, juce::dontSendNotification);
-        keyBox.setSelectedId ((midi % 12 + 12) % 12 + 1, juce::dontSendNotification);
+        const auto r = whistle::resonances (geometry, whistle::Openness::allClosed(), 100.0, 2000.0);
+        if (r.empty())
+            return;
+        midi = (int) std::lround (69.0 + 12.0 * std::log2 (r.front() / geometry.referenceA));
     }
+    octaveBox.setSelectedId (midi >= 72 ? 1 : 2, juce::dontSendNotification);
+    keyBox.setSelectedId ((midi % 12 + 12) % 12 + 1, juce::dontSendNotification);
+    geometry.tuning.lowestNote = (octaveBox.getSelectedId() == 1 ? 72 : 60) + keyBox.getSelectedId() - 1;
 }
 
 void InstrumentPage::refreshSliders()
