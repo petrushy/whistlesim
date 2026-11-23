@@ -153,6 +153,60 @@ double playerBreath (const Geometry& g, const ChartFingering& c, bool& estimated
     return std::exp (nearest.second + slope * (x - nearest.first));
 }
 
+std::optional<BreathFit> smoothLearnedBreath (Geometry& g)
+{
+    auto& learned = g.tuning.learnedBreath;
+
+    // (log frequency, log pressure) per pitch heard; log frequency in octaves above the lowest note.
+    std::map<double, std::pair<double, int>> byPitch;
+    for (const auto& c : chartFor (g.chart))
+        if (const auto found = learned.find (fingeringId (c)); found != learned.end() && found->second > 0.0)
+        {
+            auto& [sum, count] = byPitch[c.semitones];
+            sum += std::log (found->second);
+            ++count;
+        }
+    if (byPitch.size() < 3)
+        return std::nullopt;
+
+    double meanX = 0.0, meanY = 0.0;
+    for (const auto& [semitones, sumCount] : byPitch)
+    {
+        meanX += semitones / 12.0;
+        meanY += sumCount.first / sumCount.second;
+    }
+    const auto n = (double) byPitch.size();
+    meanX /= n;
+    meanY /= n;
+    double sxy = 0.0, sxx = 0.0;
+    for (const auto& [semitones, sumCount] : byPitch)
+    {
+        const double x = semitones / 12.0 - meanX, y = sumCount.first / sumCount.second - meanY;
+        sxy += x * y;
+        sxx += x * x;
+    }
+    if (sxx <= 0.0)
+        return std::nullopt;
+    const double perOctave = sxy / sxx;  // ln pressure per octave
+
+    BreathFit fit;
+    fit.pitches = (int) byPitch.size();
+    fit.exponent = perOctave / std::log (2.0);
+    double squares = 0.0;
+    int values = 0;
+    for (const auto& c : chartFor (g.chart))
+        if (auto found = learned.find (fingeringId (c)); found != learned.end() && found->second > 0.0)
+        {
+            const double curve = std::exp (meanY + perOctave * (c.semitones / 12.0 - meanX));
+            const double off = found->second / curve - 1.0;
+            squares += off * off;
+            ++values;
+            found->second = curve;
+        }
+    fit.spreadPercent = 100.0 * std::sqrt (squares / std::max (1, values));
+    return fit;
+}
+
 std::vector<PlayedNote> measurePlayed (const Geometry& g, const Voicing& v, double lowestHz)
 {
     const size_t count = chartFor (g.chart).size();
