@@ -157,6 +157,14 @@ private:
 
         void push (float v) { buffer[(size_t) write] = v; write = (write + 1) & (kLineSize - 1); }
         float read (float delay) const;  // Delay in samples (>= 2), Lagrange interpolated.
+        // The same with the delay's interpolation worked out beforehand (lagrange()): the newest of the four samples,
+        // and their weights.
+        float read (int m, const std::array<float, 4>& h) const
+        {
+            auto at = [&] (int age) { return buffer[(size_t) ((write - age) & (kLineSize - 1))]; };
+            return h[0] * at (m) + h[1] * at (m + 1) + h[2] * at (m + 2) + h[3] * at (m + 3);
+        }
+        static void lagrange (float delay, int& m, std::array<float, 4>& h);
     };
 
     struct Biquad  // Transposed direct form II
@@ -175,6 +183,9 @@ private:
     {
         int numSegments = 0;
         std::array<float, kMaxSegments> delay {};      // Samples
+        // Each section's delay as DelayLine::read needs it, worked out once (the delays only change with the geometry).
+        std::array<int, kMaxSegments> delayNewest {};
+        std::array<std::array<float, 4>, kMaxSegments> delayWeights {};
         std::array<float, kMaxSegments> area {};       // m^2
         std::array<std::array<float, 5>, kMaxSegments> loss {};  // Wall loss and dispersion filter (b0 b1 b2 a1 a2)
         std::array<int, kMaxSegments + 1> holeAt {};   // Hole index at junction j (between sections j-1 and j), or -1.
@@ -225,6 +236,15 @@ private:
     std::array<DelayLine, kMaxSegments> right {}, left {};
     std::array<Biquad, kMaxSegments> lossRight {}, lossLeft {};
     std::array<std::array<double, 9>, kMaxSegments + 1> holeState {};  // Hole junction filters: sum, p, open flow; 3 samples each
+    // Each hole junction's filter coefficients, for the openness and finger-gap damping they were made for: remade only
+    // when those change (a finger moving), not every sample. open < 0: not made yet (or the geometry changed).
+    struct HoleFilter
+    {
+        double open = -1.0, gapDamping = -1.0;
+        double gj = 0.0;  // The bore's admittance at the junction
+        double num[4] {}, flowNum[4] {}, den[4] {};
+    };
+    std::array<HoleFilter, kMaxSegments + 1> holeFilters {};
     float topPressure = 0.0f, lastSource = 0.0f;  // At the top of the bore, previous sample.
     float windowRadPressure = 0.0f;  // Pressure across the window's radiating outer part, previous sample
 
