@@ -209,7 +209,6 @@ int main()
         rig.player.tiltEnabled = true;
         check (sensorsFromText (sensorsToText (rig.player), other->player) && other->player.breathCurve.load() == 51.0f && other->player.tiltEnabled.load(),
                "sensor settings as text, and back", other->player.breathCurve.load());
-        std::error_code ignored;
         std::filesystem::remove_all (folder, ignored);
     }
 
