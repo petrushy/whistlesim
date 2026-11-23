@@ -1,7 +1,7 @@
 {
   "format": "warbl-whistle",
   "version": 1,
-  "name": "D whistle, Generation style",
+  "name": "D whistle, Generator style",
   "bore": {
     "length_mm": 265.44,
     "diameterTop_mm": 12.0,
