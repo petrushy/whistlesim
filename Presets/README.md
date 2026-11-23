@@ -39,8 +39,8 @@ Where each comes from, and how its voicing was found:
   the fourth up come from (H4–H8 within ~5 dB of the recording in both octaves; the Golden style is 9–23 dB short).
   The jet bend, with the edge nearly centred, makes the second octave purer instead of the spreading. H3 is still too
   strong by ~7 dB. Played on 2026-11-10: good, if a little too bright.
-- **Generation style, Löf style**: the Golden fipple, voiced by a search against RODE recordings of those whistles
-  (octave averages of H2–H5, note by note), then checked with transition, glide and breath. Generation: strong even,
+- **Generator style, Löf style**: the Golden fipple, voiced by a search against RODE recordings of those whistles
+  (octave averages of H2–H5, note by note), then checked with transition, glide and breath. Generator: strong even,
   weak odd harmonics in the first octave (H2/H3 −13/−22 dB), and the quietest between its harmonics (−75 and −68 dB).
   Löf: a rich first octave (H2/H3 −11/−13 dB) and a pure second (−31/−27), its edge 0.2 mm in (H2 −11 dB).
   Their tubes and windways are not measured.

@@ -53,7 +53,7 @@ RECORDINGS = {
     "golden": ("tools/Real-examples/Golden-High-D-RODE.wav", "Golden style", (400, 600, 800)),
     # The same Golden, recorded again (2026-11-14) after its bore and holes were measured: the preset built from them.
     "measured": ("tools/Real-examples/Golden-High-D-RODE-measured.wav", "Golden (measured)", (400, 600, 800)),
-    "generation": ("tools/Real-examples/Generation-High-D-RODE.wav", "Generation style", (400, 600, 800)),
+    "generator": ("tools/Real-examples/Generator-High-D-RODE.wav", "Generator style", (400, 600, 800)),
     "lof": ("tools/Real-examples/Löf-High-D-RODE.wav", "Löf style", (400, 600, 800)),
     "lowd": ("tools/Real-examples/Golden-Low-D-RODE.wav", "Low D whistle", (200, 300, 400)),
     "moeck": ("tools/Real-examples/Moeck-Soprano-RODE.wav", "Soprano recorder", (250, 300, 350)),
