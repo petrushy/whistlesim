@@ -5,6 +5,7 @@
 #include "Player/Player.h"
 #include "Player/Recorder.h"
 #include "Player/SensorSettings.h"
+#include "Whistle/PlayedTuning.h"
 #include "Whistle/PitchDetect.h"
 
 #include <chrono>
@@ -210,6 +211,28 @@ int main()
         check (sensorsFromText (sensorsToText (rig.player), other->player) && other->player.breathCurve.load() == 51.0f && other->player.tiltEnabled.load(),
                "sensor settings as text, and back", other->player.breathCurve.load());
         std::filesystem::remove_all (folder, ignored);
+    }
+
+    std::printf ("Smoothing the learned breath:\n");
+    {
+        // Learned breaths along p = 300 (f / f0)^1.8 with +-10 % scatter, on every second fingering of the chart.
+        auto g = whistle::presets().front();
+        const auto& chart = whistle::chartFor (g.chart);
+        for (size_t i = 0; i < chart.size(); i += 2)
+            g.tuning.learnedBreath[whistle::fingeringId (chart[i])] = 300.0 * std::pow (2.0, 1.8 * chart[i].semitones / 12.0) * (i % 4 == 0 ? 1.1 : 0.9);
+        const auto fit = whistle::smoothLearnedBreath (g);
+        check (fit.has_value() && std::abs (fit->exponent - 1.8) < 0.1, "the exponent found (1.8)", fit ? fit->exponent : 0.0);
+        check (fit.has_value() && std::abs (fit->spreadPercent - 10.0) < 2.0, "the scatter found (10 %)", fit ? fit->spreadPercent : 0.0);
+        double worst = 0.0;
+        for (size_t i = 0; i < chart.size(); i += 2)
+        {
+            const double value = g.tuning.learnedBreath[whistle::fingeringId (chart[i])];
+            worst = std::max (worst, std::abs (value / (300.0 * std::pow (2.0, 1.8 * chart[i].semitones / 12.0)) - 1.0));
+        }
+        check (worst < 0.05, "the values on the curve (within 5 %)", worst);
+        auto few = whistle::presets().front();
+        few.tuning.learnedBreath[whistle::fingeringId (chart[0])] = 300.0;
+        check (! whistle::smoothLearnedBreath (few).has_value(), "fewer than three pitches: left alone", 0.0);
     }
 
     std::printf (failures == 0 ? "All player tests passed\n" : "%d failures\n", failures);

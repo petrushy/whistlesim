@@ -371,6 +371,23 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
             stopLearning();
         }
     };
+    smoothButton.setTooltip ("Smooths the learned breath onto one curve of the notes' frequency (pressure ~ frequency^n, fitted "
+                             "through the notes heard): a note played a little harder or softer than the rest is brought onto it. "
+                             "Physics puts n near 2 (the jet's speed suits the note's frequency).");
+    smoothButton.onClick = [this]
+    {
+        auto g = instrument.getGeometry();
+        const auto fit = whistle::smoothLearnedBreath (g);
+        if (! fit)
+        {
+            learnStatus.setText ("Smoothing needs the breath of three different notes or more", juce::dontSendNotification);
+            return;
+        }
+        instrument.applyGeometry (g);
+        learnStatus.setText ("Smoothed: breath ~ frequency^" + juce::String (fit->exponent, 2) + "; the notes were "
+                                 + juce::String (fit->spreadPercent, 0) + " % from the curve",
+                             juce::dontSendNotification);
+    };
     forgetButton.setTooltip ("Forgets the learned breath: the notes are tuned where in their range the sliders below say");
     forgetButton.onClick = [this]
     {
@@ -405,7 +422,7 @@ WorkshopPage::WorkshopPage (AudioEngine& a, InstrumentPage& i) : audio (a), inst
             setGoal (goal);
         };
     }
-    for (auto* c : std::initializer_list<juce::Component*> { &learnButton, &forgetButton, &useLearnedButton, &lowPosition, &highPosition })
+    for (auto* c : std::initializer_list<juce::Component*> { &learnButton, &forgetButton, &smoothButton, &useLearnedButton, &lowPosition, &highPosition })
         addAndMakeVisible (c);
     useLearnedButton.setColour (juce::ToggleButton::textColourId, text);
 
@@ -643,6 +660,7 @@ void WorkshopPage::refreshGoalControls()
     headButton.setToggleState (g.tuning.shapeHead, juce::dontSendNotification);
     useLearnedButton.setEnabled (! g.tuning.learnedBreath.empty());
     forgetButton.setEnabled (! g.tuning.learnedBreath.empty());
+    smoothButton.setEnabled (g.tuning.learnedBreath.size() >= 3);
     if (! learning)
         learnStatus.setText (g.tuning.learnedBreath.empty() ? juce::String ("No breath learned yet")
                                                            : "Learned: " + juce::String ((int) g.tuning.learnedBreath.size()) + " fingerings",
@@ -866,6 +884,7 @@ void WorkshopPage::resized()
     auto learnRow = left.removeFromTop (30);
     learnButton.setBounds (learnRow.removeFromLeft (140).reduced (2));
     forgetButton.setBounds (learnRow.removeFromLeft (80).reduced (2));
+    smoothButton.setBounds (learnRow.removeFromLeft (80).reduced (2));
     useLearnedButton.setBounds (learnRow.reduced (4, 0));
     learnStatus.setBounds (left.removeFromTop (22));
     for (auto [label, slider] : { std::pair { &lowPositionLabel, &lowPosition }, std::pair { &highPositionLabel, &highPosition } })

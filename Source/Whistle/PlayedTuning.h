@@ -15,6 +15,7 @@
 
 #include "Acoustics.h"
 
+#include <optional>
 #include <vector>
 
 namespace whistle
@@ -47,6 +48,19 @@ int silentNotes (const Geometry&, const std::vector<PlayedNote>&);
 // them carried on from the nearest with the trend of all heard notes (least squares, held between flat and
 // doubling every 3.5 semitones). `estimated` says which.
 double playerBreath (const Geometry&, const ChartFingering&, bool& estimated);
+
+// The learned breath smoothed onto one curve of frequency: pressure = A f^exponent, fitted (least squares on log
+// pressure against log frequency, two fingerings of one pitch counted as one point) through the learned notes, which
+// then take the curve's value at their pitch. Physically a note sounds when the jet's speed suits its frequency (a
+// set Strouhal number), and the pressure goes with the speed squared: an exponent near 2, whatever the register or
+// fingering. Needs three pitches or more; returns nothing (and leaves them) otherwise.
+struct BreathFit
+{
+    int pitches = 0;          // Distinct pitches it was fitted to
+    double exponent = 0.0;    // p ~ f^exponent
+    double spreadPercent = 0.0;  // How far the learned values were from the curve (rms, % of pressure)
+};
+std::optional<BreathFit> smoothLearnedBreath (Geometry&);
 
 // Tunes as tuneToScale, then aims the resonances so the notes play in tune (`passes` rounds of playing and
 // refitting), keeping the best round. The holes can't move a fingering's second register against its first;

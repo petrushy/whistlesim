@@ -143,7 +143,7 @@ private:
 
     // The breath the notes are tuned at: learned from the player, or where in each note's range.
     juce::Label breathHeading, learnStatus, lowPositionLabel { {}, "Low octave" }, highPositionLabel { {}, "Upper octaves" };
-    juce::TextButton learnButton { "Learn my breath" }, forgetButton { "Forget" };
+    juce::TextButton learnButton { "Learn my breath" }, forgetButton { "Forget" }, smoothButton { "Smooth" };
     juce::ToggleButton useLearnedButton { "Tune at my learned breath" };
     juce::Slider lowPosition, highPosition;
     bool learning = false;
