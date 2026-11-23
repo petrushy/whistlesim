@@ -107,7 +107,7 @@ There are five recordings of rising scales, from the lowest note to the third oc
 | File | Instrument | Preset fitted to it |
 |---|---|---|
 | `Golden-High-D-RODE.wav` | Golden high D (aluminium, narrow head) | "D whistle, Golden style" (voicing kept from an earlier fit; the user finds it the most playable) |
-| `Generation-High-D-RODE.wav` | Generation high D (cheap brass/nickel, plastic fipple) | "D whistle, Generation style" (new; Golden tube and fipple, own voicing) |
+| `Generator-High-D-RODE.wav` | Generator high D (cheap brass/nickel, plastic fipple) | "D whistle, Generator style" (new; Golden tube and fipple, own voicing) |
 | `Löf-High-D-RODE.wav` | Löf high D (also filed earlier as "Löf"; probably the same whistle) | "D whistle, Löf style" (new; Golden tube and fipple, own voicing) |
 | `Golden-Low-D-RODE.wav` | Golden low D | "Low D whistle" (voicing left unchanged) |
 | `Moeck-Soprano-RODE.wav` | Moeck soprano recorder, baroque fingering | "Soprano recorder in C" (refitted 2026-11-10; alto and tenor share it) |
@@ -117,7 +117,7 @@ Older laptop- and phone-microphone recordings (`High-D-Golden*.wav`, `High-D-Lö
 **None of the instruments' geometries were measured.** The presets use forum or typical values:
 
 - Golden style: a 12 mm bore, an 11.5 mm head over the top 30 mm, a 0.87 mm windway, a 4.2 × 8 mm window, and an edge 0.15 mm into the pipe.
-- Generation and Löf: the Golden's tube and fipple, differing only in voicing and edge offset.
+- Generator and Löf: the Golden's tube and fipple, differing only in voicing and edge offset.
 
 So a mismatch can come from wrong dimensions as well as from missing physics.
 
@@ -144,7 +144,7 @@ These numbers are fresh, measured with the current code (after the ρU² noise l
 |---|---|---|---|---|---|---|---|
 | Golden high D | recorded | −18.1 | −17.2 | −22.7 | −27.0 | 1.18 | −66.2 |
 | | model | −22.2 | −18.6 | **−35.7** | **−39.5** | 1.10 | −68.7 |
-| Generation high D | recorded | −13.3 | −21.7 | −30.2 | −31.6 | 1.13 | −75.0 |
+| Generator high D | recorded | −13.3 | −21.7 | −30.2 | −31.6 | 1.13 | −75.0 |
 | | model | −16.3 | −19.0 | −30.1 | **−43.8** | 1.12 | **−63.8** |
 | Löf high D | recorded | −10.9 | −13.1 | −28.6 | −30.2 | 1.27 | −67.4 |
 | | model | **−17.7** | −15.7 | −28.3 | **−37.9** | 1.18 | −70.0 |
@@ -159,7 +159,7 @@ These numbers are fresh, measured with the current code (after the ρU² noise l
 |---|---|---|---|---|---|---|---|
 | Golden high D | recorded | −29.3 | −24.5 | −35.2 | −30.3 | 1.07 | −65.6 |
 | | model | −29.3 | −29.5 | **−53.6** | **−41.5** | 1.01 | −66.0 |
-| Generation high D | recorded | −21.6 | −29.2 | −39.6 | −42.2 | 1.02 | −67.9 |
+| Generator high D | recorded | −21.6 | −29.2 | −39.6 | −42.2 | 1.02 | −67.9 |
 | | model | −21.4 | −30.0 | −43.7 | −42.7 | 1.02 | **−61.0** |
 | Löf high D | recorded | −32.3 | −26.2 | −40.3 | −38.7 | 1.02 | −64.9 |
 | | model | **−23.5** | −25.8 | −42.6 | −36.2 | 1.02 | −68.8 |
@@ -185,15 +185,15 @@ Other differences:
    | Instrument | Recorded | Model |
    |---|---|---|
    | Golden | 11 dB | 7 dB |
-   | Generation | 8 dB | 5 dB |
+   | Generator | 8 dB | 5 dB |
    | Löf | 21 dB | 6 dB |
    | low D | 14 dB | 9 dB |
    | Moeck | 10 dB | 7 dB |
 
    A voicing that fits the first octave's H2 leaves the second octave too rich, and the reverse.
 3. **The low D's first octave is far richer in reality** (H2/H3 −7/−8 dB, centroid 1.64 f0) than the model can play steadily (−17/−22, centroid 1.07). Section 5 explains why "steadily" matters.
-4. **Breath noise is roughly right for the Golden fipple, the Löf and the low D** (within about 3 dB). It is too high on the Generation preset (7–11 dB) and a little low on the recorder.
-   - The Generation preset shares the Golden fipple's noise setting (0.04); its recorded noise floor is the quietest of the whistles.
+4. **Breath noise is roughly right for the Golden fipple, the Löf and the low D** (within about 3 dB). It is too high on the Generator preset (7–11 dB) and a little low on the recorder.
+   - The Generator preset shares the Golden fipple's noise setting (0.04); its recorded noise floor is the quietest of the whistles.
    - Noise "between harmonics" is a weak measure, because it includes sidebands of the tone.
 5. **Tuning:** all three recorded high D's play the second octave 11–22 cents sharp of the first (the Golden most consistently, at +20 to +22), and B5 and C#6 at +12 to +22.
    - The model's presets are tuned by a least-squares tuner that splits the octave stretch between the octaves, so they play in tune by construction.
@@ -281,7 +281,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 - **Law:** ρU², at a level fitted to the RODE recordings. It replaced U^2.5 because the noise floor relative to the tone is about equal in both octaves on the real whistles. The flutter at 15–80 Hz now matches (7.3 % against a recorded 7.5–7.9 %).
 - **Its spectrum** is a fixed-shape band at a fixed Strouhal number (0.08 U/h), which has not been checked against the recordings' noise spectra in detail.
 - **Its pulsing** (sech² of the jet's position) is a heuristic.
-- **The Generation preset** is 7–11 dB too noisy. It probably needs its own breath-noise value (about 0.015–0.02) rather than a physics change.
+- **The Generator preset** is 7–11 dB too noisy. It probably needs its own breath-noise value (about 0.015–0.02) rather than a physics change.
 
 ### 4.6 Not modelled at all
 
@@ -315,7 +315,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
 | Experiment | Result | Why it was left out |
 |---|---|---|
 | Flatten the jet band-pass above 2× its centre | 2nd-octave H4 about +10 dB | Notes squeaked into upper registers at the softest breath (from 107 Pa); octave breaks about 30 % lower |
-| The same above 5–8× the centre | +1–3 dB on H4 | Too little; the Generation, Löf and low D fits preferred it off |
+| The same above 5–8× the centre | +1–3 dB on H4 | Too little; the Generator, Löf and low D fits preferred it off |
 | The theory's band from Rayleigh, St 0.16, convection 0.49 (2026-11-06) | Most notes stopped speaking (the jet favoured high resonances) | As above |
 | The jet's own dipole radiation, ρ δ_d/(4π r c) d²Q_j/dt² | +1–2 dB on H4–H6; H3 moved up to 4 dB depending on listener angle | Small and depends on the listener angle |
 | A richer low D (edge 0.15–0.25 mm, less vortex loss) | H2/H3 −7/−18 | 4–6 of 14 transitions jumped register; 6–20× more glide chirps |
@@ -346,7 +346,7 @@ The low D geometry (22 mm bore, 1.0 mm windway, 13 × 5.2 mm window) is also fro
     cd whistlesim
     W=build/WhistleCheck_artefacts/Release/WhistleCheck
     nice -n 19 $W analyse tools/Real-examples/Golden-High-D-RODE.wav "Golden style"
-    nice -n 19 $W analyse tools/Real-examples/Generation-High-D-RODE.wav "Generation"
+    nice -n 19 $W analyse tools/Real-examples/Generator-High-D-RODE.wav "Generator"
     nice -n 19 $W analyse "tools/Real-examples/Löf-High-D-RODE.wav" "fgren"     # name matching chokes on "ö"
     nice -n 19 $W analyse tools/Real-examples/Golden-Low-D-RODE.wav "low D"
     nice -n 19 $W analyse tools/Real-examples/Moeck-Soprano-RODE.wav "soprano"
@@ -378,9 +378,9 @@ The details and numbers are in `README.md`, "Comparing with real whistles", seco
 | `transition` and `glide` time the fundamental | `tools/WhistleCheck.cpp` |
 | `analyse` prints model minus recording for H2–H8 over the notes both play; the octave split moved from 1.9 × to 1.94 × the lowest note; `blow=recorded`; preset names with ö match | `tools/WhistleCheck.cpp`, `Source/Whistle/ScalePlan.*` |
 | Jet bend (direction 2), a new Voicing parameter, 0 by default | `WhistleModel.cpp`, `WhistleGeometry.h`, instrument files, Instrument tab |
-| Two new presets, "D whistle, Golden style (bright)" and "Low D whistle (bright)"; the Generation's breath noise 0.016 | `WhistleGeometry.cpp` |
+| Two new presets, "D whistle, Golden style (bright)" and "Low D whistle (bright)"; the Generator's breath noise 0.016 | `WhistleGeometry.cpp` |
 
-Every existing preset plays sample for sample as before, except the Generation's noise level.
+Every existing preset plays sample for sample as before, except the Generator's noise level.
 
 **Against the recordings** (mean size of the model-minus-recording differences, octave averages of H2–H8):
 
@@ -388,7 +388,7 @@ Every existing preset plays sample for sample as before, except the Generation's
 |---|---|---|
 | Golden high D | 10.7 dB (Golden style) | 3.5 dB (bright) |
 | Golden low D | 8.4 dB (Low D whistle) | 3.6 dB (bright) |
-| Löf, Generation, Moeck | 3.9, 5.1 and 3.7 dB | unchanged: new searches gained 0.3–0.5 dB |
+| Löf, Generator, Moeck | 3.9, 5.1 and 3.7 dB | unchanged: new searches gained 0.3–0.5 dB |
 
 **The directions of section 7:**
 
