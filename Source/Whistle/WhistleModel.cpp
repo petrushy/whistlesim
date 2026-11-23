@@ -97,18 +97,24 @@ std::array<float, 5> fitWallLoss (double length, double a, double wallLoss, doub
 }
 } // namespace
 
-float WhistleModel::DelayLine::read (float delay) const
+void WhistleModel::DelayLine::lagrange (float delay, int& m, std::array<float, 4>& h)
 {
     // Value `delay` samples ago; the newest stored sample is 1 sample old.
     const int whole = (int) delay;
-    const int m = whole - 1;
+    m = whole - 1;
     const float f = delay - (float) m;  // In [1, 2)
-    const float h0 = -(f - 1.0f) * (f - 2.0f) * (f - 3.0f) / 6.0f;
-    const float h1 = f * (f - 2.0f) * (f - 3.0f) * 0.5f;
-    const float h2 = -f * (f - 1.0f) * (f - 3.0f) * 0.5f;
-    const float h3 = f * (f - 1.0f) * (f - 2.0f) / 6.0f;
-    auto at = [&] (int age) { return buffer[(size_t) ((write - age) & (kLineSize - 1))]; };
-    return h0 * at (m) + h1 * at (m + 1) + h2 * at (m + 2) + h3 * at (m + 3);
+    h[0] = -(f - 1.0f) * (f - 2.0f) * (f - 3.0f) / 6.0f;
+    h[1] = f * (f - 2.0f) * (f - 3.0f) * 0.5f;
+    h[2] = -f * (f - 1.0f) * (f - 3.0f) * 0.5f;
+    h[3] = f * (f - 1.0f) * (f - 2.0f) / 6.0f;
+}
+
+float WhistleModel::DelayLine::read (float delay) const
+{
+    int m = 0;
+    std::array<float, 4> h {};
+    lagrange (delay, m, h);
+    return read (m, h);
 }
 
 WhistleModel::WhistleModel()
@@ -142,6 +148,8 @@ void WhistleModel::prepare (double hostSampleRate)
 
     buildConfig (geometry, config);
     hasPending = false;
+    for (auto& filter : holeFilters)
+        filter.open = -1.0;
     resetState();
     current = target = {};
     rampRemaining = 0;
@@ -344,6 +352,7 @@ void WhistleModel::buildConfig (const Geometry& g, Config& out) const
 
         out.loss[(size_t) k] = fitWallLoss (length, a, g.wallLoss, rate);
         out.delay[(size_t) k] = (float) std::max (2.0, length / kSpeedOfSound * rate);
+        DelayLine::lagrange (out.delay[(size_t) k], out.delayNewest[(size_t) k], out.delayWeights[(size_t) k]);
         out.area[(size_t) k] = (float) (kPi * a * a);
     }
 
@@ -495,8 +504,10 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     for (int k = 0; k < n; ++k)
     {
         const auto& loss = cfg.loss[(size_t) k];
-        arriveRight[(size_t) k] = lossRight[(size_t) k].process (right[(size_t) k].read (cfg.delay[(size_t) k]), loss);  // At junction k+1
-        arriveLeft[(size_t) k] = lossLeft[(size_t) k].process (left[(size_t) k].read (cfg.delay[(size_t) k]), loss);     // At junction k
+        const int newest = cfg.delayNewest[(size_t) k];
+        const auto& weights = cfg.delayWeights[(size_t) k];
+        arriveRight[(size_t) k] = lossRight[(size_t) k].process (right[(size_t) k].read (newest, weights), loss);  // At junction k+1
+        arriveLeft[(size_t) k] = lossLeft[(size_t) k].process (left[(size_t) k].read (newest, weights), loss);     // At junction k
     }
 
     // 2. Jet. Breath pressure gives the jet speed; the sound in the window deflects the jet, the deflection
@@ -691,9 +702,14 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
     // centre line than a fast one. Below the speed the lowest note is played at, the bend stays what it is there, and
     // it levels off at the jet's half-width: a jet bent ever further as the breath falls would miss the edge, and
     // notes would need more breath to start.
-    const float bendSpeed = std::max (speed, cfg.referenceJetSpeed);
-    const float freeBend = jetBend.load (std::memory_order_relaxed) * cfg.windowLength * cfg.windowLength / (2.0f * rho * h * bendSpeed * bendSpeed);
-    const float bend = jetHalfWidth * std::tanh (freeBend / jetHalfWidth);
+    const float bendPressure = jetBend.load (std::memory_order_relaxed);
+    float bend = 0.0f;  // No bend set (most presets): no tanh to work out, every sample
+    if (bendPressure != 0.0f)
+    {
+        const float bendSpeed = std::max (speed, cfg.referenceJetSpeed);
+        const float freeBend = bendPressure * cfg.windowLength * cfg.windowLength / (2.0f * rho * h * bendSpeed * bendSpeed);
+        bend = jetHalfWidth * std::tanh (freeBend / jetHalfWidth);
+    }
     const float edge = cfg.edgeOffset + current.edgeShift + bend;  // Where the jet's centre line meets the edge
     const float jetFlow = cfg.windowWidth * jetHalfWidth * jetSpeed * flowShare * std::tanh ((deflection - edge) / jetHalfWidth);
 
@@ -776,32 +792,44 @@ void WhistleModel::tick (float& windowOut, float& bodyOut)
         if (hole >= 0)
         {
             const double open = limit (0.0, 1.0, (double) current.openness[(size_t) hole]);
-            const double mi = cfg.holeInnerMass[(size_t) hole], mr = cfg.holeOuterMass[(size_t) hole];
-            const double r = cfg.holeRadiationResistance[(size_t) hole];
-            // A fully open hole keeps a trace of compliance: avoids a pole-zero pair exactly at the Nyquist frequency.
-            const double compliance = cfg.holeCompliance[(size_t) hole] * std::max (1.0 - open, 0.02);
-            const double gj = (s1 + s2) / (rho * c);
-
-            // A partly open hole lets air out through the thin gap under the finger: a viscous resistance rv in series
-            // with the open part, huge when the gap is a fraction of a millimetre (it damps the resonance of the hole's
-            // air mass with the trapped chimney air, which otherwise "plops" as a finger lifts), negligible once the
-            // hole is more than about a quarter open. Scaled by the openness like the rest of the open branch (orv).
-            double orv = 0.0;
             const double gapDamping = fingerGapDamping.load (std::memory_order_relaxed);
-            if (open > 0.0 && open < 1.0 && gapDamping > 0.0)
+            auto& filter = holeFilters[(size_t) jn];
+            if (! exactlyEqual (open, filter.open) || ! exactlyEqual (gapDamping, filter.gapDamping))
             {
-                const double gap = cfg.holeGapHeight[(size_t) hole] / (1.0 / open - 1.0);
-                orv = std::min (1.0e15, gapDamping * open * cfg.holeGapViscous[(size_t) hole] / (gap * gap * gap));
-            }
+                // Remade only when the openness or the gap damping changed (the rest is the geometry's).
+                const double mi = cfg.holeInnerMass[(size_t) hole], mr = cfg.holeOuterMass[(size_t) hole];
+                const double r = cfg.holeRadiationResistance[(size_t) hole];
+                // A fully open hole keeps a trace of compliance: avoids a pole-zero pair exactly at the Nyquist frequency.
+                const double compliance = cfg.holeCompliance[(size_t) hole] * std::max (1.0 - open, 0.02);
+                const double gjNow = (s1 + s2) / (rho * c);
 
-            // Open branch Y_o = open (r + s mr) / (mi mr s^2 + ((mi + mr) r + orv mr) s + orv r), covered part s C.
-            // p / sum = G Do / D, open-branch flow / sum = G open (r + s mr) / D, with Do the open branch's
-            // denominator above and D = (G + s C) Do + open (r + s mr).
-            const double d0 = orv * r, d1 = (mi + mr) * r + orv * mr, d2 = mi * mr;
-            double num[4], flowNum[4], den[4];
-            bilinear (gj * d0, gj * d1, gj * d2, 0.0, num);
-            bilinear (gj * open * r, gj * open * mr, 0.0, 0.0, flowNum);
-            bilinear (gj * d0 + open * r, gj * d1 + compliance * d0 + open * mr, gj * d2 + compliance * d1, compliance * d2, den);
+                // A partly open hole lets air out through the thin gap under the finger: a viscous resistance rv in
+                // series with the open part, huge when the gap is a fraction of a millimetre (it damps the resonance of
+                // the hole's air mass with the trapped chimney air, which otherwise "plops" as a finger lifts),
+                // negligible once the hole is more than about a quarter open. Scaled by the openness like the rest of
+                // the open branch (orv).
+                double orv = 0.0;
+                if (open > 0.0 && open < 1.0 && gapDamping > 0.0)
+                {
+                    const double gap = cfg.holeGapHeight[(size_t) hole] / (1.0 / open - 1.0);
+                    orv = std::min (1.0e15, gapDamping * open * cfg.holeGapViscous[(size_t) hole] / (gap * gap * gap));
+                }
+
+                // Open branch Y_o = open (r + s mr) / (mi mr s^2 + ((mi + mr) r + orv mr) s + orv r), covered part s C.
+                // p / sum = G Do / D, open-branch flow / sum = G open (r + s mr) / D, with Do the open branch's
+                // denominator above and D = (G + s C) Do + open (r + s mr).
+                const double d0 = orv * r, d1 = (mi + mr) * r + orv * mr, d2 = mi * mr;
+                bilinear (gjNow * d0, gjNow * d1, gjNow * d2, 0.0, filter.num);
+                bilinear (gjNow * open * r, gjNow * open * mr, 0.0, 0.0, filter.flowNum);
+                bilinear (gjNow * d0 + open * r, gjNow * d1 + compliance * d0 + open * mr, gjNow * d2 + compliance * d1, compliance * d2, filter.den);
+                filter.open = open;
+                filter.gapDamping = gapDamping;
+                filter.gj = gjNow;
+            }
+            const double gj = filter.gj;
+            const double* num = filter.num;
+            const double* flowNum = filter.flowNum;
+            const double* den = filter.den;
 
             auto& st = holeState[(size_t) jn];  // sum x1 x2 x3, p y1 y2 y3, flow f1 f2 f3
             // A finger landing pushes air in: a flow into the junction, which the hole's own admittance lets
@@ -960,6 +988,8 @@ void WhistleModel::render (float* windowOut, float* bodyOut, int numSamples)
             const bool sameShape = pending.numSegments == config.numSegments;
             config = pending;
             hasPending = false;
+            for (auto& filter : holeFilters)
+                filter.open = -1.0;  // Made for the old geometry
             if (! sameShape)  // Different sections: start the bore from rest.
             {
                 for (auto& d : right) d = {};
