@@ -269,9 +269,8 @@ whistle::Controls Player::controlsFromFrame (const warbl::SensorFrame& frame)
 
     // Elevation: the angle of WARBL's long axis to the horizontal (see SensorFrame::elevationDegrees), unaffected
     // by rolling the instrument about its axis. Smoothed over ~100 ms so shaking or bumping doesn't wobble the tone.
-    if (const auto measuredElevation = frame.elevationDegrees())
     {
-        const float elevation = *measuredElevation;
+        const float elevation = frame.elevationDegrees();
         const float share = (float) std::clamp (frameInterval / 0.1, 0.001, 1.0);
         smoothedTilt = haveTilt ? smoothedTilt + share * (elevation - smoothedTilt) : elevation;
         haveTilt = true;

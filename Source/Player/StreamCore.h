@@ -42,8 +42,7 @@ public:
     const void* getStreamingSource() const { return streamingSource.load(); }
     void forgetStreamingSource() { streamingSource = nullptr; }
 
-    // The commands to send, each in both formats: the official firmware (4.8 on) only answers its registered ID, the
-    // earlier experimental firmware only 7D 57, and each ignores the other's. Each is a SysEx message without F0/F7.
+    // The commands to send, each a SysEx message without F0/F7.
     static std::vector<std::vector<uint8_t>> streamCommands (bool on, bool suppressNotes);
     static std::vector<std::vector<uint8_t>> requestInfoCommands();
 

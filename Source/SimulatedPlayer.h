@@ -60,7 +60,7 @@ public:
         // Up to ~830 Pa (2000 14-bit counts at ~0.42 Pa each): the low register of a D whistle.
         f.pressure = (uint16_t) (kAmbient14 + breath * 2000.0 + noise (28));
         // As version 3 sends it: the accelerometer's y axis, and a gently rolling instrument held about level.
-        f.accel = { 0, 300, 0 };
+        f.accelY = 300;
         const double angles[3] = { 14.0 * std::sin (t), 2.0 + std::sin (t * 0.5), 10.0 * std::sin (t * 0.3) };  // Degrees
         for (size_t axis = 0; axis < 3; ++axis)
             f.orientation[axis] = (int16_t) std::lround (angles[axis] * kAngleScale);

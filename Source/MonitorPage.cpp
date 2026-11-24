@@ -446,40 +446,24 @@ void MonitorPage::timerCallback()
 
     const int ambient = deviceInfo ? deviceInfo->ambientPressure : 0;
     ScopeView::Trace pressure { "pressure", accent, {} };
-    ScopeView::Trace ax { "x", juce::Colours::indianred, {} }, ay { "y", juce::Colours::lightgreen, {} }, az { "z", juce::Colours::cornflowerblue, {} };
+    ScopeView::Trace ay { "y", juce::Colours::lightgreen, {} };
     ScopeView::Trace roll { "roll", juce::Colours::indianred, {} }, elevation { "elevation", juce::Colours::lightgreen, {} },
         yaw { "yaw", juce::Colours::cornflowerblue, {} };
     const warbl::DeviceInfo units = deviceInfo.value_or (warbl::DeviceInfo {});
-    const bool threeAxes = ! history.back().frame.hasOrientation();  // Firmware before 4.8 sent x and z too
 
     for (const auto& r : history)
     {
         const auto& f = r.frame;
         pressure.values.push_back ((float) ((int) f.pressure - ambient) * AudioEngine::kPascalPerCount);
-        ay.values.push_back (units.accelToG (f.accel[1]));
-        if (threeAxes)
-        {
-            ax.values.push_back (units.accelToG (f.accel[0]));
-            az.values.push_back (units.accelToG (f.accel[2]));
-        }
-        // Firmware 4.8 sends WARBL's own angles; before that only the elevation can be worked out (from gravity).
-        if (f.hasOrientation())
-        {
-            roll.values.push_back (f.angleDegrees (0));
-            yaw.values.push_back (f.angleDegrees (2));
-        }
-        elevation.values.push_back (f.elevationDegrees().value_or (0.0f));
+        ay.values.push_back (units.accelToG (f.accelY));
+        roll.values.push_back (f.angleDegrees (0));
+        elevation.values.push_back (f.elevationDegrees());
+        yaw.values.push_back (f.angleDegrees (2));
     }
 
     pressureScope.setTraces ({ pressure });
-    if (threeAxes)
-        accelScope.setTraces ({ ax, ay, az });
-    else
-        accelScope.setTraces ({ ay });
-    if (roll.values.size() == history.size())
-        orientationScope.setTraces ({ roll, elevation, yaw });
-    else
-        orientationScope.setTraces ({ elevation });
+    accelScope.setTraces ({ ay });
+    orientationScope.setTraces ({ roll, elevation, yaw });
 }
 
 bool MonitorPage::keyPressed (const juce::KeyPress& key)
