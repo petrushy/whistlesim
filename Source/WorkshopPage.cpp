@@ -503,21 +503,12 @@ void WorkshopPage::listen()
     if (! tunerOn)
         return;
     tunerView.setReading (reading.hz, reading.note, reading.centsFromEqual, reading.targetCents);
-    if (onTunerReading != nullptr)
-        onTunerReading (reading.hz, reading.note, reading.centsFromEqual, reading.targetCents);
-}
-
-void WorkshopPage::setShownElsewhere (bool on)
-{
-    shownElsewhere = on;
-    if (on && ! playedValid && ! tuning)
-        countdown = 0;
 }
 
 void TunerView::setActive (bool on)
 {
     if (on == active)
-        return;  // Callers may repeat it (the phone screen does, at every refresh): only a change resets the needle
+        return;  // Callers may repeat it: only a change resets the needle
     active = on;
     silentTicks = 1000;
     repaint();

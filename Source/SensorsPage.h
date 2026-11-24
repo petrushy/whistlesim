@@ -41,7 +41,6 @@ public:
     void resized() override;
 
 private:
-    friend class DesktopControls;  // The iPhone screens drive these controls
 
     struct Row
     {

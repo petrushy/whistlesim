@@ -1,7 +1,6 @@
 #include "MainComponent.h"
 
 #include "AboutPanel.h"
-#include "OverlayPanel.h"
 #include "ReverbFile.h"
 #include "Player/SensorSettings.h"
 
@@ -110,20 +109,6 @@ void MainComponent::saveState()
     properties.saveIfNeeded();
 }
 
-void MainComponent::appSuspended()
-{
-    if (saveOnExit)
-        saveState();
-    if (! receiver.isConnected() || receiver.isSimulating())
-        audio.deviceManager.closeAudioDevice();
-}
-
-void MainComponent::appResumed()
-{
-    if (audio.deviceManager.getCurrentAudioDevice() == nullptr)
-        audio.deviceManager.restartLastAudioDevice();
-}
-
 void MainComponent::resized()
 {
     tabs.setBounds (getLocalBounds());
@@ -132,13 +117,6 @@ void MainComponent::resized()
 
 void MainComponent::showAbout()
 {
-   #if JUCE_IOS
-    // No dialog windows on iOS (they get no title bar to close them with): show it over the app instead.
-    auto panel = std::make_unique<OverlayPanel> (std::make_unique<AboutPanel>(), "About WhistleSim");
-    panel->onClose = [this] { overlay.reset(); };
-    panel->showOver (*this);
-    overlay = std::move (panel);
-   #else
     if (aboutWindow != nullptr)
     {
         aboutWindow->toFront (true);
@@ -152,5 +130,4 @@ void MainComponent::showAbout()
     options.useNativeTitleBar = true;
     options.resizable = false;
     aboutWindow = options.launchAsync();
-   #endif
 }
