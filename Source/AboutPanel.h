@@ -20,6 +20,7 @@ public:
                   "of fingerings and notes, so pitch, half-holing, slides and overblowing all come out of the physics.\n\n",
                   juce::FontOptions (14.0f), body);
         s.append (juce::String::fromUTF8 ("Created by Petrus Hyvönen\n"), juce::FontOptions (15.0f, juce::Font::bold), heading);
+        s.append ("with the AI assistants Claude (Anthropic) and Codex (OpenAI)\n", juce::FontOptions (14.0f), body);
         s.append (juce::String::fromUTF8 ("© 2026 Petrus Hyvönen\n\n"), juce::FontOptions (13.0f), quiet);
         s.append ("WARBL and WARBL2 are designed by Andrew Mowry. WhistleSim plays from the sensor stream of the WARBL2 "
                   "firmware (version 4.8 and later), and is built with the JUCE framework.\n\n"

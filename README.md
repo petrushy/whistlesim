@@ -2,6 +2,8 @@
 
 A physical model of a whistle (and recorder), played from a WARBL2 wind controller. WARBL sends its raw sensor readings (tone holes, breath pressure, motion) over USB MIDI SysEx, and WhistleSim simulates the instrument from them: the air jet, the window, the bore and the tone holes. There is no table of fingerings and notes, so pitch, half-holing, slides and overblowing all come out of the physics. It is an independent project, not made by or affiliated with the makers of WARBL.
 
+Created by Petrus Hyvönen, using the AI assistants Claude (by Anthropic) and Codex (by OpenAI).
+
 WARBL needs firmware with the sensor stream: the official WARBL2 firmware from version 4.8 (in beta in November 2026; protocol in [docs/WARBL_sensor_stream_protocol_v3.md](docs/WARBL_sensor_stream_protocol_v3.md)). The earlier experimental firmware, from the `sensor-stream` branch of [petrushy/WARBL2](https://github.com/petrushy/WARBL2/tree/sensor-stream), still works too. Without a WARBL, the app's built-in simulator plays it.
 
 - **WhistleSim** (`Source/`): the app (macOS, Windows and Linux; see Building). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and orientation. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
