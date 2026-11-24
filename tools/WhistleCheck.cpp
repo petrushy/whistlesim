@@ -917,7 +917,7 @@ int main (int argc, char* argv[])
         return 0;
     }
 
-    if (mode == "realpitch")  // realpitch [preset] [wallloss=x] [voicing options]: the model's pitch at the real Goldie's breath, against it
+    if (mode == "realpitch")  // realpitch [preset] [wallloss=x] [voicing options]: the model's pitch at the real Golden's breath, against it
     {
         // Each note at the mouth pressure the player blew the real Golden at in its scale (Golden-pressure-2-notes, the
         // medians of each note's runs), and the pitch it played there, in cents from the tube resonance (which the
@@ -2184,7 +2184,7 @@ int main (int argc, char* argv[])
                      holes.fingerHeight ? "finger height" : holes.sCurve ? "S-curve" : "power curve", breath.inputMin, breath.inputMax,
                      breath.outputMax, breath.curve);
 
-        // The app's mapping (AudioEngine::controlsFromFrame).
+        // The app's mapping (Player::controlsFromFrame).
         auto controlsFor = [&] (const Frame& f)
         {
             Controls c;
@@ -2223,7 +2223,7 @@ int main (int argc, char* argv[])
         std::vector<float> out;
         std::vector<Controls> controlsAt;  // Per output sample... too big; per frame instead
         std::vector<size_t> frameStart;
-        // Finger landings, as AudioEngine::controlsFromFrame finds them (taps and body knocks; taps=0 leaves them out).
+        // Finger landings, as Player::controlsFromFrame finds them (taps and body knocks; taps=0 leaves them out).
         bool replayTaps = true;
         for (int i = 3; i < argc; ++i)
             if (juce::String (argv[i]).startsWith ("taps="))
@@ -2270,6 +2270,8 @@ int main (int argc, char* argv[])
             model.render (out.data() + out.size() - (size_t) n, n);
         }
         saveWavArg (argc, argv, "replay", out, rate);
+        if (replayTaps)
+            std::printf ("Finger landings played: %d\n", landings);
 
         // Pitch every 5 ms (from the last 20 ms), and the fingering, for the frames between from and to: lines where
         // the fingering changes, plus 40 ms after each change.

@@ -761,11 +761,11 @@ void WorkshopPage::measurePlayedInBackground()
                     weakAlive = std::weak_ptr<bool> (alive)]
     {
         auto notes = whistle::measurePlayed (g, voicing, lowest);
-        juce::MessageManager::callAsync ([this, generation, weakAlive, notes = std::move (notes)]
+        juce::MessageManager::callAsync ([this, generation, weakAlive, measured = std::move (notes)]
         {
             if (weakAlive.lock() == nullptr || generation != playedGeneration)
                 return;  // Gone, or the instrument changed since
-            playedNotes = notes;
+            playedNotes = measured;
             playedValid = true;
             rebuildTable();
         });
@@ -787,7 +787,7 @@ void WorkshopPage::tuneHoles()
         auto tuned = g;
         std::vector<whistle::PlayedNote> notes;
         const bool ok = whistle::tuneToPlayed (tuned, voicing, hz, cross, head, 3, &notes);
-        juce::MessageManager::callAsync ([this, hz, before = g, tuned, notes = std::move (notes), ok, weakAlive]
+        juce::MessageManager::callAsync ([this, hz, before = g, tuned, measured = std::move (notes), ok, weakAlive]
         {
             if (weakAlive.lock() == nullptr)
                 return;
@@ -801,12 +801,12 @@ void WorkshopPage::tuneHoles()
             }
             auto result = tuned;
             result.slide = 0.0;  // A newly made instrument, tuned with its slide pushed in
-            status.setText (workshop::tunedReport (before, result, hz, notes), juce::dontSendNotification);
+            status.setText (workshop::tunedReport (before, result, hz, measured), juce::dontSendNotification);
             status.setTooltip (status.getText());
             instrument.applyGeometry (result);
             // The tuner's last measurement is this geometry's: show it at once.
             dirty = false;
-            playedNotes = notes;
+            playedNotes = measured;
             playedValid = true;
             ++playedGeneration;
             rebuildTable();
