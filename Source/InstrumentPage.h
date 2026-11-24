@@ -64,7 +64,7 @@ public:
     std::function<void (const juce::String&)> onChartHolesChanged;  // A new chart opened or plugged holes (which)
     void setTuningSummary (const juce::String&);    // One line from the Tuning workshop, shown under the drawing
     // The key, octave, reference A and fingering chart: what the tuner aims for (the sound never uses them), shown on
-    // the Tuning workshop tab. They stay this page's (the phone screens and Play scale use them).
+    // the Tuning workshop tab. They stay this page's (Play scale uses them).
     void showTuningControlsIn (juce::Component& parent);
     void layOutTuningControls (juce::Rectangle<int> row, juce::Rectangle<int> chartRow);
 
