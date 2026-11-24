@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compatibility · WhistleSim</title>
+<meta name="description" content="Which WARBL2 firmware and which computers WhistleSim works with.">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="img/icon.svg" alt="">WhistleSim</a>
+    <nav>
+      <a href="./">Home</a>
+      <a href="start.html">Getting started</a>
+      <a href="compatibility.html" aria-current="page">Compatibility</a>
+      <a href="support.html">Support</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Compatibility</h1>
+
+  <h2>WARBL firmware</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>WARBL2 firmware</th><th>Works with WhistleSim</th><th>USB</th><th>Bluetooth</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>4.8 or later (official)</td><td>0.4.0 or later</td><td>About 500 frames/s (333 with a Bluetooth connection also open)</td><td>Yes, in batches every 7.5–15 ms</td></tr>
+        <tr><td>Experimental sensor-stream firmware (<a href="https://github.com/petrushy/WARBL2/tree/sensor-stream">petrushy/WARBL2</a>)</td><td>0.1.0 or later</td><td>About 500 frames/s</td><td>Yes</td></tr>
+        <tr><td>4.7 or earlier</td><td>No: these have no sensor stream</td><td>–</td><td>–</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The original WARBL (version 1) has no sensor stream and can't be used.</p>
+  <p class="small">Firmware 4.8 sends WARBL's own fused elevation for tilt, where the experimental firmware sent raw accelerometer readings. If you use tilt, press <strong>Set zero now</strong> again after updating.</p>
+
+  <h2>Computers and phones</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>System</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>macOS 12 or newer (Apple silicon and Intel)</td><td>The main platform: developed and played on it.</td></tr>
+        <tr><td>Windows 10 or newer (x64)</td><td>Builds and passes the same tests as macOS, but has had little playing yet. Reports welcome.</td></tr>
+        <tr><td>Linux x86_64 (glibc 2.39 or newer, e.g. Ubuntu 24.04)</td><td>Builds and passes the same tests as macOS, but has had little playing yet. Reports welcome.</td></tr>
+        <tr><td>iPhone and iPad</td><td>In development. WARBL plugs straight into a USB-C iPhone, or pairs over Bluetooth.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="known-issues">Known issues</h2>
+  <ul>
+    <li><strong>A Mac that is also paired with WARBL over Bluetooth gets only about 10 frames/s over USB</strong> with firmware 4.8. The Mac sends the stream commands over both connections, and WARBL then streams over Bluetooth. A firmware fix has been proposed (<a href="https://github.com/amowry/WARBL2/pull/46">amowry/WARBL2#46</a>). Until then, disconnect WARBL's Bluetooth on the Mac while playing over USB.</li>
+    <li><strong>Bluetooth keeps WARBL's loop at 3 ms</strong> while a Bluetooth connection is open, also when streaming over USB. It still plays well, with about 1 ms more delay.</li>
+  </ul>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>WhistleSim is an independent project, not made by or affiliated with the makers of WARBL. WARBL and WARBL2 are made by Andrew Mowry (<a href="https://warbl.xyz">warbl.xyz</a>).</p>
+    <p><a href="privacy.html">Privacy</a> · <a href="https://github.com/petrushy/whistlesim">Source on GitHub</a></p>
+  </div>
+</footer>
+</body>
+</html>
