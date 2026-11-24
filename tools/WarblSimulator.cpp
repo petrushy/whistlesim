@@ -41,9 +41,8 @@ private:
 
         const auto* data = m.getSysExData();
         const auto size = (size_t) m.getSysExDataSize();
-        // Like firmware 4.8: only commands with WARBL's registered ID (hosts may send the older format as well).
         const auto header = warbl::parseHeader (data, size);
-        if (! header || header->format != warbl::Format::official)
+        if (! header)
             return;
         const auto type = header->type;
 

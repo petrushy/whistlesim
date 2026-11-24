@@ -32,12 +32,12 @@ void StreamCore::handleSysEx (const uint8_t* data, size_t size, double nowMs, co
 
 std::vector<std::vector<uint8_t>> StreamCore::streamCommands (bool on, bool suppressNotes)
 {
-    return { warbl::makeConfig (on, suppressNotes, warbl::Format::official), warbl::makeConfig (on, suppressNotes, warbl::Format::legacy) };
+    return { warbl::makeConfig (on, suppressNotes) };
 }
 
 std::vector<std::vector<uint8_t>> StreamCore::requestInfoCommands()
 {
-    return { warbl::makeRequestInfo (warbl::Format::official), warbl::makeRequestInfo (warbl::Format::legacy) };
+    return { warbl::makeRequestInfo() };
 }
 
 void StreamCore::acceptBatch (const uint8_t* data, size_t size, double nowMs)
