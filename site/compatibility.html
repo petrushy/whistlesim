@@ -25,20 +25,19 @@
   <h1>Compatibility</h1>
 
   <h2>WARBL firmware</h2>
+  <p>WhistleSim supports only the official WARBL2 firmware, version 4.8 or later, from <a href="https://warbl.xyz">warbl.xyz</a> and the <a href="https://github.com/amowry/WARBL2/releases">WARBL2 releases</a>.</p>
   <div class="table-scroll">
     <table>
       <thead>
         <tr><th>WARBL2 firmware</th><th>Works with WhistleSim</th><th>USB</th><th>Bluetooth</th></tr>
       </thead>
       <tbody>
-        <tr><td>4.8 or later (official)</td><td>0.4.0 or later</td><td>About 500 frames/s (333 with a Bluetooth connection also open)</td><td>Yes, in batches every 7.5–15 ms</td></tr>
-        <tr><td>Experimental sensor-stream firmware (<a href="https://github.com/petrushy/WARBL2/tree/sensor-stream">petrushy/WARBL2</a>)</td><td>0.1.0 to 0.4.0 only; later versions play only from the official firmware</td><td>About 500 frames/s</td><td>Yes</td></tr>
+        <tr><td>4.8 or later</td><td>0.4.0 or later</td><td>About 500 frames/s (333 with a Bluetooth connection also open)</td><td>Yes, in batches every 7.5–15 ms</td></tr>
         <tr><td>4.7 or earlier</td><td>No: these have no sensor stream</td><td>–</td><td>–</td></tr>
       </tbody>
     </table>
   </div>
   <p>The original WARBL (version 1) has no sensor stream and can't be used.</p>
-  <p class="small">Firmware 4.8 sends WARBL's own fused elevation for tilt, where the experimental firmware sent raw accelerometer readings. If you use tilt, press <strong>Set zero now</strong> again after updating.</p>
 
   <h2>Computers and phones</h2>
   <div class="table-scroll">
