@@ -32,7 +32,7 @@
       </thead>
       <tbody>
         <tr><td>4.8 or later (official)</td><td>0.4.0 or later</td><td>About 500 frames/s (333 with a Bluetooth connection also open)</td><td>Yes, in batches every 7.5–15 ms</td></tr>
-        <tr><td>Experimental sensor-stream firmware (<a href="https://github.com/petrushy/WARBL2/tree/sensor-stream">petrushy/WARBL2</a>)</td><td>0.1.0 or later</td><td>About 500 frames/s</td><td>Yes</td></tr>
+        <tr><td>Experimental sensor-stream firmware (<a href="https://github.com/petrushy/WARBL2/tree/sensor-stream">petrushy/WARBL2</a>)</td><td>0.1.0 to 0.4.0 only; later versions play only from the official firmware</td><td>About 500 frames/s</td><td>Yes</td></tr>
         <tr><td>4.7 or earlier</td><td>No: these have no sensor stream</td><td>–</td><td>–</td></tr>
       </tbody>
     </table>
@@ -57,7 +57,7 @@
 
   <h2 id="known-issues">Known issues</h2>
   <ul>
-    <li><strong>A Mac that is also paired with WARBL over Bluetooth gets only about 10 frames/s over USB</strong> with firmware 4.8. The Mac sends the stream commands over both connections, and WARBL then streams over Bluetooth. A firmware fix has been proposed (<a href="https://github.com/amowry/WARBL2/pull/46">amowry/WARBL2#46</a>). Until then, disconnect WARBL's Bluetooth on the Mac while playing over USB.</li>
+    <li><strong>A Mac that is also paired with WARBL over Bluetooth gets only about 10 frames/s over USB</strong> with firmware 4.8 and WhistleSim 0.4.0. WhistleSim 0.4.0 sends the stream commands over both connections, and WARBL then streams over Bluetooth. The next version of WhistleSim sends them only over USB when WARBL is on a cable, and a firmware fix has also been proposed (<a href="https://github.com/amowry/WARBL2/pull/46">amowry/WARBL2#46</a>). With 0.4.0, disconnect WARBL's Bluetooth on the Mac while playing over USB.</li>
     <li><strong>Bluetooth keeps WARBL's loop at 3 ms</strong> while a Bluetooth connection is open, also when streaming over USB. It still plays well, with about 1 ms more delay.</li>
   </ul>
 </main>
