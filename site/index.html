@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhistleSim</title>
+<meta name="description" content="A physical model of a tin whistle and recorder, played from a WARBL2 wind controller.">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="img/icon.svg" alt="">WhistleSim</a>
+    <nav>
+      <a href="./" aria-current="page">Home</a>
+      <a href="start.html">Getting started</a>
+      <a href="compatibility.html">Compatibility</a>
+      <a href="support.html">Support</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <img class="icon" src="img/icon.svg" alt="WhistleSim icon: a brass whistle on navy">
+    <div class="text">
+      <h1>A whistle you play on a WARBL2</h1>
+      <p class="lead">WhistleSim simulates a tin whistle or a recorder from WARBL2's raw sensor readings. It plays no samples and uses no fingering chart: pitch, tone and response come out of the physics.</p>
+    </div>
+  </section>
+
+  <div class="downloads">
+    <a class="button" data-asset-suffix="-macOS.zip" href="https://github.com/petrushy/whistlesim/releases/latest">Download for macOS</a>
+    <a class="button" data-asset-suffix="-Windows-x64.zip" href="https://github.com/petrushy/whistlesim/releases/latest">Download for Windows</a>
+    <a class="button" data-asset-suffix="-Linux-x86_64.tar.gz" href="https://github.com/petrushy/whistlesim/releases/latest">Download for Linux</a>
+  </div>
+  <p class="small"><span id="latest-version">Latest version on GitHub.</span> macOS 12 or newer, Windows 10 or newer (x64), Linux x86_64 (glibc 2.39 or newer). Free and open source (GPL v3). An iPhone and iPad app is on its way.</p>
+  <p class="small">Needs a WARBL2 with firmware 4.8 or later. No WARBL? The app has a built-in simulated player. <a href="start.html">Getting started →</a></p>
+
+  <h2>What it does</h2>
+  <p>WARBL2 sends WhistleSim what its sensors read, about 500 times a second: how far each tone hole is covered, the breath pressure, and how the instrument is held. WhistleSim then simulates the instrument: the breath through the windway, the air jet swinging across the edge, the sound travelling up and down the bore, and each hole as open, covered or anywhere in between. So the things that make a whistle a whistle work as they do on a real one.</p>
+
+  <div class="features">
+    <div class="card"><h3>Half-holing and slides</h3><p>Partly covered holes bend the pitch smoothly. Lift a finger slowly and the note glides.</p></div>
+    <div class="card"><h3>Overblowing</h3><p>Blow harder for the second octave and harder again for the third, with the breaks where the bore puts them.</p></div>
+    <div class="card"><h3>Breath shapes the tone</h3><p>Soft notes are rounder and hard ones brighter, with breath noise and a little chiff on tongued attacks.</p></div>
+    <div class="card"><h3>Your own instruments</h3><p>Whistles and recorders in several styles come built in. Change the bore, the holes, the windway and the jet, and save your designs as files to share.</p></div>
+    <div class="card"><h3>Tuning workshop</h3><p>The app places the holes so the notes play in tune at your breath, in equal temperament, meantone, just intonation or a tuning chosen for your keys. A needle tuner is built in.</p></div>
+    <div class="card"><h3>Rooms</h3><p>Play in a small wooden room, a studio, a concert hall or a stone church, or load your own impulse response.</p></div>
+  </div>
+
+  <h2>How it works</h2>
+  <figure>
+    <a href="img/simulation.svg"><img class="diagram" src="img/simulation.svg" alt="Diagram of WhistleSim's signal path: WARBL's sensor readings go into a model of the breath, the jet, the window, the bore and the tone holes, and out as sound." loading="lazy"></a>
+    <figcaption>From WARBL's sensors to sound. Click to open it full size. The <a href="https://github.com/petrushy/whistlesim#readme">README</a> describes the model in detail.</figcaption>
+  </figure>
+
+  <h2>Open source</h2>
+  <p>WhistleSim is free software under the GPL v3. The source, the release notes and the bug tracker are on <a href="https://github.com/petrushy/whistlesim">GitHub</a>.</p>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>WhistleSim is an independent project, not made by or affiliated with the makers of WARBL. WARBL and WARBL2 are made by Andrew Mowry (<a href="https://warbl.xyz">warbl.xyz</a>).</p>
+    <p><a href="privacy.html">Privacy</a> · <a href="https://github.com/petrushy/whistlesim">Source on GitHub</a></p>
+  </div>
+</footer>
+<script src="downloads.js"></script>
+</body>
+</html>

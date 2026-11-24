@@ -1,0 +1,161 @@
+/* WhistleSim site: one stylesheet for every page. Colours from the app icon (brass on navy). */
+
+:root {
+  --navy: #14233a;
+  --brass: #e0a24f;
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --text: #1d2330;
+  --muted: #5b6472;
+  --line: #e3e0d8;
+  --link: #8a5a14;
+  --accent-bg: #fbf1e1;
+  --warn-bg: #fff6e0;
+  --warn-line: #e8c77a;
+  --code-bg: #f1efe9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1826;
+    --surface: #16223a;
+    --text: #e6e8ec;
+    --muted: #a3abb8;
+    --line: #2a3a55;
+    --link: #f0b665;
+    --accent-bg: #1f2c44;
+    --warn-bg: #2b2616;
+    --warn-line: #6b5826;
+    --code-bg: #1c2a44;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+a { color: var(--link); }
+a:hover { text-decoration-thickness: 2px; }
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+
+/* Header and navigation */
+header.site {
+  background: var(--navy);
+  color: #fff;
+}
+header.site .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+header.site .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-weight: 650;
+  font-size: 19px;
+  text-decoration: none;
+}
+header.site .brand img { width: 32px; height: 32px; border-radius: 7px; }
+header.site nav { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+header.site nav a { color: #d6dbe3; text-decoration: none; font-size: 15px; }
+header.site nav a:hover, header.site nav a[aria-current="page"] { color: var(--brass); }
+
+main.wrap { padding-top: 32px; padding-bottom: 48px; }
+
+h1 { font-size: 34px; line-height: 1.2; margin: 0 0 12px; }
+h2 { font-size: 24px; line-height: 1.3; margin: 40px 0 10px; }
+h3 { font-size: 19px; margin: 24px 0 6px; }
+p, ul, ol { margin: 0 0 14px; }
+li { margin-bottom: 6px; }
+
+.lead { font-size: 20px; color: var(--muted); max-width: 40em; }
+
+/* Home page hero */
+.hero { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.hero img.icon { width: 120px; height: 120px; border-radius: 26px; flex: none; }
+.hero .text { flex: 1 1 300px; }
+
+/* Download buttons */
+.downloads { display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0 8px; }
+.button {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: var(--brass);
+  color: var(--navy);
+  font-weight: 650;
+  text-decoration: none;
+}
+.button:hover { filter: brightness(1.07); }
+.button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+.small { font-size: 14px; color: var(--muted); }
+
+/* Cards and boxes */
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3 { margin-top: 0; }
+.card p:last-child { margin-bottom: 0; }
+
+.note {
+  background: var(--accent-bg);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 18px 0;
+}
+.note.warn { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+.note p:last-child, .note ul:last-child { margin-bottom: 0; }
+
+figure { margin: 20px 0; }
+figure img.diagram {
+  width: 100%;
+  height: auto;
+  background: #fff;   /* the diagram has its own light colours */
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+/* Steps */
+ol.steps { padding-left: 22px; }
+ol.steps > li { margin-bottom: 14px; }
+
+/* Tables */
+.table-scroll { overflow-x: auto; margin: 12px 0 18px; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 650; }
+
+code {
+  font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--code-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+footer.site { border-top: 1px solid var(--line); padding: 20px 0 32px; font-size: 14px; color: var(--muted); }
+footer.site p { margin: 0 0 6px; }
+
+@media (max-width: 560px) {
+  body { font-size: 16px; }
+  h1 { font-size: 28px; }
+  .lead { font-size: 18px; }
+  .hero img.icon { width: 84px; height: 84px; border-radius: 18px; }
+}

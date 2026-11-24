@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · WhistleSim</title>
+<meta name="description" content="Install WhistleSim, update WARBL2 to firmware 4.8 and start playing.">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="img/icon.svg" alt="">WhistleSim</a>
+    <nav>
+      <a href="./">Home</a>
+      <a href="start.html" aria-current="page">Getting started</a>
+      <a href="compatibility.html">Compatibility</a>
+      <a href="support.html">Support</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Getting started</h1>
+  <p class="lead">Five steps from download to playing. It takes about ten minutes, most of it the firmware update.</p>
+
+  <ol class="steps">
+    <li>
+      <h3>Install WhistleSim</h3>
+      <p>Download it for your computer from the <a href="https://github.com/petrushy/whistlesim/releases/latest">latest release</a>.</p>
+      <ul>
+        <li><strong>macOS:</strong> unzip and move WhistleSim.app to Applications. The app isn't notarized by Apple yet, so the first time, right-click it and choose <strong>Open</strong>, or allow it under System Settings → Privacy &amp; Security.</li>
+        <li><strong>Windows:</strong> unzip and run WhistleSim.exe. It isn't signed yet, so SmartScreen may warn: choose <strong>More info → Run anyway</strong>.</li>
+        <li><strong>Linux:</strong> unpack and run <code>./WhistleSim</code>.</li>
+      </ul>
+    </li>
+    <li>
+      <h3>Try it without WARBL</h3>
+      <p>Switch on <strong>Simulate WARBL</strong> in the app. A scripted player plays a scale with breath swells, through the same path as the real stream. Or press <strong>Play scale</strong> (or the space bar) to hear the current instrument play its own scale. If you hear sound, the audio side works.</p>
+    </li>
+    <li>
+      <h3>Update WARBL2 to firmware 4.8 or later</h3>
+      <p>The sensor stream WhistleSim needs is part of the official WARBL2 firmware from version 4.8. Update as for any WARBL firmware update; see <a href="https://warbl.xyz">warbl.xyz</a> and the <a href="https://github.com/amowry/WARBL2/releases">WARBL2 releases</a>. WARBL's MIDI playing works as before; the stream only runs while WhistleSim asks for it.</p>
+    </li>
+    <li>
+      <h3>Connect and start the stream</h3>
+      <p>Plug WARBL into the computer with a USB cable, then switch off <strong>Simulate WARBL</strong> and tick <strong>Stream</strong>. Press <strong>Request info</strong>, and the Monitor tab should show:</p>
+      <ul>
+        <li>"Firmware 4.8" (or later) and "loop 2 ms"</li>
+        <li>about 500 frames/s and no lost frames</li>
+        <li>"new hole readings in ~100 % of frames"</li>
+      </ul>
+      <p>With a Bluetooth connection open at the same time, WARBL runs a little slower ("loop 3 ms", about 333 frames/s). That still plays well.</p>
+    </li>
+    <li>
+      <h3>Play</h3>
+      <p>Choose an instrument and a room, and blow. If notes start too easily or too hard, adjust the breath response on the Sensors tab, much as in the WARBL Config Tool.</p>
+    </li>
+  </ol>
+
+  <div class="note">
+    <p><strong>Quit WhistleSim before playing other MIDI apps.</strong> While WhistleSim is open, WARBL streams its sensor readings to every app listening to its USB MIDI port, which can make other apps lag. WARBL stops the stream by itself 3 seconds after WhistleSim quits.</p>
+  </div>
+
+  <h2>Over Bluetooth</h2>
+  <p>WARBL can stream over Bluetooth MIDI too. Pair it as a Bluetooth MIDI device (on macOS: Audio MIDI Setup → MIDI Studio → Bluetooth), unplug the USB cable, and tick <strong>Stream</strong>. Bluetooth adds about one connection interval (roughly 10–15 ms) of delay. <strong>Smooth Bluetooth</strong> on the Monitor tab evens out the bursts the samples arrive in.</p>
+
+  <h2>Sound and latency</h2>
+  <ul>
+    <li>Use wired headphones or speakers. Bluetooth headphones add 150–250 ms, which is too much to play with.</li>
+    <li><strong>Windows:</strong> choose WASAPI (exclusive mode) or an ASIO interface for low latency.</li>
+    <li><strong>Linux:</strong> use JACK or PipeWire.</li>
+  </ul>
+
+  <h2 id="if-something-doesnt-work">If something doesn't work</h2>
+  <ul>
+    <li><strong>No WARBL found:</strong> check the cable carries data (some charge only), and that no other app holds WARBL's port exclusively (on Windows, close the Config Tool and other MIDI apps).</li>
+    <li><strong>WARBL found, but no frames:</strong> the firmware is older than 4.8. Update it (step 3).</li>
+    <li><strong>Few frames/s over USB on a Mac:</strong> see the <a href="compatibility.html#known-issues">known issues</a>.</li>
+    <li>Anything else: <a href="support.html">Support</a>.</li>
+  </ul>
+
+  <p class="small">Your settings and saved instruments are kept in <code>~/Library/Application Support/WhistleSim/</code> on macOS, <code>%APPDATA%\WhistleSim\</code> on Windows and <code>~/.config/WhistleSim/</code> on Linux.</p>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>WhistleSim is an independent project, not made by or affiliated with the makers of WARBL. WARBL and WARBL2 are made by Andrew Mowry (<a href="https://warbl.xyz">warbl.xyz</a>).</p>
+    <p><a href="privacy.html">Privacy</a> · <a href="https://github.com/petrushy/whistlesim">Source on GitHub</a></p>
+  </div>
+</footer>
+</body>
+</html>
