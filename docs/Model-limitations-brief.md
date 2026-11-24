@@ -1,5 +1,7 @@
 # WhistleSim: the physical model against recorded whistles, and its limitations
 
+*A snapshot from 2026-11-10, kept for its findings. Since then the presets have moved from C++ (`WhistleGeometry.cpp`) to the `.whistle` files in `Presets/`, and line numbers have changed; the README and `Presets/README.md` have the current state.*
+
 A brief for a review of whether WhistleSim's physical model of a fipple flute can be improved. It covers what the model computes, how it compares with five studio recordings of real instruments (made 2026-11-10), which differences look like real physics gaps and which look like measurement noise, what has already been tried, and the constraints any change must keep.
 
 Repository: `whistlesim` (JUCE/CMake, C++). The model is in `Source/Whistle/`:

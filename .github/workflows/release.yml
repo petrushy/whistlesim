@@ -134,9 +134,9 @@ jobs:
           Windows and Linux builds pass the same tests as macOS, but have had little playing yet: reports welcome.
 
           To play it from a WARBL2, install the official WARBL2 firmware, version 4.8 or later
-          ([amowry/WARBL2](https://github.com/amowry/WARBL2)). The earlier sensor-stream firmware
-          ([SENSOR_STREAM.md](https://github.com/petrushy/WARBL2/blob/sensor-stream/SENSOR_STREAM.md)) still works. Without
-          a WARBL, switch on **Simulate WARBL** in the app.
+          ([amowry/WARBL2](https://github.com/amowry/WARBL2)). The earlier experimental sensor-stream firmware is no
+          longer supported (0.4.0 was the last version to play from it). Without a WARBL, switch on **Simulate WARBL**
+          in the app. Getting started, compatibility and known issues: https://petrushy.github.io/whistlesim/
           EOF
           gh release create "$GITHUB_REF_NAME" packages/* --repo "$GITHUB_REPOSITORY" \
             --title "WhistleSim $GITHUB_REF_NAME" --notes-file notes.md --generate-notes

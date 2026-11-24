@@ -67,7 +67,7 @@ Where each comes from, and how its voicing was found:
 ## Low D whistles
 
 - **Low D whistle**: a 22 mm cylindrical bore (a Golden low D measures ~21.8), a 1.0 mm windway and a 13 mm wide
-  window, from forum measurements of low whistles. The window is short (5.2 mm, Overton style): a longer one let the
+  window, from forum measurements of low whistles. The window is short (5.2 mm, as on some low whistles): a longer one let the
   jet grow so much that quick fingering changes flipped into the octave. The fipple is bigger (28 mm windway). A slightly
   wider head over the top 60 mm flattens the second octave into tune. Voicing: a jet band low enough for its registers
   to sit where a low D is blown (low D ~120–670 Pa, the octave from ~670 Pa), one band-pass stage, and less vortex loss
