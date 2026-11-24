@@ -1283,12 +1283,23 @@ int main (int argc, char* argv[])
                              " clocks differ by %+.0f ppm)\n", csvFile.getFileName().toRawUTF8(), (int) counts.size(), rest, scoreStart, scoreEnd,
                              (mapB - 1.0) * 1.0e6);
             }
-        // Mouth pressure at a time in the recording (s): the mean over the 20 ms around it.
+        // Mouth pressure at a time in the recording (s): the mean over the 20 ms around it, or over breath=<ms>
+        // (breath=0: the nearest frame, as the app gets them, for attacks).
+        double breathWindowMs = 20.0;
+        for (int k = 4; k < argc; ++k)
+            if (juce::String (argv[k]).startsWith ("breath="))
+                breathWindowMs = juce::String (argv[k]).fromFirstOccurrenceOf ("=", false, false).getDoubleValue();
         auto pressureAtSeconds = [&] (double seconds)
         {
             if (pressureMs.empty()) return 0.0;
             const double ms = mapA + mapB * seconds * 1000.0;
-            auto lo = std::lower_bound (pressureMs.begin(), pressureMs.end(), ms - 10.0), hi = std::upper_bound (pressureMs.begin(), pressureMs.end(), ms + 10.0);
+            auto lo = std::lower_bound (pressureMs.begin(), pressureMs.end(), ms - 0.5 * breathWindowMs), hi = std::upper_bound (pressureMs.begin(), pressureMs.end(), ms + 0.5 * breathWindowMs);
+            if (lo >= hi && breathWindowMs < 10.0 && ms >= pressureMs.front() && ms <= pressureMs.back())
+            {
+                auto next = std::lower_bound (pressureMs.begin(), pressureMs.end(), ms);
+                if (next == pressureMs.end() || (next != pressureMs.begin() && ms - *(next - 1) < *next - ms)) --next;
+                return pressurePa[(size_t) (next - pressureMs.begin())];
+            }
             if (lo >= hi) return std::nan ("");
             double sum = 0.0;
             for (auto it = lo; it != hi; ++it) sum += pressurePa[(size_t) (it - pressureMs.begin())];
@@ -1305,6 +1316,8 @@ int main (int argc, char* argv[])
             {
                 if (pressureMs.empty()) { std::printf ("follow= needs pressure=\n"); return 1; }
                 const auto spans = juce::StringArray::fromTokens (juce::String (argv[k]).fromFirstOccurrenceOf ("=", false, false), ",", "");
+                // wav=<prefix>: every span's model sound at its place in the recording (<prefix>-follow.wav).
+                std::vector<float> timeline ((size_t) ((double) recorded.size() / recordingRate * 48000.0), 0.0f);
                 for (const auto& span : spans)
                 {
                     const auto noteText = span.upToFirstOccurrenceOf ("@", false, false);
@@ -1327,6 +1340,8 @@ int main (int argc, char* argv[])
                         return std::isfinite (p) ? std::max (0.0, p) : 0.0;
                     };
                     const auto modelOut = playGesture (g, voicing, open, pressureAt, to - from, rate);
+                    for (size_t i = 0, at = (size_t) (from * rate); i < modelOut.size() && at + i < timeline.size(); ++i)
+                        timeline[at + i] = modelOut[i];
                     // Register (1 = the note's own resonance) every 50 ms, a change counted once it holds 100 ms.
                     auto registers = [&] (const std::vector<float>& x, double xRate, double offset)
                     {
@@ -1373,6 +1388,7 @@ int main (int argc, char* argv[])
                                  noteText.toRawUTF8(), from, to, chartNote->holePattern (g).c_str(), changes (registers (recorded, recordingRate, from)).toRawUTF8(),
                                  changes (registers (modelOut, rate, 0.0)).toRawUTF8());
                 }
+                saveWavArg (argc, argv, "follow", timeline, 48000.0);
                 return 0;
             }
 
