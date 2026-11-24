@@ -56,15 +56,15 @@
     <text x="54" y="219" class="t">(10-bit, ambient corrected)</text>
     <text x="54" y="236" class="t">breath pressure (14-bit,</text>
     <text x="54" y="253" class="t">≈ 0.41 Pa per count)</text>
-    <text x="54" y="270" class="t">accelerometer (tilt)</text>
+    <text x="54" y="270" class="t">orientation (tilt)</text>
     <text x="54" y="294" class="small">raw frames every 2 ms</text>
-    <text x="54" y="310" class="small">(1 ms with the 1 kHz loop)</text>
+    <text x="54" y="310" class="small">(3 ms over Bluetooth)</text>
     <text x="54" y="330" class="code">Sensor_stream.ino</text>
   </g>
   <g>
     <rect x="256" y="156" width="196" height="186" rx="8" class="box"/>
     <text x="270" y="180" class="boxTitle">SysEx stream</text>
-    <text x="270" y="202" class="t">7D 57 ‹ver› ‹type› payload</text>
+    <text x="270" y="202" class="t">00 03 0F ‹ver 3› ‹type› payload</text>
     <text x="270" y="219" class="t">7 bits per byte, MSB first</text>
     <text x="270" y="236" class="t">seq + 21-bit timestamp</text>
     <text x="270" y="253" class="t">USB: one frame per msg</text>
@@ -75,15 +75,15 @@
   </g>
   <g>
     <rect x="472" y="156" width="196" height="186" rx="8" class="box"/>
-    <text x="486" y="180" class="boxTitle">StreamReceiver</text>
-    <text x="486" y="202" class="t">decodes v1 and v2</text>
+    <text x="486" y="180" class="boxTitle">StreamCore</text>
+    <text x="486" y="202" class="t">decodes protocol v3</text>
     <text x="486" y="219" class="t">stamps arrival time</text>
     <text x="486" y="236" class="t">counts lost frames, jitter</text>
     <text x="486" y="253" class="t">→ audio queue, UI queue</text>
     <text x="486" y="277" class="small">BLE: playout buffer puts</text>
     <text x="486" y="293" class="small">bursts back at their own</text>
     <text x="486" y="309" class="small">spacing (≤ 40 ms delay)</text>
-    <text x="486" y="330" class="code">StreamReceiver.cpp</text>
+    <text x="486" y="330" class="code">Player/StreamCore.cpp</text>
   </g>
   <g>
     <rect x="688" y="156" width="196" height="186" rx="8" class="box"/>
@@ -93,7 +93,7 @@
     <text x="702" y="236" class="t">holes: S-curve, or finger</text>
     <text x="702" y="253" class="t">height → openness</text>
     <text x="702" y="270" class="t">breath: Pa → Pa curve</text>
-    <text x="702" y="287" class="t">tilt → edge shift (opt.)</text>
+    <text x="702" y="287" class="t">tilt → voicing (optional)</text>
     <text x="702" y="310" class="small">finger landings → taps</text>
     <text x="702" y="330" class="code">SensorResponse.h</text>
   </g>
@@ -131,7 +131,7 @@
     <text x="1378" y="270" class="t">→ recorder (WAV)</text>
     <text x="1378" y="294" class="small">rest mode: model and room</text>
     <text x="1378" y="310" class="small">skipped when silent 0.5 s</text>
-    <text x="1378" y="330" class="code">AudioEngine.cpp</text>
+    <text x="1378" y="330" class="code">Player/Player.cpp</text>
   </g>
   <!-- arrows between boxes -->
   <g stroke="#4a4f57" stroke-width="1.6" fill="none" marker-end="url(#arrow)">

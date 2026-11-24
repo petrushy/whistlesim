@@ -6,6 +6,13 @@ Points found while porting WhistleSim to the sensor stream in the WARBL2 4.8 bet
 
 The wire layouts in the spec match the firmware source: the USB frame (39 bytes), the BLE batch (sizes as in the table), STREAM_INFO (62 bytes), the commands, and the renewal timeout.
 
+**Status on 2026-11-24** (upstream main at 70edb66, firmware 4.8.1):
+
+- Point 1 (covered thresholds): still open; the spec's section 9 still says "relative to baseline".
+- Point 3: natural vibrato is in upstream (47eaa6e, on by default). The lower-holes pattern is proposed in amowry/WARBL2#45 and the Bluetooth on/off setting in #43 (Andrew prefers not to add it).
+- Point 4: done. A USB stream now pauses Bluetooth, so the loop stays at 2 ms (amowry/WARBL2#44, merged; the spec copy here is updated to match). A Mac that is also paired over Bluetooth can still move the stream to Bluetooth; a fix is proposed in #46, and WhistleSim now sends its commands only to the USB port when WARBL is on a cable.
+- Point 6, command versions: WhistleSim now sends only the official format (00 03 0F, version 3).
+
 ## 1. Spec: the covered thresholds are absolute readings, not relative to baseline
 
 Spec section 9 says "Covered thresholds are relative to baseline" and gives `coverage = (rawHole - baseline[i]) / coveredThreshold[i]`. The firmware sends `toneholeCovered[i]` unchanged (`Sensor_stream.ino` line 256), and that is an absolute reading like the baseline. It is set during calibration by `toneholeCovered[i] = toneholeRead[i]`, and the baseline is subtracted from `toneholeRead` only when not calibrating (`Functions.ino` line 114: `if (calibration == 0)`). The firmware itself compares against `toneholeCovered[i] - toneholeBaseline[i]` (`Functions.ino` line 929). So the formula should be:
@@ -57,4 +64,4 @@ Petrus' Bluetooth toggle (point 3) exists to keep the 2 ms loop. Suggestion: do 
 - **The STREAM_INFO loop period is a prediction** (2 or 3 ms from `connIntvl`), as the spec says. It changes if BLE connects or disconnects during a stream, and no new INFO is sent when it does. Hosts should time frames by the device timestamps; WhistleSim does.
 - **Over BLE, the INFO reply may be fragmented** (`sendSysExMessage`, unlike the batches). macOS reassembles it; worth testing on iOS and Windows.
 - **Untested beta:** `README-integration.txt` says "not compiled or hardware tested", and the BMP mapping is provisional. With the experimental firmware, WARBL sometimes hung or was reset by the watchdog while streaming over USB (2026-11-21). That needs checking again on 4.8.
-- **Command versions:** the firmware accepts command versions 1–3 with the registered ID, so the old command version number keeps working. The old manufacturer ID (7D 57) does not, so every host needs updating. WhistleSim sends both formats.
+- **Command versions:** the firmware accepts command versions 1–3 with the registered ID, so the old command version number keeps working. The old manufacturer ID (7D 57) does not, so every host needs updating. (WhistleSim sent both formats until 2026-11-24.)
