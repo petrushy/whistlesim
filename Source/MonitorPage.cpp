@@ -1,6 +1,4 @@
 #include "MonitorPage.h"
-#include "OverlayPanel.h"
-#include "PickedFile.h"
 #include "ReverbFile.h"
 
 namespace
@@ -187,14 +185,6 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
         addAndMakeVisible (b);
     }
 
-   #if JUCE_IOS || JUCE_ANDROID
-    // A Bluetooth MIDI device only shows up here after it has been paired from inside an app (on a Mac, Audio MIDI
-    // Setup does it instead). The device list callback connects once the pairing is done.
-    pairButton.setWantsKeyboardFocus (false);
-    pairButton.setTooltip ("Pairs WARBL over Bluetooth MIDI. Turn on WARBL's Bluetooth first.");
-    pairButton.onClick = [] { juce::BluetoothMidiDevicePairingDialogue::open(); };
-    addAndMakeVisible (pairButton);
-   #endif
 
     for (auto* c : std::initializer_list<juce::Component*> { &holeView, &pressureScope, &accelScope, &orientationScope, &timingView })
         addAndMakeVisible (c);
@@ -274,9 +264,7 @@ MonitorPage::MonitorPage (StreamReceiver& r, AudioEngine& a) : receiver (r), aud
         irChooser = std::make_unique<juce::FileChooser> ("Choose an impulse response", juce::File(), "*.wav;*.aif;*.aiff;*.flac");
         irChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [this] (const juce::FileChooser& chooser)
         {
-            // Kept in the app on iOS, so it can be reloaded at the next start.
-            const auto file = readableChosenFile (chooser, juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
-                                                               .getChildFile ("Impulse responses"));
+            const auto file = chooser.getResult();
             if (file == juce::File())
                 return;
             const auto error = loadReverbFile (audio.reverb, file);
@@ -313,11 +301,7 @@ void MonitorPage::tryConnect()
     }
     else
     {
-       #if JUCE_IOS || JUCE_ANDROID
-        statusLabel.setText ("WARBL not found (connect it with a USB cable, pair it over Bluetooth, or use Simulate WARBL)", juce::dontSendNotification);
-       #else
         statusLabel.setText ("WARBL not found (connect it with a USB cable, or use Simulate WARBL)", juce::dontSendNotification);
-       #endif
     }
 }
 
@@ -341,12 +325,6 @@ void MonitorPage::showAudioSettings()
     auto selector = std::make_unique<juce::AudioDeviceSelectorComponent> (audio.deviceManager, 0, 0, 2, 2, false, false, true, false);
     selector->setSize (500, 400);
 
-   #if JUCE_IOS
-    auto settingsPanel = std::make_unique<OverlayPanel> (std::move (selector), "Audio settings");
-    settingsPanel->onClose = [this] { overlay.reset(); };
-    settingsPanel->showOver (*this);
-    overlay = std::move (settingsPanel);
-   #else
     juce::DialogWindow::LaunchOptions options;
     options.content.setOwned (selector.release());
     options.dialogTitle = "Audio settings";
@@ -355,26 +333,16 @@ void MonitorPage::showAudioSettings()
     options.useNativeTitleBar = true;
     options.resizable = false;
     options.launchAsync();
-   #endif
 }
 
 juce::File MonitorPage::recordingFolder()
 {
-   #if JUCE_IOS
-    // The app's Documents folder is the one the Files app shows.
-    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("Recordings");
-   #else
     return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Downloads").getChildFile ("WhistleSim recordings");
-   #endif
 }
 
 juce::String MonitorPage::recordingFolderDescription()
 {
-   #if JUCE_IOS
-    return "Files > On My iPhone > WhistleSim > Recordings";
-   #else
     return "Downloads/WhistleSim recordings";
-   #endif
 }
 
 void MonitorPage::toggleRecording()
@@ -550,7 +518,6 @@ void MonitorPage::resized()
     simulateButton.setBounds (clickRow.removeFromRight (150));
     bluetoothSimButton.setBounds (clickRow.removeFromRight (120));
     smoothBluetoothButton.setBounds (clickRow.removeFromRight (160));
-    pairButton.setBounds (clickRow.removeFromLeft (150).reduced (2));
 
     auto reverbRow = area.removeFromTop (28);
     reverbLabel.setBounds (reverbRow.removeFromLeft (60));

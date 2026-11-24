@@ -1,8 +1,6 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "MainComponent.h"
-#include "Phone/DesktopView.h"
-#include "Phone/PhoneUI.h"
 
 class WhistleSimApplication : public juce::JUCEApplication
 {
@@ -70,22 +68,8 @@ public:
                 main->showSensors();
             if (args.contains ("--model"))
                 main->showModel();
-            auto* phoneUI = dynamic_cast<PhoneUI*> (mainWindow->getContentComponent());
             if (args.contains ("--about"))
-            {
-                if (phoneUI != nullptr)
-                    phoneUI->showAbout();
-                else
-                    main->showAbout();
-            }
-            // "--phone-tab <n>" (with --phone): 0 Play, 1 Instrument, 2 Tuning, 3 Room, 4 Sensors, 5 Setup.
-            const auto phoneTab = args.indexOf ("--phone-tab");
-            if (phoneUI != nullptr && phoneTab >= 0 && phoneTab + 1 < args.size())
-                phoneUI->showTab (args[phoneTab + 1].getIntValue());
-            if (phoneUI != nullptr && args.contains ("--phone-wide"))  // The phone turned sideways
-                phoneUI->setSize (852, 393);
-            if (phoneUI != nullptr && args.contains ("--phone-presets"))  // The preset list open
-                phoneUI->showPresetList();
+                main->showAbout();
             const auto preset = args.indexOf ("--preset");
             if (preset >= 0 && preset + 1 < args.size())
                 main->loadPreset (args[preset + 1].getIntValue());
@@ -133,28 +117,11 @@ public:
     }
     void systemRequestedQuit() override { quit(); }
 
-    // iOS sends the app to the background instead of quitting it, and may then end it without calling shutdown().
-    void suspended() override
-    {
-        if (auto* main = getMain())
-            main->appSuspended();
-    }
-    void resumed() override
-    {
-        if (auto* main = getMain())
-            main->appResumed();
-    }
-
     MainComponent* getMain() const
     {
         if (mainWindow == nullptr)
             return nullptr;
-        auto* content = mainWindow->getContentComponent();
-        if (auto* phoneUI = dynamic_cast<PhoneUI*> (content))
-            return &phoneUI->getMain();
-        if (auto* tablet = dynamic_cast<TabletRoot*> (content))
-            return &tablet->getMain();
-        return dynamic_cast<MainComponent*> (content);
+        return dynamic_cast<MainComponent*> (mainWindow->getContentComponent());
     }
 
     class MainWindow : public juce::DocumentWindow
@@ -164,22 +131,9 @@ public:
             : DocumentWindow (name, juce::Colour (0xff1e1f22), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
-           #if JUCE_IOS
-            // An iPad has room for the desktop window; an iPhone gets its own screens.
-            if (juce::SystemStats::getDeviceDescription().startsWithIgnoreCase ("iPad"))
-                setContentOwned (new TabletRoot (std::make_unique<MainComponent>()), false);
-            else
-                setContentOwned (new PhoneUI (std::make_unique<MainComponent>()), false);
-            setFullScreen (true);
-           #else
-            // "--phone": the iPhone screens in a phone-sized window, for trying them on a Mac.
-            if (getCommandLineParameterArray().contains ("--phone"))
-                setContentOwned (new PhoneUI (std::make_unique<MainComponent>()), true);
-            else
-                setContentOwned (new MainComponent(), true);
+            setContentOwned (new MainComponent(), true);
             setResizable (true, true);
             centreWithSize (getWidth(), getHeight());
-           #endif
             setVisible (true);
         }
 

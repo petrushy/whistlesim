@@ -1,4 +1,3 @@
 build/
 .juce/
 .DS_Store
-build-ios/

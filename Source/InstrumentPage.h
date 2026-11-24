@@ -73,7 +73,6 @@ public:
     float textScaleFor (juce::Rectangle<int> page) const;
 
 private:
-    friend class DesktopControls;  // The iPhone screens drive these controls
 
     enum class RowKind { normal, holePosition, holeDiameter };  // A hole's two sliders share one line.
 

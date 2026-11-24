@@ -4,14 +4,7 @@ project(WhistleSim VERSION 0.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# iOS (-G Xcode -DCMAKE_SYSTEM_NAME=iOS) builds only the app; see "iPhone and iPad" in the README.
-if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(WHISTLESIM_IOS ON)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0" CACHE STRING "")
-else()
-    set(WHISTLESIM_IOS OFF)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
-endif()
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "")
 
 include(FetchContent)
 FetchContent_Declare(JUCE
@@ -19,39 +12,6 @@ FetchContent_Declare(JUCE
     GIT_TAG 9.0.5
     GIT_SHALLOW ON)
 FetchContent_MakeAvailable(JUCE)
-
-# iOS: keep playing with the screen locked, pair WARBL over Bluetooth MIDI, and show the app's Documents folder
-# (recordings, impulse responses) in the Files app. An iPhone has its own screens, upright or sideways.
-set(WHISTLESIM_IOS_OPTIONS)
-if (WHISTLESIM_IOS)
-    set(WHISTLESIM_IOS_OPTIONS
-        BACKGROUND_AUDIO_ENABLED TRUE
-        BLUETOOTH_PERMISSION_ENABLED TRUE
-        BLUETOOTH_PERMISSION_TEXT "WhistleSim connects to WARBL over Bluetooth MIDI."
-        FILE_SHARING_ENABLED TRUE
-        # .whistle files as a declared document type (JSON). Without a declared type iOS gives the extension a
-        # made-up one, and the file picker then offered only "On My iPhone", not iCloud Drive or other providers.
-        PLIST_TO_MERGE "<plist><dict>
-<key>LSSupportsOpeningDocumentsInPlace</key><true/>
-<key>UTExportedTypeDeclarations</key><array><dict>
-<key>UTTypeIdentifier</key><string>io.github.petrushy.whistlesim.whistle</string>
-<key>UTTypeDescription</key><string>WhistleSim instrument</string>
-<key>UTTypeConformsTo</key><array><string>public.json</string><string>public.text</string><string>public.data</string><string>public.content</string></array>
-<key>UTTypeTagSpecification</key><dict><key>public.filename-extension</key><array><string>whistle</string></array><key>public.mime-type</key><array><string>application/json</string></array></dict>
-</dict></array>
-<key>CFBundleDocumentTypes</key><array><dict>
-<key>CFBundleTypeName</key><string>WhistleSim instrument</string>
-<key>CFBundleTypeRole</key><string>Editor</string>
-<key>LSHandlerRank</key><string>Owner</string>
-<key>LSItemContentTypes</key><array><string>io.github.petrushy.whistlesim.whistle</string></array>
-</dict></array>
-</dict></plist>"
-        STATUS_BAR_HIDDEN TRUE
-        REQUIRES_FULL_SCREEN TRUE
-        IPHONE_SCREEN_ORIENTATIONS UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-        IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown
-            UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight)
-endif()
 
 # The physics engine (Source/Whistle), with no JUCE: a library the app, tools and tests link, and the iPhone app
 # builds on its own. It embeds the built-in presets, the .whistle files in Presets/ (JSON, as Export writes them;
@@ -67,19 +27,13 @@ endforeach()
 
 # The app: plays a physical model of a whistle from the WARBL2 sensor stream, and monitors the stream's timing.
 # Not a WARBL product, so the company and bundle ID are the project's own.
-# The icon (Icons/WhistleSim.svg): a whistle standing upright, brass on navy. iOS rounds the corners itself and wants
-# no transparency; the Mac's is drawn in a rounded square with a margin, as Mac icons are.
-if (WHISTLESIM_IOS)
-    set(WHISTLESIM_ICON "${CMAKE_CURRENT_SOURCE_DIR}/Icons/WhistleSim-ios.png")
-else()
-    set(WHISTLESIM_ICON "${CMAKE_CURRENT_SOURCE_DIR}/Icons/WhistleSim-mac.png")
-endif()
+# The icon (Icons/WhistleSim.svg): a whistle standing upright, brass on navy, drawn in a rounded square with a
+# margin, as Mac icons are.
 juce_add_gui_app(WhistleSim
     PRODUCT_NAME "WhistleSim"
     COMPANY_NAME "WhistleSim"
     BUNDLE_ID "io.github.petrushy.whistlesim"
-    ICON_BIG "${WHISTLESIM_ICON}"
-    ${WHISTLESIM_IOS_OPTIONS})
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/Icons/WhistleSim-mac.png")
 
 target_sources(WhistleSim PRIVATE
     Source/Main.cpp
@@ -90,8 +44,7 @@ target_sources(WhistleSim PRIVATE
     Source/SensorsPage.cpp
     Source/ModelPage.cpp
     Source/StreamReceiver.cpp
-    Source/AudioEngine.cpp
-    Source/Phone/PhoneUI.cpp)
+    Source/AudioEngine.cpp)
 
 target_include_directories(WhistleSim PRIVATE Source)
 
@@ -111,15 +64,6 @@ target_link_libraries(WhistleSim
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
-
-if (WHISTLESIM_IOS)
-    # Sign with the team given at configure time (-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=...); Xcode makes the
-    # certificate and provisioning profile itself.
-    set_target_properties(WhistleSim PROPERTIES
-        XCODE_ATTRIBUTE_CODE_SIGN_STYLE Automatic
-        XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Apple Development")
-    return()  # The tools and tests are command-line programs: Mac, Linux and Windows only.
-endif()
 
 # Protocol unit test (no JUCE).
 enable_testing()

@@ -56,25 +56,6 @@ ctest --test-dir build -C Release
 
 Settings and your presets are kept in `~/Library/Application Support/WhistleSim/` on macOS, `~/.config/WhistleSim/` on Linux and `%APPDATA%\WhistleSim\` on Windows. The check tools (`WhistleCheck`, `ReverbCheck`, `WarblSimulator`) are built alongside, in `build/<Tool>_artefacts/Release/`.
 
-### iPhone and iPad (in development)
-
-The same app builds for iOS 16 or newer. On an iPhone it has screens of its own, with tabs at the bottom: **Play** (the connection, the instrument with a list of presets, the whistle showing your fingers, breath and sound meters, the room and reverb, Play scale and Record), **Instrument** (saving, exporting and importing presets, and every dimension and voicing setting in folding sections), **Tuning** (the Tuning workshop: the tuning table with where the model plays each fingering, tap a fingering to take it in or out or set its weight or breath; Tune holes and Tune slide; Learn my breath and the breath positions; target pitches and key weights with the chords; key, chart and pitch standard; the needle tuner), **Room** (the room and reverb settings, explained), **Sensors** (how breath pressure and each hole's coverage become the model's breath and holes, with live readings), and **Setup** (WARBL, Bluetooth pairing, the simulator, stream diagnostics, the delay from breath to sound and the buffer size, About). The desktop's Monitor and Model pages aren't on the iPhone. An iPad shows the desktop window, scaled to the screen. On a Mac, `--phone` opens the iPhone screens in a phone-sized window (`--phone-wide` turned sideways, `--phone-tab <0-5>` opens a tab). You need Xcode (not only the command line tools) and an Apple ID; a free one is enough to install the app on your own iPhone, but then the app stops opening after 7 days and has to be installed again from Xcode (settings and presets are kept).
-
-1. In Xcode → Settings → Accounts, add your Apple ID. It makes a "Personal Team". Its 10-character team ID is shown in Keychain Access, as the Organizational Unit of the "Apple Development" certificate (Xcode makes the certificate on the first build; until then, choose the team in the project's Signing & Capabilities and copy the ID from the build settings' `DEVELOPMENT_TEAM`).
-2. Configure and open the Xcode project (`build-ios`, next to `build`; the JUCE copy from the desktop build is reused):
-
-   ```
-   cmake -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=<team ID> \
-       -DFETCHCONTENT_SOURCE_DIR_JUCE="$PWD/build/_deps/juce-src"
-   open build-ios/WhistleSim.xcodeproj
-   ```
-3. Connect the iPhone with a cable, unlock it and trust the Mac. Turn on **Developer Mode** (Settings → Privacy & Security, at the bottom; it only appears once the phone has been connected to Xcode) and let the phone restart.
-4. In Xcode choose the **WhistleSim** scheme and your iPhone, set the scheme's Run configuration to **Release** (Product → Scheme → Edit Scheme; Debug runs the model far slower), and press Run. The first time, the phone asks you to trust the developer: Settings → General → VPN & Device Management.
-
-To install over Wi-Fi later (WARBL then has the iPhone's port): Window → Devices and Simulators → your iPhone → "Connect via network", once, with the cable in.
-
-On the phone: WARBL plugs straight into a USB-C iPhone (or through Apple's camera adapter on a Lightning one), or pair it over Bluetooth with **Pair over Bluetooth...** under Setup. Bluetooth headphones add ~150–250 ms, too much to play with: use the speaker, wired headphones, or a USB-C hub with a USB audio adapter. The app keeps playing with the screen locked while WARBL is connected, and stops the sound in the background otherwise. Recordings, and impulse responses you load, are in the Files app under On My iPhone → WhistleSim.
-
 ### The firmware
 
 Install the official WARBL2 firmware, version 4.8 or later, as for any WARBL update ([amowry/WARBL2](https://github.com/amowry/WARBL2)). Then start the app, tick **Stream** and press **Request info**: the Monitor tab should show "Firmware 4.8", "loop 2 ms", about 500 frames/s, "new hole readings in ~100 % of frames" and no lost frames. With a Bluetooth connection open at the same time, 4.8 runs its loop at 3 ms over USB too ("loop 3 ms", ~333 frames/s).

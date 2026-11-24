@@ -4,14 +4,9 @@ AudioEngine::AudioEngine (StreamReceiver& receiver) : Player (receiver.audioQueu
 {
     deviceManager.initialiseWithDefaultDevices (0, 2);
 
-    // Ask for a small buffer; the device may round it. An iPhone (tried on a USB-C one) plays cleanly at 128
-    // samples (2.9 ms at 44.1 kHz) but not at 64.
+    // Ask for a small buffer; the device may round it.
     auto setup = deviceManager.getAudioDeviceSetup();
-   #if JUCE_IOS
-    setup.bufferSize = 128;
-   #else
     setup.bufferSize = 64;
-   #endif
     deviceManager.setAudioDeviceSetup (setup, true);
 
     deviceManager.addAudioCallback (this);
