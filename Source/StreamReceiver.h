@@ -16,8 +16,10 @@ public:
     ~StreamReceiver() override;
 
     // Opens every MIDI input and output whose name contains "WARBL" (macOS may also list an old Bluetooth
-    // pairing or a simulator under that name). Commands go to all of them, and frames are taken from the first
-    // input that streams. Returns true if at least one input and output were opened.
+    // pairing or a simulator under that name). Commands go to all of them, except that when a WARBL is on a USB
+    // cable they go only to the USB ports: WARBL moves the stream to the port the latest command came on, so a copy
+    // over Bluetooth too would pull it onto Bluetooth (3 ms loop, batches). Frames are taken from the first input
+    // that streams, or from a USB input as soon as one does. Returns true if at least one input and output were opened.
     bool connect();
 
     // Test runs (--snapshot) never touch WARBL: connect() then does nothing, so they can't interfere with the
@@ -44,5 +46,12 @@ private:
 
     std::vector<std::unique_ptr<juce::MidiInput>> inputs;
     std::vector<std::unique_ptr<juce::MidiOutput>> outputs;
+    std::vector<bool> outputIsUsb;            // Per entry in outputs
+    std::vector<juce::MidiInput*> usbInputs;  // Set while the inputs are stopped, read on the MIDI thread
+    bool isUsbInput (const void*) const;
+
+    void requestInfoLater();                 // From the MIDI thread
+    std::atomic<bool> infoWanted { false };  // Ask for info again when the next frame arrives
+    bool streamOn = false;                   // Message thread
     std::shared_ptr<bool> alive = std::make_shared<bool> (true);  // Expires with the receiver, for async callbacks.
 };
