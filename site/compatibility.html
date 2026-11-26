@@ -56,7 +56,7 @@
 
   <h2 id="known-issues">Known issues</h2>
   <ul>
-    <li><strong>A Mac that is also paired with WARBL over Bluetooth gets only about 10 frames/s over USB</strong> with firmware 4.8 and WhistleSim 0.4.0. WhistleSim 0.4.0 sends the stream commands over both connections, and WARBL then streams over Bluetooth. The next version of WhistleSim sends them only over USB when WARBL is on a cable, and a firmware fix has also been proposed (<a href="https://github.com/amowry/WARBL2/pull/46">amowry/WARBL2#46</a>). With 0.4.0, disconnect WARBL's Bluetooth on the Mac while playing over USB.</li>
+    <li><strong>A Mac that is also paired with WARBL over Bluetooth gets only about 10 frames/s over USB</strong> with firmware 4.8 and WhistleSim 0.4.0, because 0.4.0 sends the stream commands over both connections and WARBL then streams over Bluetooth. Fixed in WhistleSim 0.5.0, which sends them only over USB when WARBL is on a cable. The firmware has been fixed too (<a href="https://github.com/amowry/WARBL2/pull/46">amowry/WARBL2#46</a>), in the version after 4.8. With WhistleSim 0.4.0 and firmware 4.8, disconnect WARBL's Bluetooth on the Mac while playing over USB.</li>
     <li><strong>Bluetooth keeps WARBL's loop at 3 ms</strong> while a Bluetooth connection is open, also when streaming over USB. It still plays well, with about 1 ms more delay.</li>
   </ul>
 </main>
