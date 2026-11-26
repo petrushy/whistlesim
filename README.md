@@ -4,7 +4,7 @@ A physical model of a whistle (and recorder), played from a WARBL2 wind controll
 
 Created by Petrus Hyvönen, using the AI assistants Claude (by Anthropic) and Codex (by OpenAI).
 
-WARBL needs firmware with the sensor stream: the official WARBL2 firmware from version 4.8 (in beta in November 2026; protocol in [docs/WARBL_sensor_stream_protocol_v3.md](docs/WARBL_sensor_stream_protocol_v3.md)). The earlier experimental firmware is no longer supported (WhistleSim 0.4.0 was the last version to play from it). Without a WARBL, the app's built-in simulator plays it.
+WARBL needs firmware with the sensor stream: the official WARBL2 firmware from version 4.8 (released November 2026; protocol in [docs/WARBL_sensor_stream_protocol_v3.md](docs/WARBL_sensor_stream_protocol_v3.md)). The earlier experimental firmware is no longer supported (WhistleSim 0.4.0 was the last version to play from it). Without a WARBL, the app's built-in simulator plays it.
 
 - **WhistleSim** (`Source/`): the app (macOS, Windows and Linux; see Building). It finds WARBL, turns the stream on, and shows the tone holes, pressure, accelerometer and orientation. It also measures frame rate, lost frames and arrival jitter. It has a room reverb (see below).
 - **WARBL Simulator** (`tools/`): a virtual WARBL that plays a scale, as a separate MIDI device. The app also has this built in.
